@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from septa-detours!")
+"""Collect, parse, and map SEPTA service detours."""
