@@ -69,6 +69,8 @@ notebooks/       exploration only, not production code
 
 - Run tests: `uv run pytest`
 - Lint/format: `uv run ruff check . && uv run ruff format .`
+- Export a route's GeoJSON (from the repo root):
+  `uv run python -m septa_detours.export bus 21` -> `web/data/bus-21.geojson`
 - Fetch data: `uv run septa-detours fetch` (planned, not built yet)
 - Serve the map: `python -m http.server -d web` (planned; export writes
   GeoJSON to `web/data/`)
@@ -207,20 +209,39 @@ code. Ruff RUF001 flags literal en dashes; write it as `"\u2013"` in tests.
 Verified by hand on real data: route 21 gives 2 features (`317337` dir 0,
 284 pts; `317338` dir 1, 282 pts), `route_color` `#EF3340`, ~13 KB file.
 
-Next: a small script that loads GTFS and writes
-`web/data/bus-21.geojson`, then the MapLibre page (`web/` doesn't exist
-yet). Glue only: all logic already lives in `gtfs/` and `export/`.
-Things to decide in that step:
-- Where it lives: `scripts/export_route.py` (`uv run python ...`),
-  `python -m septa_detours.export`, or a `[project.scripts]` CLI now
-  (CLAUDE.md currently says to add the CLI with `fetch`).
-- Hardcode route 21 or take `feed`/`route_id` arguments (argparse is
-  stdlib, no new dependency).
-- A known route with no shapes gives an empty FeatureCollection (unknown
-  routes already raise in `route_properties`): write it, or error?
-- Load only the needed feed (`load_trips(["bus"])`) to keep it fast.
-- Paths are relative to the repo root (`DEFAULT_GTFS_ROOT`,
-  `DEFAULT_WEB_DATA_DIR`), so run from there.
+Done: `export/__main__.py`, run as `python -m septa_detours.export
+<feed> <route_id>` (glue only). `_build_parser` (argparse, `feed`
+limited by `choices=ALL_FEEDS`), `export_route(feed, route_id) -> Path`
+(raises `ValueError`), `main(argv=None) -> int` (testable; when the real
+CLI arrives with `fetch`, a subcommand can call it). Decisions:
+- Loads only the requested feed. Checks run cheapest-first: path
+  validation (no I/O) -> `routes` (unknown route) -> `trips` (no shapes)
+  -> `shapes` (the big file). Real route 21 runs in ~0.45 s, so no
+  semi-join prefilter of shapes.
+- A known route with no shapes raises; nothing is written (an empty file
+  would be a silently blank map). A failure leaves an earlier export intact.
+- `main` catches only `ValueError` -> `error: ...` on stderr, exit 1;
+  anything else is a bug and keeps its traceback. Success prints
+  `wrote <path>` to stdout, exit 0. Bad arguments: argparse exits 2.
+- `cast("Feed", args.feed)`: argparse attributes are `Any`; `choices`
+  backs the cast at runtime. `print` needs `# noqa: T201`.
+
+Done: `tests/test_export_main.py` (19). A `mini_gtfs` fixture writes a
+fake bus feed (routes `21`, `NS` with no trips, `BROKEN` with a missing
+shape) under `tmp_path` and `chdir`s there, so real default paths are
+used; no rail folder, so loading the wrong feed crashes. Check order is
+proven by deleting GTFS files the code shouldn't need yet. One
+subprocess test covers `raise SystemExit(main())`. 17 mutations, all
+caught. The `FileNotFoundError` test depends on polars' exception type
+for a missing file. 106 tests total.
+
+Next (fresh session): the MapLibre page in `web/` (doesn't exist yet).
+Plain JS, no build step, keyless basemap (OpenFreeMap or Protomaps).
+Load `data/bus-21.geojson` (generate it first with the command above),
+color lines from the `route_color` property with a fallback for null,
+and handle the two directions (identical geometry is possible, so
+filter or style by `direction_id`). Serve with
+`python -m http.server -d web`.
 
 After that: collect raw alerts into `data/raw/`. The `Detour` model in
 `model.py` is still deferred. Later, `match/` must map detour text like
