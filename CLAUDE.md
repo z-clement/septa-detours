@@ -17,6 +17,8 @@ This is a learning project. I want to write most of the implementation myself.
 - Don't make changes outside the file or function I'm working on. If you think
   something elsewhere should change, tell me instead.
 - Ask before adding a new dependency.
+- Go slowly, one task at a time. Explain the reasoning behind each step,
+  and stop for me to check before moving to the next one.
 
 ## Architecture
 
@@ -87,5 +89,7 @@ notebooks/       exploration only, not production code
 ## Current focus
 
 <!-- TODO: update as the project moves -->
-Starting over from scratch. Next steps: define `model.py`, load GTFS and plot
-one route, then collect raw alerts into `data/raw/`.
+Stack chosen; project created with `uv init --package` (Python 3.13, `src/`
+layout). Next steps: review `pyproject.toml`, load GTFS and plot one route,
+then collect raw alerts into `data/raw/`. Defining the `Detour` model in
+`model.py` is deferred until later.
