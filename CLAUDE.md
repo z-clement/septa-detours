@@ -105,9 +105,9 @@ notebooks/       exploration only, not production code
 ## Current focus
 
 <!-- TODO: update as the project moves -->
-Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing.
-pytest config (`testpaths`) deferred until the first test. No CLI entry point
-yet; add `[project.scripts]` back when building `fetch`.
+Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
+pytest `testpaths = ["tests"]`. No CLI entry point yet; add
+`[project.scripts]` back when building `fetch`.
 
 Goal: load GTFS and plot one route with **MapLibre** (export the route as
 GeoJSON to `web/data/`).
@@ -123,13 +123,25 @@ Done: `gtfs/shapes.py::shape_coordinates`: `group_by(feed, shape_id,
 maintain_order=True)`, `concat_list(lon, lat).sort_by(shape_pt_sequence)`
 inside the `agg` (chosen so ordering doesn't depend on input order).
 Output `coordinates: List(List(Float64))`; groups in first-appearance order.
-Checked by hand (out-of-order seqs, gaps, same shape_id in both feeds),
-not yet covered by tests. Docstring follow-ups pending: note the
-`maintain_order` guarantee; note that duplicate `shape_pt_sequence` values
-are kept in arbitrary relative order (known gap, not handled).
+Docstring follow-ups pending: note the `maintain_order` guarantee; note
+that duplicate `shape_pt_sequence` values are kept in arbitrary relative
+order (known gap, not handled; candidate `xfail` test later).
 
-Next: first pytest, `tests/test_shapes.py` with small hand-built frames
-(out-of-order sequences, gaps, same `shape_id` in both feeds), and add
-`testpaths` to `pyproject.toml`. After that: pick one route, join routes -> trips -> shapes, and write
-the GeoJSON export, then the MapLibre page. Then collect raw alerts into
-`data/raw/`. The `Detour` model in `model.py` is still deferred.
+Done: `tests/test_shapes.py`, 6 tests over hand-built frames via a
+`make_shapes` helper (`(shape_id, lat, lon, seq, feed)` tuples, explicit
+`SHAPES_SCHEMA` matching `load_shapes`, `orient="row"`: without it polars
+guesses columns when row count == column count). Covers sorting, gaps,
+`[lon, lat]` order, feed separation, first-appearance order, output
+schema. Test-writing habits: realistic Philly coords (lon ~ -75) so
+lat/lon swaps can't cancel out; compare whole outputs (`.rows()`,
+`.schema`); break the code once to see each test fail. Known weakness:
+the first-appearance test has only 2 groups, so a random group order
+would pass ~50% of the time.
+
+Next: pick one route, join routes -> trips -> shapes (via `shape_id`, on
+`(feed, id)`), write the GeoJSON export to `web/data/`, then the MapLibre
+page. Open questions for that step: which route to start with; where the
+join lives (`gtfs/` reference helper vs `export/`); a route has many trips
+sharing a few distinct shapes, so dedupe shapes before exporting. Then
+collect raw alerts into `data/raw/`. The `Detour` model in `model.py` is
+still deferred.
