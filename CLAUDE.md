@@ -157,19 +157,70 @@ Decided: start with **route 21** (bus feed, `route_id` "21", 660 trips,
 second check. Reference lookups live in `gtfs/`; GeoJSON building
 lives in `export/`.
 
-Next: `export/` skeleton. Join `route_shape_ids` output onto
-`shape_coordinates` output on `["feed", "shape_id"]`, build a GeoJSON
-`FeatureCollection` (pure function, one LineString Feature per row),
-plus a small function that writes it to `web/data/`. Then the MapLibre
-page. Things to decide in that step:
-- Feature properties: `direction_id` for sure. Route metadata
-  (`route_color`, `route_short_name`, `route_long_name`) needs a separate
-  join with `routes`; this is where the `routes` table earns its keep.
+Done: `export/geojson.py` (pure, no I/O). Pipeline for one route:
+`join_route_lines(route_shape_ids(...), shape_coordinates(...))` ->
+`route_properties(routes, feed, route_id)` ->
+`route_feature_collection(lines, props)` (calls `line_feature` per row).
+GeoJSON shapes are `TypedDict`s (`LineString`, `Feature`,
+`FeatureCollection`); `Properties = dict[str, str | int | None]`.
+Decisions:
+- `join_route_lines`: anti join first and raise `ValueError` naming any
+  `(feed, shape_id)` with no coordinates (no silent drops); then left join
+  with `validate="m:1"` (duplicate coords -> `ComputeError`) and
+  `maintain_order="left"` (polars joins don't keep order by default).
+  Explicit `select`s so extra columns can't leak into output.
+- `route_properties`: exactly one `(feed, route_id)` match or `ValueError`
+  (0 = unknown route, 2+ = broken data). Dict built field by field, so new
+  `ROUTE_COLUMNS` don't leak into GeoJSON. Colors get `#` in Python via
+  private `_css_color`; null or malformed -> `None` (frontend picks a
+  fallback). All 181 real routes have valid 6-hex colors.
+- Route metadata goes on *every feature's* properties: MapLibre styles
+  from feature properties and ignores FeatureCollection extras.
+- `line_feature`: raises on < 2 points (message includes properties);
+  shallow-copies coordinates and properties.
+- `route_feature_collection`: per-row `shape_id`/`direction_id` win over
+  same-named `route_props` keys; null `direction_id` stays JSON `null`;
+  empty input gives a valid empty collection (caller decides).
 - A shape used in both directions gives two Features with identical
-  geometry; the frontend should style or filter by direction, not
-  assume one line per shape.
-- Empty input (unknown route): error or empty FeatureCollection?
-- Use stdlib `json` for writing; no new dependency needed.
+  geometry; the frontend must style/filter by `direction_id`.
+
+Done: `export/write.py` (the only I/O in `export/`).
+`route_geojson_path(feed, route_id, root=web/data)` ->
+`web/data/<feed>-<route_id>.geojson`; pure; raises `ValueError` unless
+`route_id` fullmatches `[A-Za-z0-9_-]+` (reject, don't sanitize: cleaning
+could make two routes share a file). `.geojson` is served by `http.server`
+as `application/geo+json`. `write_geojson(collection, path)`: serialize in
+memory first (`allow_nan=False`, `ensure_ascii=False`, compact
+separators, trailing newline, UTF-8), `mkdir(parents=True)`, then write
+`<name>.tmp` beside the target and `Path.replace` it (atomic; temp file
+removed on any failure, incl. Ctrl+C). `web/data/` is gitignored.
+
+Done: tests. `tests/test_geojson.py` (39; helpers `make_route_shapes`,
+`make_coordinates`, `make_lines`, `make_routes`) and `tests/test_write.py`
+(30, all disk tests use `tmp_path`; atomicity proven by monkeypatching
+`Path.write_text` to write half then raise). 87 tests total, all passing.
+Every behaviour was mutation-checked (27 deliberate breakages, each
+caught). Mutation-check gotcha: run with `PYTHONDONTWRITEBYTECODE=1`,
+since a stale `.pyc` (same size, same second) silently tests the wrong
+code. Ruff RUF001 flags literal en dashes; write it as `"\u2013"` in tests.
+
+Verified by hand on real data: route 21 gives 2 features (`317337` dir 0,
+284 pts; `317338` dir 1, 282 pts), `route_color` `#EF3340`, ~13 KB file.
+
+Next: a small script that loads GTFS and writes
+`web/data/bus-21.geojson`, then the MapLibre page (`web/` doesn't exist
+yet). Glue only: all logic already lives in `gtfs/` and `export/`.
+Things to decide in that step:
+- Where it lives: `scripts/export_route.py` (`uv run python ...`),
+  `python -m septa_detours.export`, or a `[project.scripts]` CLI now
+  (CLAUDE.md currently says to add the CLI with `fetch`).
+- Hardcode route 21 or take `feed`/`route_id` arguments (argparse is
+  stdlib, no new dependency).
+- A known route with no shapes gives an empty FeatureCollection (unknown
+  routes already raise in `route_properties`): write it, or error?
+- Load only the needed feed (`load_trips(["bus"])`) to keep it fast.
+- Paths are relative to the repo root (`DEFAULT_GTFS_ROOT`,
+  `DEFAULT_WEB_DATA_DIR`), so run from there.
 
 After that: collect raw alerts into `data/raw/`. The `Detour` model in
 `model.py` is still deferred. Later, `match/` must map detour text like
