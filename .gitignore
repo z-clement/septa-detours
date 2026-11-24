@@ -1,0 +1,18 @@
+# Tool-generated: rebuilt by uv, python, pytest, ruff
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+
+# Data that can be re-downloaded
+data/raw/
+data/gtfs/
+
+# Pipeline output; keep small committed samples only
+data/processed/*
+!data/processed/sample_*
+web/data/
