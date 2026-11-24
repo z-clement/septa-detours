@@ -72,8 +72,8 @@ notebooks/       exploration only, not production code
 - Export a route's GeoJSON (from the repo root):
   `uv run python -m septa_detours.export bus 21` -> `web/data/bus-21.geojson`
 - Fetch data: `uv run septa-detours fetch` (planned, not built yet)
-- Serve the map: `python -m http.server -d web` (planned; export writes
-  GeoJSON to `web/data/`)
+- Serve the map: `python -m http.server -d web`, then open
+  http://localhost:8000 (export the route first; it reads `web/data/`)
 
 ## Data notes
 
@@ -235,15 +235,31 @@ subprocess test covers `raise SystemExit(main())`. 17 mutations, all
 caught. The `FileNotFoundError` test depends on polars' exception type
 for a missing file. 106 tests total.
 
-Next (fresh session): the MapLibre page in `web/` (doesn't exist yet).
-Plain JS, no build step, keyless basemap (OpenFreeMap or Protomaps).
-Load `data/bus-21.geojson` (generate it first with the command above),
-color lines from the `route_color` property with a fallback for null,
-and handle the two directions (identical geometry is possible, so
-filter or style by `direction_id`). Serve with
-`python -m http.server -d web`.
+Done: MapLibre page, `web/index.html` + `web/map.js` (written by Claude
+at my request, commented for reading; I'm less familiar with JS).
+Decisions:
+- MapLibre **5.24.0** UMD from unpkg (global `maplibregl`), not v6: v6
+  is ESM-only and loads a separate worker file, which browsers refuse
+  cross-origin from a CDN. Moving to v6 means vendoring it into `web/`.
+- Basemap: OpenFreeMap `positron` (light grey, so route colors stand out).
+- `map.js` is an ES module. `main` awaits `Promise.all([map.once("load"),
+  loadCollection(url)])`; `loadCollection` checks `response.ok` (fetch
+  doesn't reject on 404) and its error names the export command.
+  Errors show in the `#error` banner (hidden via CSS `:empty`).
+- One line layer: `line-color` = `coalesce(get route_color, #555555)`;
+  width and offset interpolate by zoom. Directions are separated by the
+  *same* positive `line-offset`: opposite vertex order puts each on its
+  own (right-hand) side of the street. Known gap: a shape shared by both
+  directions has identical geometry and order, so it still overlaps.
+- Click popup lists every feature under the cursor (route, direction,
+  shape_id), via `setText`/`textContent`, never HTML.
+- `collectionBounds` computes `[[w,s],[e,n]]` by hand (no turf); null
+  for an empty collection -> error banner, no `fitBounds`.
+- Verified in headless Firefox: page, JS and GeoJSON load, style loads,
+  no error. Headless can't capture the WebGL canvas, so check the drawn
+  lines by eye in a real browser.
 
-After that: collect raw alerts into `data/raw/`. The `Detour` model in
+Next: collect raw alerts into `data/raw/`. The `Detour` model in
 `model.py` is still deferred. Later, `match/` must map detour text like
 "Route 21" / "the L" to `route_id` via `route_short_name` (not always
 equal to `route_id`; check rail).
