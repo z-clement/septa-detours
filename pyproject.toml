@@ -1,7 +1,7 @@
 [project]
 name = "septa-detours"
 version = "0.1.0"
-description = "Add your description here"
+description = "A tool that maps SEPTA service detours."
 readme = "README.md"
 authors = [
     { name = "Zac Clement", email = "zclement@gmail.com" }
@@ -15,3 +15,39 @@ septa-detours = "septa_detours:main"
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.ruff]
+line-length = 88          # ruff/black default; matches the formatter
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle: basic style errors/warnings
+    "F",        # pyflakes: unused imports, undefined names (real bugs)
+    "I",        # isort: import ordering (auto-fixable)
+    "B",        # bugbear: likely bugs, e.g. mutable default args
+    "UP",       # pyupgrade: use modern 3.13 syntax
+    "SIM",      # simplify: flags convoluted if/else, nested with, etc.
+    "C4",       # comprehensions: cleaner list/dict/set building
+    "N",        # pep8-naming
+    "ANN",      # annotations: enforces "type hints on public functions"
+    "D",        # pydocstyle: docstrings on public things
+    "PTH",      # use pathlib instead of os.path
+    "DTZ",      # flags naive datetimes (no timezone)
+    "RET",      # return-statement consistency
+    "PT",       # pytest style
+    "T20",      # stray print() calls
+    "ERA",      # commented-out code
+    "RUF",      # ruff's own rules
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "D"]   # don't require annotations/docstrings on tests
