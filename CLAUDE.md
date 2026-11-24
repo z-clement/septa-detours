@@ -55,7 +55,8 @@ notebooks/       exploration only, not production code
   (OpenFreeMap or Protomaps)
 - Tests: pytest
 - Formatting/linting: ruff (Python). No JS linter for now
-- Type checking: pyright, basic mode (optional, add later)
+- Type checking: ty (Astral), via the VS Code extension; editor interpreter
+  must be `.venv/bin/python`
 - Candidate libraries (ask before adding each): httpx (ingest),
   polars or pandas (GTFS), shapely + pyproj (match; project to EPSG:2272
   before measuring distances)
