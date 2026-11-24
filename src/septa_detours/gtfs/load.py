@@ -74,8 +74,8 @@ def read_table(
 
     Edge cases:
         - A requested column missing from this feed's file should raise a
-          clear error naming the feed, and table, rather than a
-          confusing failure later in a join.
+          clear error naming the feed and table, with the column name in the attached
+          original error, rather than a confusing failure later in a join.
         - Empty strings in GTFS mean "no value"; they become nulls here.
     """
     source = feed_dir(feed, root) / f"{table}.txt"
@@ -90,6 +90,18 @@ def read_table(
     return df.with_columns(pl.lit(feed).alias("feed"))
 
 
+def _concat_feeds(
+    feeds: Sequence[Feed],
+    table: str,
+    columns: Sequence[str],
+    root: Path = DEFAULT_GTFS_ROOT,
+) -> pl.DataFrame:
+    """Load given table for the given feeds, stacked into one frame."""
+    return pl.concat(
+        [read_table(feed, table, columns, root) for feed in feeds], how="vertical"
+    )
+
+
 def load_routes(
     feeds: Sequence[Feed] = ALL_FEEDS,
     root: Path = DEFAULT_GTFS_ROOT,
@@ -100,8 +112,8 @@ def load_routes(
     metro lines (L1, B1, route_type 1), so filter by ``route_type``, not
     by ``feed``, when you mean a mode.
     """
-    # TODO
-    raise NotImplementedError
+    df = _concat_feeds(feeds, "routes", ROUTE_COLUMNS, root)
+    return df.with_columns(pl.col("route_type").cast(pl.Int16))
 
 
 def load_trips(
@@ -112,8 +124,8 @@ def load_trips(
 
     Casts ``direction_id`` to an integer. ``shape_id`` stays a string.
     """
-    # TODO
-    raise NotImplementedError
+    df = _concat_feeds(feeds, "trips", TRIP_COLUMNS, root)
+    return df.with_columns(pl.col("direction_id").cast(pl.Int8))
 
 
 def load_shapes(
@@ -126,5 +138,9 @@ def load_shapes(
     ``shape_pt_sequence`` to an integer. Does not sort; ordering is the
     caller's job (see ``shapes.shape_coordinates``).
     """
-    # TODO
-    raise NotImplementedError
+    df = _concat_feeds(feeds, "shapes", SHAPE_COLUMNS, root)
+    return df.with_columns(
+        pl.col("shape_pt_lat").cast(pl.Float64),
+        pl.col("shape_pt_lon").cast(pl.Float64),
+        pl.col("shape_pt_sequence").cast(pl.Int32),
+    )
