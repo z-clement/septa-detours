@@ -119,9 +119,17 @@ Empty `feeds` list is treated as a caller bug (no special handling).
 `stops` and `stop_times` loaders deferred; `stop_times` (133 MB) should
 use lazy `scan_csv`.
 
-Next: implement `gtfs/shapes.py::shape_coordinates` (skeleton exists):
-one row per `(feed, shape_id)` with an ordered list of `[lon, lat]`.
-Open choice: sort whole frame before `group_by`, or sort inside the `agg`.
-After that: pick one route, join routes -> trips -> shapes, and write
+Done: `gtfs/shapes.py::shape_coordinates`: `group_by(feed, shape_id,
+maintain_order=True)`, `concat_list(lon, lat).sort_by(shape_pt_sequence)`
+inside the `agg` (chosen so ordering doesn't depend on input order).
+Output `coordinates: List(List(Float64))`; groups in first-appearance order.
+Checked by hand (out-of-order seqs, gaps, same shape_id in both feeds),
+not yet covered by tests. Docstring follow-ups pending: note the
+`maintain_order` guarantee; note that duplicate `shape_pt_sequence` values
+are kept in arbitrary relative order (known gap, not handled).
+
+Next: first pytest, `tests/test_shapes.py` with small hand-built frames
+(out-of-order sequences, gaps, same `shape_id` in both feeds), and add
+`testpaths` to `pyproject.toml`. After that: pick one route, join routes -> trips -> shapes, and write
 the GeoJSON export, then the MapLibre page. Then collect raw alerts into
 `data/raw/`. The `Detour` model in `model.py` is still deferred.
