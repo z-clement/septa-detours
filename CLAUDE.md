@@ -43,7 +43,8 @@ data/gtfs/       SEPTA static GTFS (gitignored)
 data/processed/  normalized detours (sample files may be committed)
 src/septa_detours/{ingest,parse,match,export}/
 src/septa_detours/gtfs/   shared GTFS reference data (not a stage): load.py
-                          reads tables, shapes.py builds coordinate lists
+                          reads tables, shapes.py builds coordinate lists,
+                          routes.py finds a route's shapes
 src/septa_detours/model.py
 web/             map frontend
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones
@@ -138,10 +139,39 @@ lat/lon swaps can't cancel out; compare whole outputs (`.rows()`,
 the first-appearance test has only 2 groups, so a random group order
 would pass ~50% of the time.
 
-Next: pick one route, join routes -> trips -> shapes (via `shape_id`, on
-`(feed, id)`), write the GeoJSON export to `web/data/`, then the MapLibre
-page. Open questions for that step: which route to start with; where the
-join lives (`gtfs/` reference helper vs `export/`); a route has many trips
-sharing a few distinct shapes, so dedupe shapes before exporting. Then
-collect raw alerts into `data/raw/`. The `Detour` model in `model.py` is
-still deferred.
+Done: `gtfs/routes.py::route_shape_ids(trips, feed, route_id)`: filters
+trips to `(feed, route_id)`, drops null `shape_id`, returns distinct
+`(feed, shape_id, direction_id)` rows in first-appearance order. Uses
+`trips` only; `routes` isn't needed for the join. `direction_id` is kept
+on purpose: detours can affect only one direction. So a shape used in
+both directions appears twice, and null `direction_id` is its own row.
+Unknown route and shapeless route both give an empty typed frame; the
+caller decides if that's an error. Tests in `tests/test_routes.py` (12,
+`make_trips` helper with `(route_id, direction_id, shape_id, feed)`
+tuples, `TRIPS_SCHEMA` matching `load_trips`); each was checked against
+deliberately broken versions of the function. Ruff SIM300 flags
+`CONSTANT == value` asserts; put the module constant on the right.
+
+Decided: start with **route 21** (bus feed, `route_id` "21", 660 trips,
+2 shapes: `317337` dir 0, `317338` dir 1). Route 42 (8 shapes) is a good
+second check. Reference lookups live in `gtfs/`; GeoJSON building
+lives in `export/`.
+
+Next: `export/` skeleton. Join `route_shape_ids` output onto
+`shape_coordinates` output on `["feed", "shape_id"]`, build a GeoJSON
+`FeatureCollection` (pure function, one LineString Feature per row),
+plus a small function that writes it to `web/data/`. Then the MapLibre
+page. Things to decide in that step:
+- Feature properties: `direction_id` for sure. Route metadata
+  (`route_color`, `route_short_name`, `route_long_name`) needs a separate
+  join with `routes`; this is where the `routes` table earns its keep.
+- A shape used in both directions gives two Features with identical
+  geometry; the frontend should style or filter by direction, not
+  assume one line per shape.
+- Empty input (unknown route): error or empty FeatureCollection?
+- Use stdlib `json` for writing; no new dependency needed.
+
+After that: collect raw alerts into `data/raw/`. The `Detour` model in
+`model.py` is still deferred. Later, `match/` must map detour text like
+"Route 21" / "the L" to `route_id` via `route_short_name` (not always
+equal to `route_id`; check rail).
