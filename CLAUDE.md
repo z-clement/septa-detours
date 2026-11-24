@@ -42,6 +42,8 @@ data/raw/        untouched downloads (gitignored)
 data/gtfs/       SEPTA static GTFS (gitignored)
 data/processed/  normalized detours (sample files may be committed)
 src/septa_detours/{ingest,parse,match,export}/
+src/septa_detours/gtfs/   shared GTFS reference data (not a stage): load.py
+                          reads tables, shapes.py builds coordinate lists
 src/septa_detours/model.py
 web/             map frontend
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones
@@ -57,9 +59,10 @@ notebooks/       exploration only, not production code
 - Formatting/linting: ruff (Python). No JS linter for now
 - Type checking: ty (Astral), via the VS Code extension; editor interpreter
   must be `.venv/bin/python`
+- GTFS tables: polars (added). Shapely/geometry stays out of polars; build
+  it from plain coordinate lists in `match/`
 - Candidate libraries (ask before adding each): httpx (ingest),
-  polars or pandas (GTFS), shapely + pyproj (match; project to EPSG:2272
-  before measuring distances)
+  shapely + pyproj (match; project to EPSG:2272 before measuring distances)
 
 ## Commands
 
@@ -73,6 +76,18 @@ notebooks/       exploration only, not production code
 
 - Static GTFS joins: `routes` -> `trips` -> `shapes` (via `shape_id`) and
   `stop_times` -> `stops`. Remind me of this if I get tangled.
+- Two feeds, stored flat: `data/gtfs/bus/*.txt` and `data/gtfs/rail/*.txt`.
+  IDs are only unique within a feed, so every loaded frame carries a `feed`
+  column; group/join on `(feed, id)`.
+- Always read GTFS as strings (`infer_schema=False`), then cast known-numeric
+  columns. Real traps: bus `route_id` mixes `124`/`L1`; rail `shape_id`s
+  have leading zeros (`001005`) and appear as `538_406` deep in the file.
+- The two feeds have different column sets; only shared columns are loaded.
+- The "bus" feed also holds trolleys (route_type 0), metro (1, L1/B1), and
+  trackless trolleys (11). Filter modes by `route_type`, not `feed`.
+- Choose integer widths from the GTFS spec's legal range, not today's data
+  (e.g. `shape_pt_sequence` is Int32). Lat/lon are Float64.
+- GeoJSON coordinates are `[lon, lat]`; GTFS columns are lat, lon.
 - Detour text is messy and inconsistent. Real examples go in `tests/fixtures/`
   and should drive parser design. Never "fix" a fixture to make a test pass.
 - Treat unparseable or ambiguous detours as `unknown` rather than guessing.
@@ -94,7 +109,19 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing.
 pytest config (`testpaths`) deferred until the first test. No CLI entry point
 yet; add `[project.scripts]` back when building `fetch`.
 
-Next: load GTFS and plot one route, using **polars** for the GTFS tables
-(not yet added; ask first) and **MapLibre** for display (export the route
-as GeoJSON to `web/data/`). Then collect raw alerts into `data/raw/`.
-Defining the `Detour` model in `model.py` is deferred until later.
+Goal: load GTFS and plot one route with **MapLibre** (export the route as
+GeoJSON to `web/data/`).
+
+Done: `gtfs/load.py`: `read_table` (all-string read, `""` -> null, `feed`
+column, ValueError naming feed/table on a missing column), private
+`_concat_feeds` helper, and `load_routes` / `load_trips` / `load_shapes`.
+Empty `feeds` list is treated as a caller bug (no special handling).
+`stops` and `stop_times` loaders deferred; `stop_times` (133 MB) should
+use lazy `scan_csv`.
+
+Next: implement `gtfs/shapes.py::shape_coordinates` (skeleton exists):
+one row per `(feed, shape_id)` with an ordered list of `[lon, lat]`.
+Open choice: sort whole frame before `group_by`, or sort inside the `agg`.
+After that: pick one route, join routes -> trips -> shapes, and write
+the GeoJSON export, then the MapLibre page. Then collect raw alerts into
+`data/raw/`. The `Detour` model in `model.py` is still deferred.
