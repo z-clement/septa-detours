@@ -89,7 +89,11 @@ notebooks/       exploration only, not production code
 ## Current focus
 
 <!-- TODO: update as the project moves -->
-Stack chosen; project created with `uv init --package` (Python 3.13, `src/`
-layout). Next steps: review `pyproject.toml`, load GTFS and plot one route,
-then collect raw alerts into `data/raw/`. Defining the `Detour` model in
-`model.py` is deferred until later.
+Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing.
+pytest config (`testpaths`) deferred until the first test. No CLI entry point
+yet; add `[project.scripts]` back when building `fetch`.
+
+Next: load GTFS and plot one route, using **polars** for the GTFS tables
+(not yet added; ask first) and **MapLibre** for display (export the route
+as GeoJSON to `web/data/`). Then collect raw alerts into `data/raw/`.
+Defining the `Detour` model in `model.py` is deferred until later.
