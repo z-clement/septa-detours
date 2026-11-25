@@ -10,13 +10,32 @@ failure, which proves the cheapest-first check order in ``export_route``.
 """
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from septa_detours.export.__main__ import export_route, main
+from septa_detours.export.__main__ import (
+    DEFAULT_DETOURS_DIR,
+    DETOURS_GEOJSON,
+    MATCH_COMMAND,
+    export_detours,
+    export_route,
+    find_latest_detours,
+    main,
+)
+from septa_detours.model import (
+    AffectedShape,
+    Detour,
+    DetourNotice,
+    RouteMatch,
+    StartPoint,
+    dump_detours,
+)
+from septa_detours.parse.notice import parse_snapshot
 
 # Routes in the fake feed:
 #   21      two shapes, one per direction (the happy path)
@@ -271,3 +290,214 @@ def test_python_dash_m_exit_code(route_id, expected_code):
     )
 
     assert result.returncode == expected_code, result.stderr
+
+
+# --- find_latest_detours ----------------------------------------------------
+
+
+def touch_all(root: Path, *names: str) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (root / name).touch()
+
+
+def test_find_latest_detours_picks_newest_stamp(tmp_path):
+    touch_all(
+        tmp_path,
+        "detours-2026-11-25T121123Z.json",
+        "detours-2027-01-02T000000Z.json",
+        "detours-2026-11-25T025344Z.json",
+    )
+    assert find_latest_detours(tmp_path).name == "detours-2027-01-02T000000Z.json"
+
+
+@pytest.mark.parametrize(
+    "stray",
+    [
+        "detours-2027-01-01T000000Z.json.tmp",  # write_bytes_atomic leftover
+        "detours-mine.json",  # output of a hand-named snapshot
+        "2027-01-01T000000Z.json",  # a snapshot, not detours
+        "detours-2027-01-01T000000.json",  # no Z
+        "xdetours-2027-01-01T000000Z.json",
+        "detours-2027-01-01T000000Z.geojson",
+        "streets.parquet",
+    ],
+)
+def test_find_latest_detours_ignores_other_files(tmp_path, stray):
+    touch_all(tmp_path, "detours-2026-11-25T025344Z.json", stray)
+    assert find_latest_detours(tmp_path).name == "detours-2026-11-25T025344Z.json"
+
+
+@pytest.mark.parametrize("make_dir", [False, True], ids=["no-directory", "empty"])
+def test_find_latest_detours_none_names_match_command(tmp_path, make_dir):
+    root = tmp_path / "processed"
+    if make_dir:
+        touch_all(root, "streets.parquet")
+    with pytest.raises(FileNotFoundError, match="no detours file") as excinfo:
+        find_latest_detours(root)
+    assert str(root) in str(excinfo.value)
+    assert MATCH_COMMAND in str(excinfo.value)
+    assert MATCH_COMMAND == "uv run python -m septa_detours.match"
+
+
+def test_find_latest_detours_default_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    touch_all(DEFAULT_DETOURS_DIR, "detours-2026-11-25T025344Z.json")
+    assert Path("data/processed") == DEFAULT_DETOURS_DIR
+    expected = DEFAULT_DETOURS_DIR / "detours-2026-11-25T025344Z.json"
+    assert find_latest_detours() == expected
+
+
+def test_detours_constants_match_the_match_command(tmp_path):
+    # Duplicated on purpose (stages don't import each other); this test is
+    # the only place that knows both.
+    from septa_detours.match import __main__ as match_main
+
+    assert match_main.DEFAULT_DETOURS_DIR == DEFAULT_DETOURS_DIR
+    written = match_main.detours_path(Path("2027-03-04T050607Z.json"), tmp_path)
+    touch_all(tmp_path, written.name)
+    assert find_latest_detours(tmp_path) == written
+
+
+# --- export_detours ---------------------------------------------------------
+
+STAMP = "2026-11-25T025344Z"
+DETOURS_FILE = DEFAULT_DETOURS_DIR / f"detours-{STAMP}.json"
+
+
+@pytest.fixture
+def notices(read_alert_fixture) -> list[DetourNotice]:
+    """Real route 2 notices (5); the tests match them onto fake route 21."""
+    content = read_alert_fixture(f"{STAMP}__bus_route_2.json")
+    return parse_snapshot(b"[" + content + b"]", f"{STAMP}.json")
+
+
+def on_route_21(
+    notice: DetourNotice, shape: tuple[str, int] | None, placed: bool
+) -> Detour:
+    match = RouteMatch(
+        feed="bus",
+        route_id="21",
+        shapes=()
+        if shape is None
+        else (AffectedShape(shape_id=shape[0], direction_id=shape[1]),),
+        start_point=StartPoint(node_id=11, lon=-75.2101, lat=39.9588)
+        if placed
+        else None,
+    )
+    return Detour(notice=notice, match=match)
+
+
+def write_detours(detours: list[Detour], path: Path = DETOURS_FILE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(dump_detours(detours))
+
+
+def read_collection(path: Path) -> Any:
+    """Like ``read_json``, typed ``Any`` so tests can index into it."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_writes_lines_and_points(notices):
+    # 2 lines, 1 point: unequal, so swapped counts in the summary show.
+    detours = [
+        on_route_21(notices[0], ("317337", 0), placed=True),
+        on_route_21(notices[1], ("317337", 0), placed=False),
+        Detour(notice=notices[2], match=None),
+        on_route_21(notices[3], ("317338", 1), placed=False),
+    ]
+    write_detours(detours)
+
+    summary = export_detours(DETOURS_FILE)
+
+    assert summary == (
+        f"wrote {DETOURS_GEOJSON} (2 lines, 1 start points from 4 detours "
+        f"in {DETOURS_FILE.name})"
+    )
+    assert Path("web/data/detours.geojson") == DETOURS_GEOJSON
+    line_0, line_1, point = read_collection(DETOURS_GEOJSON)["features"]
+    assert line_0["geometry"] == {
+        "type": "LineString",
+        "coordinates": [[-75.25878, 39.961991], [-75.1652, 39.9526]],
+    }
+    assert line_0["properties"] == {
+        **ROUTE_21_PROPS,
+        "shape_id": "317337",
+        "direction_id": 0,
+        "detour_count": 2,
+    }
+    assert (line_1["properties"]["shape_id"], line_1["properties"]["detour_count"]) == (
+        "317338",
+        1,
+    )
+    assert point["geometry"] == {"type": "Point", "coordinates": [-75.2101, 39.9588]}
+    assert point["properties"]["source_key"] == notices[0].source_key
+    assert point["properties"]["node_id"] == 11
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_without_matches_reads_no_gtfs(notices):
+    shutil.rmtree(BUS_DIR)
+    write_detours([Detour(notice=n, match=None) for n in notices])
+
+    summary = export_detours(DETOURS_FILE)
+
+    assert "(0 lines, 0 start points from 5 detours" in summary
+    assert read_json(DETOURS_GEOJSON) == {"type": "FeatureCollection", "features": []}
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_empty_file_writes_empty_collection():
+    write_detours([])
+    assert "from 0 detours" in export_detours(DETOURS_FILE)
+    assert read_json(DETOURS_GEOJSON) == {"type": "FeatureCollection", "features": []}
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_overwrites_previous_output(notices):
+    write_detours([on_route_21(notices[0], None, placed=True)])
+    DETOURS_GEOJSON.parent.mkdir(parents=True)
+    DETOURS_GEOJSON.write_text("old")
+    export_detours(DETOURS_FILE)
+    assert len(read_collection(DETOURS_GEOJSON)["features"]) == 1
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_other_path(notices, tmp_path):
+    write_detours([on_route_21(notices[0], None, placed=True)])
+    out = tmp_path / "elsewhere" / "x.geojson"
+    assert export_detours(DETOURS_FILE, out).startswith(f"wrote {out} ")
+    assert out.exists()
+    assert not DETOURS_GEOJSON.exists()
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_missing_file_raises():
+    with pytest.raises(FileNotFoundError):
+        export_detours(DETOURS_FILE)
+    assert not DETOURS_GEOJSON.exists()
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+@pytest.mark.parametrize(
+    "content", [b"", b"not json", b"{}", b'[{"notice": 1}]'], ids=str
+)
+def test_export_detours_invalid_file_raises_before_gtfs(content):
+    shutil.rmtree(BUS_DIR)  # a GTFS error would mean it loaded GTFS first
+    DETOURS_FILE.parent.mkdir(parents=True)
+    DETOURS_FILE.write_bytes(content)
+    with pytest.raises(ValueError, match="validation error"):
+        export_detours(DETOURS_FILE)
+    assert not DETOURS_GEOJSON.exists()
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_export_detours_gtfs_disagreement_keeps_old_output(notices):
+    DETOURS_GEOJSON.parent.mkdir(parents=True)
+    DETOURS_GEOJSON.write_text("old")
+    bad = on_route_21(notices[0], ("000000", 0), placed=False)
+    write_detours([bad])
+    with pytest.raises(ValueError, match="000000"):
+        export_detours(DETOURS_FILE)
+    assert DETOURS_GEOJSON.read_text() == "old"
