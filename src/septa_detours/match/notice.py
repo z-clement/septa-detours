@@ -1,13 +1,16 @@
 """Turn ``DetourNotice`` objects into ``Detour`` objects by matching to GTFS."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 
 import polars as pl
 
 from septa_detours.gtfs.load import Feed
 from septa_detours.gtfs.routes import route_shape_ids
+from septa_detours.gtfs.shapes import shape_coordinates
 from septa_detours.match.directions import find_direction_id
 from septa_detours.match.routes import find_gtfs_route
+from septa_detours.match.streets import street_key_table
 from septa_detours.model import (
     AffectedShape,
     Detour,
@@ -16,22 +19,78 @@ from septa_detours.model import (
     RouteMatch,
 )
 
+type ShapeLines = Mapping[tuple[Feed, str], list[list[float]]]
+"""``(feed, shape_id)`` -> the shape's ``[lon, lat]`` points, in order."""
 
-def match_notice(
-    notice: DetourNotice,
+
+@dataclass(frozen=True, kw_only=True)
+class MatchReference:
+    """Everything matching reads besides the notice; built once per run.
+
+    Keyword-only, so five frames of the same type can't be passed in the
+    wrong order. Build it with ``build_match_reference``, which derives
+    ``street_keys`` and ``shape_lines``.
+
+    Attributes:
+        routes: Output of ``load.load_routes``.
+        trips: Output of ``load.load_trips``.
+        directions: Output of ``load.load_directions``.
+        ways: The street cache (``streets.cache.read_street_cache``).
+        street_keys: ``streets.street_key_table(ways)``.
+        shape_lines: Every loaded shape's points.
+    """
+
+    routes: pl.DataFrame
+    trips: pl.DataFrame
+    directions: pl.DataFrame
+    ways: pl.DataFrame
+    street_keys: pl.DataFrame
+    shape_lines: ShapeLines
+
+
+def build_match_reference(
+    *,
     routes: pl.DataFrame,
     trips: pl.DataFrame,
     directions: pl.DataFrame,
-) -> Detour:
+    shapes: pl.DataFrame,
+    ways: pl.DataFrame,
+) -> MatchReference:
+    """Derive the per-run lookups once, so matching each notice is cheap.
+
+    Args:
+        routes: Output of ``load.load_routes``.
+        trips: Output of ``load.load_trips``.
+        directions: Output of ``load.load_directions``.
+        shapes: Output of ``load.load_shapes`` (the bus feed is enough:
+            the rail feed has no detours).
+        ways: The street cache.
+
+    Nothing is checked against ``trips`` here: a matched route whose shape
+    is missing from ``shapes`` fails later, as a bug (wrong feed loaded).
+    """
+    shape_lines = {
+        (feed, shape_id): coordinates
+        for feed, shape_id, coordinates in shape_coordinates(shapes).iter_rows()
+    }
+    return MatchReference(
+        routes=routes,
+        trips=trips,
+        directions=directions,
+        ways=ways,
+        street_keys=street_key_table(ways),
+        shape_lines=shape_lines,
+    )
+
+
+def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
     """Match a notice to its GTFS route and the shapes in its direction.
 
     Args:
         notice: Output of ``parse.notice.parse_detour``. Matched whatever
             its ``status``: even an ``unknown`` notice belongs to a known
             route. Filtering by status is the consumer's job.
-        routes: Output of ``load.load_routes``.
-        trips: Output of ``load.load_trips``.
-        directions: Output of ``load.load_directions``.
+        reference: GTFS and street data, from ``build_match_reference``.
 
     Returns:
         A ``Detour`` with ``notice`` unchanged and:
@@ -50,12 +109,12 @@ def match_notice(
     (e.g. a malformed frame) is a bug and propagates.
     """
     try:
-        feed, route_id = find_gtfs_route(notice.source.route_id, routes)
+        feed, route_id = find_gtfs_route(notice.source.route_id, reference.routes)
     except ValueError as err:
         return Detour(notice=notice, match=None, issues=(f"route: {err}",))
 
     shapes, issues = _affected_shapes(
-        notice.direction, feed, route_id, trips, directions
+        notice.direction, feed, route_id, reference.trips, reference.directions
     )
     return Detour(
         notice=notice,
@@ -101,10 +160,7 @@ def _affected_shapes(
 
 
 def match_notices(
-    notices: Iterable[DetourNotice],
-    routes: pl.DataFrame,
-    trips: pl.DataFrame,
-    directions: pl.DataFrame,
+    notices: Iterable[DetourNotice], reference: MatchReference
 ) -> list[Detour]:
     """Match every notice: one ``Detour`` per notice, in input order.
 
@@ -115,8 +171,6 @@ def match_notices(
 
     Args:
         notices: E.g. the output of ``parse.notice.parse_snapshot``.
-        routes: Output of ``load.load_routes``.
-        trips: Output of ``load.load_trips``.
-        directions: Output of ``load.load_directions``.
+        reference: From ``build_match_reference``, built once for all.
     """
-    return [match_notice(notice, routes, trips, directions) for notice in notices]
+    return [match_notice(notice, reference) for notice in notices]
