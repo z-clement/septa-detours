@@ -1,12 +1,17 @@
+import polars as pl
 import pytest
 
+from septa_detours.match import streets
 from septa_detours.match.streets import (
+    STREET_KEYS_SCHEMA,
     STREET_TYPES,
     WORD_ALIASES,
     StreetName,
     osm_street_keys,
     split_street_type,
+    street_key_table,
 )
+from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
 
 @pytest.mark.parametrize(
@@ -253,3 +258,88 @@ def test_word_aliases_values_are_normalized_and_final() -> None:
 
 def test_word_aliases_never_replace_a_type_word() -> None:
     assert not set(WORD_ALIASES) & set(STREET_TYPES)
+
+
+def make_ways(rows: list[tuple[int, str]]) -> pl.DataFrame:
+    """A street-cache frame from ``(way_id, name)``; geometry is filler."""
+    full_rows = [
+        (way_id, name, "residential", [1, 2], [[-75.16, 39.95], [-75.17, 39.95]])
+        for way_id, name in rows
+    ]
+    return pl.DataFrame(full_rows, schema=STREET_WAYS_SCHEMA, orient="row")
+
+
+def test_street_key_table_rows() -> None:
+    ways = make_ways(
+        [
+            (101, "North Broad Street"),
+            (102, "Washington Avenue"),
+            (103, "South Street"),
+            (104, "Spring Garden"),
+        ]
+    )
+    assert street_key_table(ways).rows() == [
+        (101, "north broad", "street"),
+        (101, "broad", "street"),
+        (102, "washington", "avenue"),
+        (103, "south", "street"),
+        (104, "spring garden", None),
+    ]
+
+
+def test_street_key_table_schema_is_exact() -> None:
+    # Only the three key columns: no name, highway or geometry leak through.
+    table = street_key_table(make_ways([(101, "North Broad Street")]))
+    assert table.schema == STREET_KEYS_SCHEMA
+
+
+def test_street_key_table_keeps_way_order_for_repeated_names() -> None:
+    # 103 shares 101's name but must still come after 102 (a plain polars
+    # join doesn't keep order); its keys stay full-first.
+    ways = make_ways(
+        [
+            (101, "North Broad Street"),
+            (102, "Washington Avenue"),
+            (103, "North Broad Street"),
+        ]
+    )
+    assert street_key_table(ways)["way_id"].to_list() == [101, 101, 102, 103, 103]
+    assert street_key_table(ways).filter(pl.col("way_id") == 103).rows() == [
+        (103, "north broad", "street"),
+        (103, "broad", "street"),
+    ]
+
+
+def test_street_key_table_applies_aliases() -> None:
+    ways = make_ways([(7, "Schuykill Parkway"), (8, "JFK Drive")])
+    assert street_key_table(ways).rows() == [
+        (7, "schuylkill parkway", None),
+        (8, "john f kennedy", "drive"),
+    ]
+
+
+def test_street_key_table_empty_ways() -> None:
+    table = street_key_table(make_ways([]))
+    assert table.is_empty()
+    assert table.schema == STREET_KEYS_SCHEMA
+
+
+def test_street_key_table_blank_name_names_the_way() -> None:
+    ways = make_ways([(101, "Broad Street"), (102, " . "), (103, " . ")])
+    with pytest.raises(ValueError, match=r"^way 102: blank street name ' \. '$"):
+        street_key_table(ways)
+
+
+def test_street_key_table_normalizes_each_name_once(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def counting_keys(name: str) -> tuple[StreetName, ...]:
+        calls.append(name)
+        return osm_street_keys(name)
+
+    monkeypatch.setattr(streets, "osm_street_keys", counting_keys)
+    ways = make_ways(
+        [(101, "Broad Street"), (102, "Pine Street"), (103, "Broad Street")]
+    )
+    street_key_table(ways)
+    assert calls == ["Broad Street", "Pine Street"]

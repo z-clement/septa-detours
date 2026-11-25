@@ -8,6 +8,8 @@ accident.
 
 from typing import NamedTuple
 
+import polars as pl
+
 STREET_TYPES: dict[str, str] = {
     "street": "street",
     "st": "street",
@@ -134,3 +136,50 @@ def osm_street_keys(name: str) -> tuple[StreetName, ...]:
     if first not in DIRECTION_PREFIXES or not rest:
         return (full,)
     return (full, StreetName(" ".join(rest), full.street_type))
+
+
+STREET_KEYS_SCHEMA = pl.Schema(
+    {"way_id": pl.Int64, "base": pl.String, "street_type": pl.String}
+)
+"""Columns of ``street_key_table``; ``street_type`` null = no type."""
+
+
+def street_key_table(ways: pl.DataFrame) -> pl.DataFrame:
+    """List the keys every OSM way can be looked up by.
+
+    Args:
+        ways: The street cache (``streets.cache.read_street_cache``); only
+            ``way_id`` and ``name`` are read. Names are non-null there.
+
+    Returns:
+        A ``STREET_KEYS_SCHEMA`` frame, one row per ``osm_street_keys`` key
+        of each way: in way order, the full key before the prefix-less
+        one. Geometry stays in ``ways``; join back on ``way_id``.
+
+    Raises:
+        ValueError: A name has no words (only dots or whitespace), naming
+            one way that has it. None in the 2026-11-24 cache; raising
+            makes a changed extract loud instead of silently unmatched.
+
+    ``osm_street_keys`` runs once per distinct name (40,003 for 146,871
+    real ways), not once per way.
+    """
+    rows: list[tuple[str, str, str | None]] = []
+    for name in ways["name"].unique(maintain_order=True).to_list():
+        try:
+            keys = osm_street_keys(name)
+        except ValueError as error:
+            way_id = ways.filter(pl.col("name") == name)["way_id"].first()
+            raise ValueError(f"way {way_id}: {error}") from None
+        rows.extend((name, key.base, key.street_type) for key in keys)
+    keys_by_name = pl.DataFrame(
+        rows,
+        schema={"name": pl.String, "base": pl.String, "street_type": pl.String},
+        orient="row",
+    )
+    # "left_right": way order, then each name's keys in osm_street_keys order.
+    return (
+        ways.select("way_id", "name")
+        .join(keys_by_name, on="name", how="inner", maintain_order="left_right")
+        .select(STREET_KEYS_SCHEMA.names())
+    )
