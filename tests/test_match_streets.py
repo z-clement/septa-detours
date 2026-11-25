@@ -1,6 +1,11 @@
 import pytest
 
-from septa_detours.match.streets import STREET_TYPES, StreetName, split_street_type
+from septa_detours.match.streets import (
+    STREET_TYPES,
+    StreetName,
+    osm_street_keys,
+    split_street_type,
+)
 
 
 @pytest.mark.parametrize(
@@ -87,3 +92,63 @@ def test_street_types_keys_are_normalized() -> None:
     for key in STREET_TYPES:
         assert key == key.casefold().replace(".", "").strip()
         assert " " not in key
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # Real OSM names with a Philly direction prefix: two keys, full first.
+        (
+            "North Broad Street",
+            [("north broad", "street"), ("broad", "street")],
+        ),
+        ("South 17th Street", [("south 17th", "street"), ("17th", "street")]),
+        (
+            "East Hunting Park Avenue",
+            [("east hunting park", "avenue"), ("hunting park", "avenue")],
+        ),
+        # A different real road comes out as a key too; the caller filters.
+        ("West Chester Pike", [("west chester", "pike"), ("chester", "pike")]),
+        # Type not in STREET_TYPES: the prefix still comes off the base.
+        ("South Penn Square", [("south penn square", None), ("penn square", None)]),
+        # Case and dots are normalized before the prefix check.
+        ("NORTH Broad St.", [("north broad", "street"), ("broad", "street")]),
+    ],
+)
+def test_osm_street_keys_strips_prefix(name: str, expected: list[tuple]) -> None:
+    assert osm_street_keys(name) == tuple(StreetName(*key) for key in expected)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # No prefix.
+        ("Washington Avenue", ("washington", "avenue")),
+        # The direction word is the whole base: it is the street's name.
+        ("South Street", ("south", "street")),
+        ("West Avenue", ("west", "avenue")),
+        ("North", ("north", None)),
+        # Single letters are letter streets, not prefixes.
+        ("W Street", ("w", "street")),
+        ("E 3rd Avenue", ("e 3rd", "avenue")),
+        # A word that only starts like a direction.
+        ("Northwood Avenue", ("northwood", "avenue")),
+        ("Westminster Avenue", ("westminster", "avenue")),
+        # Trailing directions are left alone (decided: not stripped).
+        ("Broad Street North", ("broad street north", None)),
+    ],
+)
+def test_osm_street_keys_single_key(name: str, expected: tuple) -> None:
+    assert osm_street_keys(name) == (StreetName(*expected),)
+
+
+def test_osm_street_keys_strips_only_one_prefix() -> None:
+    assert osm_street_keys("North East Avenue") == (
+        StreetName("north east", "avenue"),
+        StreetName("east", "avenue"),
+    )
+
+
+def test_osm_street_keys_rejects_blank() -> None:
+    with pytest.raises(ValueError, match="blank street name"):
+        osm_street_keys(" . ")

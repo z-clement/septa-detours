@@ -65,3 +65,37 @@ def split_street_type(name: str) -> StreetName:
     if street_type is None or not rest:
         return StreetName(" ".join(words), None)
     return StreetName(" ".join(rest), street_type)
+
+
+DIRECTION_PREFIXES = frozenset({"north", "south", "east", "west"})
+"""Leading words dropped from OSM names (normalized form).
+
+Full words only: in OSM, single letters are almost always letter
+streets (``"E Street"``, ``"W Street"``), not abbreviated prefixes.
+"""
+
+
+def osm_street_keys(name: str) -> tuple[StreetName, ...]:
+    """Return the keys an OSM street name can be looked up by.
+
+    Always the full name first. If the base starts with a direction word
+    and has more words after it, also the name without that word:
+    ``"North Broad Street"`` -> ``("north broad", "street")``,
+    ``("broad", "street")``. Alerts say ``"Broad"``; OSM spells out the
+    Philly prefix.
+
+    Not stripped when the direction word is the whole base:
+    ``"South Street"`` is South Street, so only ``("south", "street")``.
+    Stripping can add a wrong candidate (``"West Chester Pike"`` also
+    gives ``("chester", "pike")``, a different real road); the caller
+    must check candidates against the route. Alert text never goes
+    through here: alert ``"South & 33rd"`` means South Street.
+
+    Raises:
+        ValueError: ``name`` has no words (see ``split_street_type``).
+    """
+    full = split_street_type(name)
+    first, *rest = full.base.split(" ")
+    if first not in DIRECTION_PREFIXES or not rest:
+        return (full,)
+    return (full, StreetName(" ".join(rest), full.street_type))
