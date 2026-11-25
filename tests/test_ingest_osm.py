@@ -1,13 +1,18 @@
 """Tests for ``septa_detours.ingest.osm`` (Geofabrik extracts)."""
 
+import gzip
+import hashlib
 import re
+from collections.abc import Callable, Iterator
 
+import httpx
 import pytest
 
 from septa_detours.ingest.osm import (
     GEOFABRIK_REGIONS,
     dated_extract_name,
     extract_url,
+    fetch_extract,
     parse_md5_file,
 )
 
@@ -261,3 +266,264 @@ def test_parse_md5_rejects_html_error_page():
     content = b"<!DOCTYPE html><html><body>Not Found</body></html>\n"
     with pytest.raises(ValueError, match="not one md5sum line"):
         parse_md5_file(content, DATED_NAME)
+
+
+# --- fetch_extract -----------------------------------------------------------
+#
+# A fake Geofabrik behind httpx.MockTransport. Every request URL is appended
+# to a shared ``log``; the download body appends "body" when it is first
+# read, so tests can see whether (and when) the big download was consumed.
+
+LATEST = f"{US}/delaware-latest.osm.pbf"
+LATEST_NESTED = f"{US}/delaware/delaware-latest.osm.pbf"
+DATED = f"{US}/delaware/delaware-261124.osm.pbf"
+DATED_MD5_URL = f"{DATED}.md5"
+
+# Starts like a real .pbf header; includes bytes that aren't valid UTF-8.
+BODY_CHUNKS = (b"\x00\x00\x00\x0e\n\tOSMHeader", b"\xff\xfe not utf-8", b" end")
+BODY = b"".join(BODY_CHUNKS)
+BODY_MD5 = hashlib.md5(BODY, usedforsecurity=False).hexdigest()
+
+HAPPY_LOG = [LATEST, LATEST_NESTED, DATED, DATED_MD5_URL, "body"]
+
+
+def md5_line(digest: str, name: str = DATED_NAME) -> bytes:
+    return f"{digest}  {name}\n".encode()
+
+
+class LoggedBody(httpx.SyncByteStream):
+    """A response body that logs "body" when read, optionally failing at the end."""
+
+    def __init__(
+        self, chunks: tuple[bytes, ...], log: list[str], error: Exception | None
+    ) -> None:
+        self.chunks = chunks
+        self.log = log
+        self.error = error
+
+    def __iter__(self) -> Iterator[bytes]:
+        self.log.append("body")
+        yield from self.chunks
+        if self.error is not None:
+            raise self.error
+
+
+Routes = dict[str, Callable[[], httpx.Response]]
+
+
+def geofabrik_routes(
+    log: list[str],
+    *,
+    chunks: tuple[bytes, ...] = BODY_CHUNKS,
+    md5_body: bytes | None = None,
+    error: Exception | None = None,
+) -> Routes:
+    """The real redirect chain seen on 2026-11-25: 301, 307, then the dated file."""
+    md5_body = md5_line(BODY_MD5) if md5_body is None else md5_body
+    return {
+        LATEST: lambda: httpx.Response(301, headers={"location": LATEST_NESTED}),
+        LATEST_NESTED: lambda: httpx.Response(307, headers={"location": DATED}),
+        DATED: lambda: httpx.Response(200, stream=LoggedBody(chunks, log, error)),
+        DATED_MD5_URL: lambda: httpx.Response(200, content=md5_body),
+    }
+
+
+def geofabrik_client(routes: Routes, log: list[str]) -> httpx.Client:
+    """Serve ``routes``; anything else is a 404. Follows redirects like make_client."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        log.append(url)
+        make = routes.get(url)
+        return make() if make else httpx.Response(404, content=b"Not Found")
+
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+def test_fetch_extract_saves_verified_body_under_dated_name(tmp_path):
+    log: list[str] = []
+    root = tmp_path / "data" / "raw" / "osm"
+    with geofabrik_client(geofabrik_routes(log), log) as client:
+        path = fetch_extract(client, "delaware", root)
+
+    assert path == root / DATED_NAME
+    assert path.read_bytes() == BODY
+    assert [p.name for p in root.iterdir()] == [DATED_NAME]
+    # The checksum is fetched before a single body byte is read.
+    assert log == HAPPY_LOG
+
+
+def test_fetch_extract_replaces_existing_file(tmp_path):
+    (tmp_path / DATED_NAME).write_bytes(b"older copy of the same extract")
+    log: list[str] = []
+    with geofabrik_client(geofabrik_routes(log), log) as client:
+        fetch_extract(client, "delaware", tmp_path)
+    assert (tmp_path / DATED_NAME).read_bytes() == BODY
+    assert [p.name for p in tmp_path.iterdir()] == [DATED_NAME]
+
+
+def test_fetch_extract_saves_decoded_body_when_gzip_encoded(tmp_path):
+    """Geofabrik's MD5 is of the .pbf file, so HTTP content-encoding is undone."""
+    log: list[str] = []
+    routes = geofabrik_routes(log)
+    routes[DATED] = lambda: httpx.Response(
+        200, content=gzip.compress(BODY), headers={"content-encoding": "gzip"}
+    )
+    with geofabrik_client(routes, log) as client:
+        path = fetch_extract(client, "delaware", tmp_path)
+    assert path.read_bytes() == BODY
+
+
+class DiskCheckingBody(httpx.SyncByteStream):
+    """Yields 1 MiB, then records how much of it is on disk before yielding more."""
+
+    first = b"\x00" * 2**20
+
+    def __init__(self, tmp_file, sizes: list[int]) -> None:
+        self.tmp_file = tmp_file
+        self.sizes = sizes
+
+    def __iter__(self) -> Iterator[bytes]:
+        yield self.first
+        exists = self.tmp_file.exists()
+        self.sizes.append(self.tmp_file.stat().st_size if exists else -1)
+        yield b"rest"
+
+
+def test_fetch_extract_streams_to_disk(tmp_path):
+    """The first chunk is on disk before the second arrives: nothing buffers it all."""
+    sizes: list[int] = []
+    body = DiskCheckingBody(tmp_path / f"{DATED_NAME}.tmp", sizes)
+    content = DiskCheckingBody.first + b"rest"
+    digest = hashlib.md5(content, usedforsecurity=False).hexdigest()
+    log: list[str] = []
+    routes = geofabrik_routes(log, md5_body=md5_line(digest))
+    routes[DATED] = lambda: httpx.Response(200, stream=body)
+    with geofabrik_client(routes, log) as client:
+        path = fetch_extract(client, "delaware", tmp_path)
+    assert sizes == [len(DiskCheckingBody.first)]
+    assert path.read_bytes() == content
+
+
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        BODY_CHUNKS[:-1],  # truncated download
+        (*BODY_CHUNKS[:-1], b" enD"),  # one byte changed
+        (*BODY_CHUNKS, b"x"),  # one byte too many
+        (),  # empty body
+    ],
+    ids=["truncated", "corrupted", "extra-byte", "empty"],
+)
+def test_fetch_extract_md5_mismatch_keeps_existing_file(tmp_path, chunks):
+    (tmp_path / DATED_NAME).write_bytes(b"good old copy")
+    log: list[str] = []
+    with (
+        geofabrik_client(geofabrik_routes(log, chunks=chunks), log) as client,
+        pytest.raises(ValueError, match=f"MD5 mismatch for {re.escape(DATED_NAME)}"),
+    ):
+        fetch_extract(client, "delaware", tmp_path)
+
+    assert (tmp_path / DATED_NAME).read_bytes() == b"good old copy"
+    assert [p.name for p in tmp_path.iterdir()] == [DATED_NAME]
+    assert log == HAPPY_LOG
+
+
+def test_fetch_extract_connection_drop_mid_body_writes_nothing(tmp_path):
+    log: list[str] = []
+    root = tmp_path / "osm"
+    routes = geofabrik_routes(log, error=httpx.ReadError("connection dropped"))
+    with (
+        geofabrik_client(routes, log) as client,
+        pytest.raises(httpx.ReadError),
+    ):
+        fetch_extract(client, "delaware", root)
+    # The directory exists (writing had started), but holds no file or temp.
+    assert list(root.iterdir()) == []
+
+
+# Failures before the download: the body is never read, nothing is created.
+
+
+def _assert_nothing_written(root, log):
+    assert "body" not in log
+    assert not root.exists()
+
+
+def test_fetch_extract_missing_md5_fails_before_download(tmp_path):
+    log: list[str] = []
+    routes = geofabrik_routes(log)
+    del routes[DATED_MD5_URL]
+    root = tmp_path / "osm"
+    with (
+        geofabrik_client(routes, log) as client,
+        pytest.raises(httpx.HTTPStatusError, match="404"),
+    ):
+        fetch_extract(client, "delaware", root)
+    assert log == HAPPY_LOG[:-1]
+    _assert_nothing_written(root, log)
+
+
+@pytest.mark.parametrize(
+    ("md5_body", "message"),
+    [
+        (b"<html><body>Not Found</body></html>", "not one md5sum line"),
+        (md5_line(BODY_MD5, "delaware-latest.osm.pbf"), "is for 'delaware-latest"),
+        (md5_line(BODY_MD5, "delaware-261123.osm.pbf"), "is for 'delaware-261123"),
+    ],
+    ids=["html", "latest-name", "other-date"],
+)
+def test_fetch_extract_bad_md5_fails_before_download(tmp_path, md5_body, message):
+    log: list[str] = []
+    root = tmp_path / "osm"
+    with (
+        geofabrik_client(geofabrik_routes(log, md5_body=md5_body), log) as client,
+        pytest.raises(ValueError, match=message),
+    ):
+        fetch_extract(client, "delaware", root)
+    assert log == HAPPY_LOG[:-1]
+    _assert_nothing_written(root, log)
+
+
+@pytest.mark.parametrize("status", [404, 500, 503])
+def test_fetch_extract_http_error_on_extract_skips_md5(tmp_path, status):
+    log: list[str] = []
+    routes = geofabrik_routes(log)
+    routes[DATED] = lambda: httpx.Response(status, content=b"error page")
+    root = tmp_path / "osm"
+    with (
+        geofabrik_client(routes, log) as client,
+        pytest.raises(httpx.HTTPStatusError, match=str(status)),
+    ):
+        fetch_extract(client, "delaware", root)
+    assert log == [LATEST, LATEST_NESTED, DATED]
+    _assert_nothing_written(root, log)
+
+
+def test_fetch_extract_no_redirect_to_dated_file_skips_md5(tmp_path):
+    """If -latest is served directly, the data date is unknown: refuse."""
+    log: list[str] = []
+    routes = geofabrik_routes(log)
+    routes[LATEST] = lambda: httpx.Response(
+        200, stream=LoggedBody(BODY_CHUNKS, log, None)
+    )
+    root = tmp_path / "osm"
+    with (
+        geofabrik_client(routes, log) as client,
+        pytest.raises(ValueError, match="did not redirect to a dated extract"),
+    ):
+        fetch_extract(client, "delaware", root)
+    assert log == [LATEST]
+    _assert_nothing_written(root, log)
+
+
+def test_fetch_extract_invalid_region_makes_no_request(tmp_path):
+    log: list[str] = []
+    root = tmp_path / "osm"
+    with (
+        geofabrik_client(geofabrik_routes(log), log) as client,
+        pytest.raises(ValueError, match="invalid Geofabrik region"),
+    ):
+        fetch_extract(client, "../delaware", root)
+    assert log == []
+    _assert_nothing_written(root, log)

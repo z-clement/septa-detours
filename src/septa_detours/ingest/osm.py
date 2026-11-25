@@ -17,10 +17,20 @@ Every extract has a published ``.md5`` file in ``md5sum`` format, used to
 reject truncated or corrupted downloads before they replace a good file.
 """
 
+import hashlib
 import re
+from collections.abc import Iterable, Iterator
 from datetime import datetime
+from pathlib import Path
+
+import httpx
+
+from septa_detours.io import write_chunks_atomic
 
 GEOFABRIK_US_URL = "https://download.geofabrik.de/north-america/us"
+
+# The path assumes you run from the repo root (data/raw/ is gitignored).
+DEFAULT_OSM_DIR = Path("data/raw/osm")
 
 # States SEPTA's routes touch. Order is download order: biggest first, so a
 # failure on the one that matters most shows up first.
@@ -162,3 +172,81 @@ def parse_md5_file(content: bytes, expected_name: str) -> str:
         msg = f"MD5 file is for {name!r}, expected {expected_name!r}"
         raise ValueError(msg)
     return digest
+
+
+def fetch_extract(
+    client: httpx.Client, region: str, root: Path = DEFAULT_OSM_DIR
+) -> Path:
+    """Download one region's latest extract, verify its MD5, and save it.
+
+    Steps, in this order so that cheap failures come before the big download:
+        1. Open a streaming GET of ``extract_url(region)``; the client
+           follows Geofabrik's redirects to the dated file. Non-2xx raises.
+        2. Take the dated name from the final URL (``dated_extract_name``).
+        3. GET ``<final url>.md5``, the checksum of *that* dated file (not
+           of ``-latest``, which could move on mid-download), and parse it.
+        4. Only now read the body, streaming it through an MD5 check into
+           ``root / <dated name>`` with ``write_chunks_atomic``.
+
+    Anything failing in steps 1-3 means the body is never read and nothing
+    is written (not even ``root``). A failure in step 4 (dropped connection,
+    MD5 mismatch, Ctrl+C) leaves any existing file untouched.
+
+    The body is read with ``iter_bytes`` (HTTP content-encoding undone, if
+    any), because Geofabrik's MD5 is of the ``.pbf`` file itself. No
+    content-type or empty-body checks: an error page or empty body can't
+    match the MD5.
+
+    A second fetch of the same dated extract downloads it again and
+    replaces the (identical) file.
+
+    Args:
+        client: An open client that follows redirects.
+        region: Geofabrik's name for the state, e.g. ``"new-jersey"``.
+        root: Directory for extracts. Defaults to ``data/raw/osm``.
+
+    Returns:
+        The path the extract was written to.
+
+    Raises:
+        httpx.HTTPError: Network failure, timeout, or non-2xx status (for
+            the extract or its ``.md5``).
+        ValueError: Invalid region, a redirect to an unexpected URL, a
+            malformed ``.md5``, or an MD5 mismatch.
+        OSError: If the file can't be written.
+    """
+    with client.stream("GET", extract_url(region)) as response:
+        response.raise_for_status()
+        name = dated_extract_name(region, str(response.url))
+
+        md5_response = client.get(f"{response.url}.md5")
+        md5_response.raise_for_status()
+        expected_md5 = parse_md5_file(md5_response.content, name)
+
+        path = root / name
+        write_chunks_atomic(
+            _verified_chunks(response.iter_bytes(), expected_md5, name), path
+        )
+    return path
+
+
+def _verified_chunks(
+    chunks: Iterable[bytes], expected_md5: str, name: str
+) -> Iterator[bytes]:
+    """Yield ``chunks`` unchanged; after the last one, raise if the MD5 is wrong.
+
+    Raising *after* the last chunk (not before the first) is what lets
+    ``write_chunks_atomic`` discard the temp file instead of replacing the
+    target.
+
+    Raises:
+        ValueError: If the MD5 of all chunks isn't ``expected_md5``.
+    """
+    digest = hashlib.md5(usedforsecurity=False)
+    for chunk in chunks:
+        digest.update(chunk)
+        yield chunk
+    actual = digest.hexdigest()
+    if actual != expected_md5:
+        msg = f"MD5 mismatch for {name}: expected {expected_md5}, got {actual}"
+        raise ValueError(msg)
