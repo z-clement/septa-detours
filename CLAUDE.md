@@ -411,10 +411,10 @@ Done: `parse/` skeleton (scaffolded by Claude at my request). Every function rai
 ty and imports pass. Layout:
 - `_api.py`: private raw models `ApiRoute` (`route_id`, `mode`,
   `detour`) / `ApiDetour` (the six strings), `extra="ignore"` (outside
-  format; unlike `model.py`'s `forbid`), strict, frozen. Fields written;
-  `read_snapshot(content: bytes) -> list[ApiRoute]` body is a TODO. A
-  structural error fails the whole snapshot (`ValidationError`): API
-  drift should be loud, not skipped.
+  format; unlike `model.py`'s `forbid`), strict, frozen.
+  `read_snapshot(content: bytes) -> list[ApiRoute]`: **done** (see
+  below). A structural error fails the whole snapshot
+  (`ValidationError`): API drift should be loud, not skipped.
 - `text.py::clean_text(raw) -> str | None`: **done** (see below).
 - `times.py::parse_api_datetime(raw) -> datetime` and
   `local_time_issue(moment) -> str | None`: **done** (see below).
@@ -422,7 +422,8 @@ ty and imports pass. Layout:
   `find_directions(message) -> tuple[Direction, ...]`: **done** (see
   below). Finding is separate from deciding.
 - `notice.py`: `make_source_key(route_id, location_start, start) -> str`
-  (hashlib), `parse_detour(route, detour, snapshot) -> DetourNotice`,
+  (**done**, see below), `parse_detour(route, detour, snapshot) ->
+  DetourNotice`,
   `parse_snapshot(content, snapshot) -> list[DetourNotice]` (API order;
   routes without detours contribute nothing).
 Decisions:
@@ -435,8 +436,6 @@ Decisions:
 - `end` < `start` -> keep both, add an issue. API `start`/`end` win over
   times in the message text.
 Open (TODOs in the docstrings; decide while implementing):
-- `make_source_key`: normalization (case, whitespace) and separator.
-  Must give the same key for route 31 #2 in both snapshots' fixtures.
 - Whether recurring windows and message/API mismatches add an issue
   (adding one makes most notices `partial`).
 - A `kind` field (reroute / stop closure / relocation) would change
@@ -511,12 +510,84 @@ equivalent (`.lower()` vs `.casefold()` on ASCII keys; dropping `+` from
 the separator only adds empty tokens, which normalize to `None`).
 334 tests total.
 
+Done: `parse/notice.py::make_source_key`. Decided (my choice):
+whitespace + case. Each field -> `(clean_text(raw) or "").casefold()`;
+blank and whitespace-only both hash as `""`; inner runs collapse to one
+space (not removed). Nothing else forgiven: `"3:00"` != `"03:00"`. The
+three fields are hashed as `json.dumps([...])` (no separator character,
+so text can't shift between fields and collide), UTF-8, `sha256`, first
+`SOURCE_KEY_LENGTH = 16` hex chars. `tests/test_notice.py` (24) includes
+a **pinned value** (`661b7024a25d2bbd` for route 31 #4): keys are compared
+across snapshots parsed at different times, so changing the algorithm
+must be deliberate. Route 31 items 0-4 get equal keys across both
+snapshots (they're byte-identical, so the fixtures can't distinguish
+normalizations; hand-built tests do). 15 mutations, 13 caught; 2
+survivors only matter for non-ASCII input (none in fixture key fields):
+`.lower()` vs `.casefold()`, `ensure_ascii=False`.
+
+Done: `parse/_api.py::read_snapshot`: module-level
+`_SNAPSHOT = TypeAdapter(Annotated[list[ApiRoute], Field(min_length=1)])`,
+then `_SNAPSHOT.validate_json(content)`. Everything bad is a
+`ValidationError`: invalid JSON, invalid UTF-8, a BOM, trailing garbage,
+non-list top level, null/missing/wrong-type fields at either level.
+Decided (my choice): **`[]` is rejected** (real snapshots list all ~185
+routes, even detour-less ones; `[]` would read as "no detours anywhere");
+**duplicate `route_id`s not checked** (not a shape problem; none seen).
+Values are verbatim (the API's `\/` decodes to `/`; no cleaning).
+Checked by hand: both real snapshots have 185 entries, no BOM, all six
+detour keys present and all strings. `tests/test_api.py` (36): every
+fixture wrapped as `b"[" + bytes + b"]"` and compared field by field to
+the decoded JSON; `make_entry`/`make_detour(**overrides)` helpers; a
+25-case rejection table. 11 mutations, 10 caught; `strict=False`
+survives and is equivalent for JSON input (lax JSON mode doesn't coerce
+numbers/bools/arrays to `str` or strings/objects to `tuple`). Strict
+does bite in Python: `ApiRoute(**dict)` with a list of dicts fails, so
+tests compare against `read_snapshot(...)` output instead. 394 tests
+total.
+
+Claude habit to watch: it has twice typed literal NBSPs into test
+strings. Ruff RUF001 catches it; fix with `sed -i
+'s/\xc2\xa0/\\u00a0/g' <file>` (Edit can't match the invisible char).
+
 Next (clean session): Claude implements `parse/`, one function at a
 time, with tests from the fixture index, stopping for my review after each.
 Order: ~~`clean_text`~~ -> ~~`parse_api_datetime`~~ ->
-~~`normalize_direction`~~ -> ~~`find_directions`~~ -> `make_source_key`
-(settle its normalization question first; ask me) ->
-`_api.read_snapshot` -> `parse_detour` -> `parse_snapshot`. Keep
+~~`normalize_direction`~~ -> ~~`find_directions`~~ ->
+~~`make_source_key`~~ -> ~~`_api.read_snapshot`~~ -> **`parse_detour`**
+-> `parse_snapshot`.
+
+Brief for `parse_detour(route, detour, snapshot) -> DetourNotice`
+(read its docstring in `notice.py` first; it lists the decisions):
+- `source`: `SourceText(snapshot=..., route_id=route.route_id,
+  mode=route.mode, ` + the six `detour` strings verbatim`)`.
+- `source_key`: `make_source_key(route.route_id, detour.location_start,
+  detour.start)` (raw strings; the function normalizes).
+- `location_start`/`location_end`/`reason`: `clean_text`; blank ->
+  `None`. Decide whether a blank `location_start` also adds an issue
+  (it already makes `status` `unknown`; ask me).
+- `start`/`end`: `parse_api_datetime`; catch `ValueError` -> `None` +
+  issue `f"start: {error}"`. Then call `local_time_issue` on each parsed
+  value and add any result as `"start: ..."` / `"end: ..."`.
+- `end < start` -> keep both, add an issue (wording to settle). Same-zone
+  aware datetimes compare by wall clock (see the `times.py` notes).
+- `direction`: `find_directions(detour.message)`; exactly one ->
+  it; none or 2+ -> `None` + issue (wording to settle). Never pick one.
+- `issues`: a tuple in a fixed, documented order (decide: field order,
+  e.g. start, end, order check, direction?). Each must be `CleanText`.
+- Must never raise on messy text: a test should run it over every detour
+  item in every fixture and assert it returns (and check `status`).
+- Expected results per item are in `tests/fixtures/alerts/README.md`
+  (guessed before the parser existed; challenge them). Build tests from
+  those rows; use `read_snapshot` on a wrapped fixture to get real
+  `ApiRoute`/`ApiDetour` objects.
+- Still open, ask me before deciding: recurring windows and
+  message-vs-API mismatches (flag or not; flagging makes most notices
+  `partial`); a `kind` field (changes `model.py`: flag it).
+Suggested increments: (1) the happy path on route 55 (clean baseline)
+building `source`/`source_key`/cleaned text; (2) times + DST + order
+issues; (3) direction issues; (4) the all-fixtures never-raises sweep.
+Then `parse_snapshot` (`read_snapshot` + `parse_detour` per item, API
+order). Keep
 collecting snapshots over several days: fetch on 11/26 while the parade
 detours are live, and again on 11/27 to see them removed. Add fixtures
 when a snapshot shows a new quirk (one README table per snapshot).
