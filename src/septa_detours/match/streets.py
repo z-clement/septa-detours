@@ -33,6 +33,35 @@ alert ``"Hunting Park"`` would split as base ``"hunting"``.
 """
 
 
+WORD_ALIASES: dict[str, str] = {
+    # Abbreviations.
+    "jfk": "john f kennedy",  # alert "JFK Blvd"; OSM "JFK Drive"
+    "mt": "mount",  # alert "Mt Pleasant"; OSM "Mt Pleasant Road"
+    "prk": "park",  # alert "Hunting Prk"
+    # Missing or missing spaces.
+    "graysferry": "grays ferry",  # alert "Graysferry & Washington"
+    "malvernave": "malvern ave",  # alert "MalvernAve btwn 64th & Wynnewood"
+    # Typos, each seen in a real alert (or OSM: "Schuykill Parkway").
+    "batrum": "bartram",  # "Tinicum Blvd & Batrum Ave"
+    "creshem": "cresheim",  # "Mt Pleasant & Creshem"
+    "farimount": "fairmount",  # "Farimount & Beach"
+    "krestown": "krewstown",  # "Krestown Rd Btwn Algon & Bloomfield"
+    "lorretto": "loretto",  # "Oxford & Lorretto"
+    "riggold": "ringgold",  # "Morris St & Riggold St"
+    "schuykill": "schuylkill",  # "Market & Schuykill"
+    "graden": "garden",  # "Spring Graden & Pennsylvania"
+    "sping": "spring",  # route 31 message "Sping Garden"
+}
+"""Whole word (casefolded, dots removed) -> its replacement word(s).
+
+Applied to alert text and OSM names alike, once, before the type is split
+off (so ``"MalvernAve"`` -> ``"malvern ave"`` -> type ``"avenue"``). No
+replacement word is itself a key, so one pass is enough. Exact entries
+only, no fuzzy matching: an unseen typo stays unmatched. Deliberately
+absent: ``"garney"`` (route 54; probably Garnet Street, but unverified).
+"""
+
+
 class StreetName(NamedTuple):
     """A street name split into its base and its type, both normalized."""
 
@@ -46,7 +75,9 @@ def split_street_type(name: str) -> StreetName:
     """Normalize ``name`` and split a known type off its last word.
 
     Normalizing: casefold, delete dots (``"J.F.K."`` -> ``"jfk"``,
-    ``"John F. Kennedy"`` -> ``"john f kennedy"``), collapse whitespace.
+    ``"John F. Kennedy"`` -> ``"john f kennedy"``), collapse whitespace,
+    replace whole words found in ``WORD_ALIASES`` (``"jfk"`` ->
+    ``"john f kennedy"``).
     Then, if the last word is in ``STREET_TYPES``, it becomes the type:
     ``"Broad St"`` -> ``("broad", "street")``. Only the last word is
     checked, so a leading ``"St"`` (Saint) stays in the base.
@@ -57,7 +88,11 @@ def split_street_type(name: str) -> StreetName:
     Raises:
         ValueError: ``name`` has no words (blank, or only dots).
     """
-    words = name.replace(".", "").casefold().split()
+    words = [
+        replacement
+        for word in name.replace(".", "").casefold().split()
+        for replacement in WORD_ALIASES.get(word, word).split()
+    ]
     if not words:
         raise ValueError(f"blank street name {name!r}")
     *rest, last = words

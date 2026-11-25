@@ -2,6 +2,7 @@ import pytest
 
 from septa_detours.match.streets import (
     STREET_TYPES,
+    WORD_ALIASES,
     StreetName,
     osm_street_keys,
     split_street_type,
@@ -24,8 +25,8 @@ from septa_detours.match.streets import (
         ("Huntingdon Pk", ("huntingdon", "pike")),
         ("Spring Garden", ("spring garden", None)),
         ("MArket", ("market", None)),
-        ("J.F.K. Blvd", ("jfk", "boulevard")),
-        ("JFK", ("jfk", None)),
+        ("J.F.K. Blvd", ("john f kennedy", "boulevard")),
+        ("JFK", ("john f kennedy", None)),
         # Real OSM spellings.
         ("North Broad Street", ("north broad", "street")),
         ("Washington Avenue", ("washington", "avenue")),
@@ -58,7 +59,7 @@ def test_split_street_type_real_names(name: str, expected: tuple) -> None:
         ("Street", ("street", None)),
         ("St.", ("st", None)),
         # Type spelled with a dot.
-        ("Mt. Airy Dr.", ("mt airy", "drive")),
+        ("Mt. Airy Dr.", ("mount airy", "drive")),
         # Whitespace runs and padding collapse.
         ("  Spring   Garden\tSt ", ("spring garden", "street")),
         # Case of the type word doesn't matter.
@@ -152,3 +153,103 @@ def test_osm_street_keys_strips_only_one_prefix() -> None:
 def test_osm_street_keys_rejects_blank() -> None:
     with pytest.raises(ValueError, match="blank street name"):
         osm_street_keys(" . ")
+
+
+def alert_matches_osm(alert: str, osm: str) -> bool:
+    """The tier A rule: same base; the alert's type, if given, must agree."""
+    wanted = split_street_type(alert)
+    return any(
+        key.base == wanted.base and wanted.street_type in (None, key.street_type)
+        for key in osm_street_keys(osm)
+    )
+
+
+# (alert piece, real OSM name it should match). Alert pieces are real
+# location text (split by hand); "Sping Garden" is from route 31's message.
+ALIAS_EVIDENCE = [
+    ("JFK Blvd", "John F. Kennedy Boulevard"),
+    ("J.F.K. Blvd", "John F Kennedy Boulevard"),
+    ("Mt Pleasant", "East Mount Pleasant Avenue"),
+    ("Hunting Prk", "West Hunting Park Avenue"),
+    ("Graysferry", "Grays Ferry Avenue"),
+    ("MalvernAve", "Malvern Avenue"),
+    ("Batrum Ave", "Bartram Avenue"),
+    ("Creshem", "Cresheim Road"),
+    ("Farimount", "Fairmount Avenue"),
+    ("Krestown Rd", "Krewstown Road"),
+    ("Lorretto", "Loretto Avenue"),
+    ("Riggold St", "North Ringgold Street"),
+    ("Schuykill", "South Schuylkill Avenue"),
+    ("Spring Graden", "Spring Garden Street"),
+    ("Sping Garden", "North Spring Garden Street"),
+]
+
+
+@pytest.mark.parametrize(("alert", "osm"), ALIAS_EVIDENCE)
+def test_aliased_alert_matches_osm(alert: str, osm: str) -> None:
+    assert alert_matches_osm(alert, osm)
+
+
+def test_every_alias_has_evidence() -> None:
+    # A new alias must come with a real (alert, OSM) pair above.
+    used = {
+        word
+        for alert, _ in ALIAS_EVIDENCE
+        for word in alert.replace(".", "").casefold().split()
+    }
+    assert set(WORD_ALIASES) <= used
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # Glued type: aliased first, then the type is split off.
+        ("MalvernAve", ("malvern", "avenue")),
+        # Only word is an alias.
+        ("Mt", ("mount", None)),
+        # Alias in the middle of a name.
+        ("Old Graysferry Rd", ("old grays ferry", "road")),
+        # Case and dots are normalized before the lookup.
+        ("SCHUYKILL", ("schuylkill", None)),
+        ("M.T. Pleasant", ("mount pleasant", None)),
+        # Whole words only.
+        ("Mtn Road", ("mtn", "road")),
+        ("Prkway", ("prkway", None)),
+        # OSM's own variants get the same treatment (decided: both sides).
+        ("JFK Drive", ("john f kennedy", "drive")),
+        ("Mt Pleasant Road", ("mount pleasant", "road")),
+        ("Schuykill Parkway", ("schuylkill parkway", None)),
+    ],
+)
+def test_split_street_type_aliases(name: str, expected: tuple) -> None:
+    assert split_street_type(name) == StreetName(*expected)
+
+
+def test_alias_reaches_osm_keys() -> None:
+    assert osm_street_keys("North JFK Street") == (
+        StreetName("north john f kennedy", "street"),
+        StreetName("john f kennedy", "street"),
+    )
+
+
+def test_aliased_type_is_still_strict() -> None:
+    # "JFK Blvd" must not match "JFK Drive" (decided: strict if given).
+    assert not alert_matches_osm("JFK Blvd", "JFK Drive")
+    assert alert_matches_osm("JFK", "JFK Drive")
+
+
+def test_word_aliases_keys_are_normalized_single_words() -> None:
+    for key in WORD_ALIASES:
+        assert key == key.casefold().replace(".", "")
+        assert key.split() == [key]
+
+
+def test_word_aliases_values_are_normalized_and_final() -> None:
+    # One pass is enough: no replacement word is itself an alias key.
+    for value in WORD_ALIASES.values():
+        assert value == " ".join(value.casefold().replace(".", "").split())
+        assert not set(value.split()) & set(WORD_ALIASES)
+
+
+def test_word_aliases_never_replace_a_type_word() -> None:
+    assert not set(WORD_ALIASES) & set(STREET_TYPES)
