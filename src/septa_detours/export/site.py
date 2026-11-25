@@ -24,6 +24,7 @@ from septa_detours.export.geojson import (
     _css_color,  # private; same stage
     line_feature,
 )
+from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Detour
 
@@ -42,6 +43,15 @@ _NUMBER = re.compile(r"[0-9]+")
 
 _SAFE_ROUTE_ID = re.compile(r"[A-Za-z0-9_-]+")
 """Same rule as ``write.py``'s (a test checks they agree)."""
+
+DETAIL_TOLERANCE_M: Final = 2.0
+"""``simplify_line`` tolerance for a focused route's shapes (plan D2)."""
+
+COVERING_TOLERANCE_M: Final = 20.0
+"""``covering_shapes`` tolerance: which shapes the overview draws (D1)."""
+
+COORDINATE_DECIMALS: Final = 5
+"""``round_line`` places for every exported line: ~1 m (D2)."""
 
 
 def route_mode(route_type: int) -> Mode:
@@ -290,6 +300,78 @@ def route_detail(
         "shapes": {"type": "FeatureCollection", "features": features},
         "detours": detour_objects,
     }
+
+
+def route_shapes(
+    trips: pl.DataFrame, coordinates: pl.DataFrame
+) -> dict[str, list[RouteShape]]:
+    """Prepare every route's shapes for its detail file.
+
+    Args:
+        trips: Output of ``load.load_trips``. Trips without a ``shape_id``
+            have nothing to draw and are skipped.
+        coordinates: Output of ``shapes.shape_coordinates`` (raw lines).
+
+    Returns:
+        Route ``key`` -> its shapes, one per ``(shape, direction)`` used by
+        its trips. Each line is simplified at ``DETAIL_TOLERANCE_M`` and
+        rounded to ``COORDINATE_DECIMALS``; ``covering`` comes from
+        ``covering_shapes`` per direction, on the simplified lines. Order:
+        by ``direction_id`` (missing last), covering first, most trips
+        first, then ``shape_id``. Routes without shaped trips are absent.
+
+    Raises:
+        ValueError: A trip's shape has no coordinates (named, never
+            silently dropped), or a ``route_id`` isn't safe (``route_key``).
+    """
+    counts = (
+        trips.drop_nulls("shape_id")
+        .group_by("feed", "route_id", "direction_id", "shape_id", maintain_order=True)
+        .len("trip_count")
+    )
+    raw = {(feed, shape_id): line for feed, shape_id, line in coordinates.rows()}
+    used = sorted(set(counts.select("feed", "shape_id").rows()))
+    missing = [shape for shape in used if shape not in raw]
+    if missing:
+        raise ValueError(f"shapes used by trips have no coordinates: {missing}")
+    simplified = {
+        shape: simplify_line(raw[shape], DETAIL_TOLERANCE_M) for shape in used
+    }
+
+    groups: dict[tuple[str, int | None], list[tuple[str, str, int]]] = {}
+    for row in counts.iter_rows(named=True):
+        key = route_key(row["feed"], row["route_id"])
+        groups.setdefault((key, row["direction_id"]), []).append(
+            (row["feed"], row["shape_id"], row["trip_count"])
+        )
+
+    shapes: dict[str, list[RouteShape]] = {}
+    for (key, direction_id), members in groups.items():
+        lines = {
+            shape_id: simplified[(feed, shape_id)] for feed, shape_id, _ in members
+        }
+        covering = set(covering_shapes(lines, COVERING_TOLERANCE_M))
+        shapes.setdefault(key, []).extend(
+            RouteShape(
+                shape_id=shape_id,
+                direction_id=direction_id,
+                trip_count=trip_count,
+                covering=shape_id in covering,
+                line=round_line(lines[shape_id], COORDINATE_DECIMALS),
+            )
+            for _, shape_id, trip_count in members
+        )
+    for route in shapes.values():
+        route.sort(
+            key=lambda shape: (
+                shape.direction_id is None,
+                shape.direction_id or 0,
+                not shape.covering,
+                -shape.trip_count,
+                shape.shape_id,
+            )
+        )
+    return shapes
 
 
 def _blank_to_none(text: str | None) -> str | None:

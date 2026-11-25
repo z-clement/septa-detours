@@ -19,6 +19,7 @@ from septa_detours.export.site import (
     route_detail,
     route_key,
     route_mode,
+    route_shapes,
     route_sort_key,
 )
 from septa_detours.export.write import route_geojson_path
@@ -617,3 +618,146 @@ def test_route_detail_rejects_a_one_point_shape() -> None:
     shape = SOUTH._replace(line=[[-75.1716, 39.9405]])
     with pytest.raises(ValueError, match="317310"):
         route_detail(ROUTE_2, [], [shape], [])
+
+
+# --- route_shapes ----------------------------------------------------------------
+
+# Must match ``load.load_trips`` and ``shapes.shape_coordinates`` output.
+TRIPS_SCHEMA = {
+    "route_id": pl.String,
+    "service_id": pl.String,
+    "trip_id": pl.String,
+    "trip_headsign": pl.String,
+    "direction_id": pl.Int8,
+    "shape_id": pl.String,
+    "feed": pl.String,
+}
+COORDINATES_SCHEMA = {
+    "feed": pl.String,
+    "shape_id": pl.String,
+    "coordinates": pl.List(pl.List(pl.Float64)),
+}
+
+
+def make_trips(
+    rows: list[tuple[Feed, str, int | None, str | None, int]],
+) -> pl.DataFrame:
+    """``(feed, route_id, direction_id, shape_id, trip count)`` -> trips."""
+    trips = [
+        (
+            route_id,
+            "WK",
+            f"{route_id}-{shape_id}-{n}",
+            None,
+            direction_id,
+            shape_id,
+            feed,
+        )
+        for feed, route_id, direction_id, shape_id, count in rows
+        for n in range(count)
+    ]
+    return pl.DataFrame(trips, schema=TRIPS_SCHEMA, orient="row")
+
+
+def make_coordinates(lines: dict[tuple[Feed, str], list[list[float]]]) -> pl.DataFrame:
+    rows = [(feed, shape_id, line) for (feed, shape_id), line in lines.items()]
+    return pl.DataFrame(rows, schema=COORDINATES_SCHEMA, orient="row")
+
+
+# Raw lines: 6 decimals (rounding shows); 317310's midpoint is 0.85 m off
+# its line (dropped at 2 m, not at 0). 317315 is a short-turn along 317310
+# ending 8.5 m beside it (covered at 20 m, not at 0).
+# "001005" exists in both feeds with different lines: feed must be used.
+RAW_LINES: dict[tuple[Feed, str], list[list[float]]] = {
+    ("bus", "317310"): [
+        [-75.171612, 39.940512],
+        [-75.171602, 39.938512],
+        [-75.171612, 39.936512],
+    ],
+    ("bus", "317315"): [[-75.171612, 39.940512], [-75.171512, 39.938512]],
+    ("bus", "317312"): [[-75.170612, 39.936512], [-75.170612, 39.940512]],
+    ("bus", "001005"): [[-75.0, 40.1], [-75.0, 40.2]],
+    ("rail", "001005"): [[-75.241234, 39.876543], [-75.201234, 39.906543]],
+}
+COORDINATES = make_coordinates(RAW_LINES)
+
+
+def test_route_shapes_whole_output() -> None:
+    trips = make_trips(
+        [
+            ("bus", "2", 0, "317315", 5),
+            ("bus", "2", 1, "317312", 2),
+            ("bus", "2", 0, "317310", 3),
+            ("rail", "AIR", 1, "001005", 4),
+        ]
+    )
+    assert route_shapes(trips, COORDINATES) == {
+        "bus-2": [
+            RouteShape(
+                "317310", 0, 3, True, [[-75.17161, 39.94051], [-75.17161, 39.93651]]
+            ),
+            RouteShape(
+                "317315", 0, 5, False, [[-75.17161, 39.94051], [-75.17151, 39.93851]]
+            ),
+            RouteShape(
+                "317312", 1, 2, True, [[-75.17061, 39.93651], [-75.17061, 39.94051]]
+            ),
+        ],
+        "rail-AIR": [
+            RouteShape(
+                "001005", 1, 4, True, [[-75.24123, 39.87654], [-75.20123, 39.90654]]
+            )
+        ],
+    }
+
+
+@pytest.mark.parametrize("tied", [("b", "a"), ("a", "b")])
+def test_route_shapes_order_within_a_direction(tied: tuple[str, str]) -> None:
+    # Three separate branches (all covering) and a direction-less shape.
+    # The tied pair comes in both orders, so the result can't be input order.
+    lines: dict[tuple[Feed, str], list[list[float]]] = {
+        ("bus", "b"): [[-75.10, 40.00], [-75.10, 40.01]],
+        ("bus", "a"): [[-75.12, 40.00], [-75.12, 40.01]],
+        ("bus", "c"): [[-75.14, 40.00], [-75.14, 40.01]],
+        ("bus", "n"): [[-75.16, 40.00], [-75.16, 40.01]],
+    }
+    trips = make_trips(
+        [
+            ("bus", "9", None, "n", 9),
+            ("bus", "9", 1, tied[0], 2),
+            ("bus", "9", 1, "c", 7),
+            ("bus", "9", 1, tied[1], 2),
+            ("bus", "9", 0, "b", 1),
+        ]
+    )
+    result = route_shapes(trips, make_coordinates(lines))
+    assert [(s.direction_id, s.shape_id) for s in result["bus-9"]] == [
+        (0, "b"),
+        (1, "c"),  # most trips
+        (1, "a"),  # tie on trips: by shape_id
+        (1, "b"),
+        (None, "n"),  # no direction: last
+    ]
+
+
+def test_route_shapes_shape_in_both_directions_is_two_separate_shapes() -> None:
+    trips = make_trips([("bus", "2", 0, "317312", 1), ("bus", "2", 1, "317312", 6)])
+    first, second = route_shapes(trips, COORDINATES)["bus-2"]
+    assert [(s.direction_id, s.trip_count) for s in (first, second)] == [(0, 1), (1, 6)]
+    assert first.line == second.line
+    assert first.line is not second.line
+
+
+def test_route_shapes_skips_trips_without_a_shape() -> None:
+    trips = make_trips([("bus", "2", 0, "317310", 1), ("bus", "47", 0, None, 3)])
+    assert list(route_shapes(trips, COORDINATES)) == ["bus-2"]
+
+
+def test_route_shapes_no_trips() -> None:
+    assert route_shapes(make_trips([]), COORDINATES) == {}
+
+
+def test_route_shapes_rejects_a_shape_without_coordinates() -> None:
+    trips = make_trips([("bus", "2", 0, "317310", 1), ("rail", "AIR", 0, "317310", 1)])
+    with pytest.raises(ValueError, match=r"no coordinates: \[\('rail', '317310'\)\]"):
+        route_shapes(trips, COORDINATES)

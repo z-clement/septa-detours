@@ -187,7 +187,7 @@ keeps it.
 
 A FeatureCollection of LineStrings: the **covering set** of each
 route-direction (D1 decided, see Facts), simplified at **5 m**
-(**Confirm** D2), coordinates rounded to 5 decimals.
+(D2 decided), coordinates rounded to 5 decimals.
 
 Properties, kept minimal (this file is loaded once, up front):
 `key`, `direction_id`, `mode`, `color`. Everything else comes from
@@ -427,7 +427,7 @@ Web (plain JS):
   from kept branches are dropped too). Rejected: one kept shape must
   cover it all; the longest shape per route-direction (loses real
   branches, e.g. route 55).
-- **D2** Simplification: overview 5 m, detail 2 m, 5 decimals
+- **D2** (decided, for now) Simplification: overview 5 m, detail 2 m, 5 decimals
   (recommended). 10 m overview saves little more (0.40 vs 0.53 MB on
   single shapes).
 - **D3** Build directory + `current.json` pointer (recommended) vs.
