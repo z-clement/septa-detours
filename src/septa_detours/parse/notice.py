@@ -7,10 +7,13 @@ prefixed with the field name, e.g. ``"start: unparseable '...'"``.
 
 import hashlib
 import json
+from datetime import UTC, datetime
 
-from septa_detours.model import DetourNotice
+from septa_detours.model import DetourNotice, Direction, SourceText
 from septa_detours.parse._api import ApiDetour, ApiRoute
+from septa_detours.parse.direction import find_directions
 from septa_detours.parse.text import clean_text
+from septa_detours.parse.times import local_time_issue, parse_api_datetime
 
 SOURCE_KEY_LENGTH = 16
 """Hex characters kept from the SHA-256 digest (64 bits)."""
@@ -63,10 +66,17 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
     Returns:
         The notice, with ``source`` holding the raw strings verbatim.
 
+    Issues come in field order: start, end, the end-before-start check,
+    then direction. Each is prefixed with its field name.
+
     Decisions this function owns (each needs a test):
         - Directions: exactly one found -> it; none -> ``None`` + issue;
           two or more different -> ``None`` + issue (never pick one).
-        - ``end`` earlier than ``start`` -> keep both, add an issue.
+        - ``end`` earlier than ``start`` (as real instants) -> keep both,
+          add an issue. Equal times are not flagged.
+        - Blank ``location_start``/``location_end``/``reason`` -> ``None``
+          with no issue: a ``None`` location_start already makes the
+          status ``unknown``, and blank LE/reason are normal.
         - Message text vs API fields (route 44 #3 says "until 11/23", API
           end is 11/24): API fields win. Whether to flag the mismatch is
           open; detecting it means parsing message dates, which is out of
@@ -77,8 +87,76 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         - Stop closures vs reroutes: the model has no ``kind`` field yet.
           Adding one changes ``model.py`` (flag it first).
     """
-    # TODO: build SourceText, call each field parser, collect issues.
-    raise NotImplementedError
+    source = SourceText(
+        snapshot=snapshot,
+        route_id=route.route_id,
+        mode=route.mode,
+        location_start=detour.location_start,
+        location_end=detour.location_end,
+        start=detour.start,
+        end=detour.end,
+        message=detour.message,
+        reason=detour.reason,
+    )
+    start, start_issues = _parse_time("start", detour.start)
+    end, end_issues = _parse_time("end", detour.end)
+    issues = [*start_issues, *end_issues]
+    if start is not None and end is not None and _is_before(end, start):
+        issues.append("end: before start")
+    direction, direction_issues = _pick_direction(detour.message)
+    issues.extend(direction_issues)
+    return DetourNotice(
+        source=source,
+        source_key=make_source_key(route.route_id, detour.location_start, detour.start),
+        start=start,
+        end=end,
+        location_start=clean_text(detour.location_start),
+        location_end=clean_text(detour.location_end),
+        reason=clean_text(detour.reason),
+        direction=direction,
+        issues=tuple(issues),
+    )
+
+
+def _parse_time(field: str, raw: str) -> tuple[datetime | None, tuple[str, ...]]:
+    """Parse one API time, turning problems into field-prefixed issues.
+
+    An unparseable value gives ``None`` and one issue, e.g.
+    ``"start: unrecognized datetime '...'"``. A parsed value that falls in
+    a DST gap or overlap is kept, with ``local_time_issue``'s reason.
+    """
+    try:
+        moment = parse_api_datetime(raw)
+    except ValueError as error:
+        return None, (f"{field}: {error}",)
+    issue = local_time_issue(moment)
+    return moment, () if issue is None else (f"{field}: {issue}",)
+
+
+def _pick_direction(message: str) -> tuple[Direction | None, tuple[str, ...]]:
+    """Decide the detour's direction from the directions in its message.
+
+    Exactly one distinct direction -> it (repeats like route 24 #0's
+    "NB Via ... Recover NB On" count once). None found, or two or more
+    different ones -> ``None`` plus an issue; never pick one. Conflicting
+    directions are listed in message order.
+    """
+    directions = find_directions(message)
+    if len(directions) == 1:
+        return directions[0], ()
+    if not directions:
+        return None, ("direction: none found in message",)
+    return None, (f"direction: conflicting {', '.join(directions)} in message",)
+
+
+def _is_before(later: datetime, earlier: datetime) -> bool:
+    """Whether ``later`` is strictly before ``earlier``, as real instants.
+
+    Compared in UTC on purpose: same-zone aware datetimes compare by wall
+    clock, which gets a DST gap wrong (``2:30 AM`` is read as 07:30 UTC,
+    after a ``3:10 AM`` end at 07:10 UTC). Equal times are not "before".
+    """
+    return later.astimezone(UTC) < earlier.astimezone(UTC)
 
 
 def parse_snapshot(content: bytes, snapshot: str) -> list[DetourNotice]:
