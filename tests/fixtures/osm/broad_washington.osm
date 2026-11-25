@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-written for septa-detours tests: not real OSM data, though the
+  coordinates are near the real Broad St & Washington Ave (South Philly).
+  Every way is here to test one rule of streets.load.read_street_ways.
+-->
+<osm version="0.6" generator="hand-written">
+  <!-- Broad St runs north-south (lon about -75.1677); node 2 is its
+       intersection with Washington Ave (lat about 39.9386). -->
+  <node id="1" version="1" lat="39.9396" lon="-75.1679"/>
+  <node id="2" version="1" lat="39.9386" lon="-75.1677"/>
+  <node id="3" version="1" lat="39.9376" lon="-75.1675"/>
+  <node id="4" version="1" lat="39.9384" lon="-75.1700"/>
+  <node id="5" version="1" lat="39.9388" lon="-75.1655"/>
+  <!-- A tagged node (traffic signal): nodes are never rows. -->
+  <node id="6" version="1" lat="39.9386" lon="-75.1677">
+    <tag k="highway" v="traffic_signals"/>
+  </node>
+  <!-- Far away (Pittsburgh), for bbox tests. -->
+  <node id="7" version="1" lat="40.4415" lon="-79.9959"/>
+  <node id="8" version="1" lat="40.4420" lon="-79.9940"/>
+
+  <!-- Kept: a plain named road. -->
+  <way id="101" version="1">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/>
+    <tag k="highway" v="primary"/>
+    <tag k="name" v="South Broad Street"/>
+  </way>
+  <!-- Kept: shares node 2 with way 101 (the intersection). -->
+  <way id="102" version="1">
+    <nd ref="4"/><nd ref="2"/><nd ref="5"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="name" v="Washington Avenue"/>
+    <tag k="tiger:name_base" v="Washington"/>
+  </way>
+  <!-- Dropped: road with no name. -->
+  <way id="103" version="1">
+    <nd ref="1"/><nd ref="4"/>
+    <tag k="highway" v="residential"/>
+  </way>
+  <!-- Dropped: named, but a footway (not a road). -->
+  <way id="104" version="1">
+    <nd ref="3"/><nd ref="5"/>
+    <tag k="highway" v="footway"/>
+    <tag k="name" v="Broad Street Walk"/>
+  </way>
+  <!-- Dropped: named road still under construction. -->
+  <way id="105" version="1">
+    <nd ref="3"/><nd ref="4"/>
+    <tag k="highway" v="construction"/>
+    <tag k="name" v="Future Street"/>
+  </way>
+  <!-- Dropped: named, but not a highway at all. -->
+  <way id="106" version="1">
+    <nd ref="1"/><nd ref="5"/><nd ref="3"/><nd ref="1"/>
+    <tag k="building" v="yes"/>
+    <tag k="name" v="Broad Street Hall"/>
+  </way>
+  <!-- Kept: a service road (transit-centre driveways are often these). -->
+  <way id="107" version="1">
+    <nd ref="5"/><nd ref="3"/>
+    <tag k="highway" v="service"/>
+    <tag k="name" v="Station Drive"/>
+  </way>
+  <!-- Kept: a link road; "_link" types are in ROAD_TYPES. -->
+  <way id="108" version="1">
+    <nd ref="4"/><nd ref="1"/>
+    <tag k="highway" v="primary_link"/>
+    <tag k="name" v="Broad Street Ramp"/>
+  </way>
+  <!-- Kept unless a bbox excludes it: entirely in Pittsburgh. -->
+  <way id="109" version="1">
+    <nd ref="7"/><nd ref="8"/>
+    <tag k="highway" v="primary"/>
+    <tag k="name" v="Liberty Avenue"/>
+  </way>
+  <!-- Kept: crosses from Philly to Pittsburgh (one node in each). -->
+  <way id="110" version="1">
+    <nd ref="5"/><nd ref="7"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="name" v="Pennsylvania Turnpike"/>
+  </way>
+  <!-- Relations are skipped, even ones tagged like roads. -->
+  <relation id="201" version="1">
+    <member type="way" ref="101" role=""/>
+    <tag k="type" v="route"/>
+    <tag k="highway" v="primary"/>
+    <tag k="name" v="Route Relation"/>
+  </relation>
+</osm>
