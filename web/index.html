@@ -49,11 +49,35 @@
       #error:empty {
         display: none;
       }
+
+      /* Status line (what's drawn), bottom-left so it stays clear of the
+         zoom buttons and popups. Hidden while empty, like #error. */
+      #status {
+        position: absolute;
+        bottom: 28px; /* above the basemap attribution */
+        left: 12px;
+        padding: 6px 10px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #222;
+        font: 13px/1.4 system-ui, sans-serif;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      #status:empty {
+        display: none;
+      }
+
+      /* Popup text keeps its line breaks (describeStart joins with \n). */
+      .maplibregl-popup-content {
+        white-space: pre-line;
+        font: 13px/1.4 system-ui, sans-serif;
+      }
     </style>
   </head>
   <body>
     <div id="map"></div>
     <div id="error" role="alert"></div>
+    <div id="status" role="status"></div>
 
     <!-- type="module": strict mode, own scope (no accidental globals), and
          deferred until the HTML is parsed, so #map exists when it runs.
