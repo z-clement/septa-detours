@@ -214,23 +214,24 @@ def test_failed_replace_removes_temp_file(tmp_path):
 def test_interrupted_write_leaves_existing_file_unchanged(tmp_path, monkeypatch):
     """A write that dies halfway (disk full, crash) can't truncate the old file.
 
-    ``Path.write_text`` is replaced with a version that writes half the
+    ``Path.write_bytes`` is replaced with a version that writes half the
     data and then raises, simulating a failure mid-write. Writing straight
     to the target would leave it truncated; writing to a temp file and
     renaming leaves it intact. This is the test that proves atomicity: the
-    others pass either way.
+    others pass either way. (``io.py`` has its own copy of this test; this
+    one proves ``write_geojson`` actually goes through the atomic path.)
     """
     path = tmp_path / "bus-21.geojson"
     write_geojson(ROUTE_21, path)
     before = path.read_bytes()
 
-    real_write_text = Path.write_text
+    real_write_bytes = Path.write_bytes
 
-    def write_half_then_fail(self: Path, data: str, *args, **kwargs) -> int:
-        real_write_text(self, data[: len(data) // 2], *args, **kwargs)
+    def write_half_then_fail(self: Path, data: bytes) -> int:
+        real_write_bytes(self, data[: len(data) // 2])
         raise OSError("simulated disk full")
 
-    monkeypatch.setattr(Path, "write_text", write_half_then_fail)
+    monkeypatch.setattr(Path, "write_bytes", write_half_then_fail)
     with pytest.raises(OSError, match="simulated disk full"):
         write_geojson(EMPTY, path)
 
