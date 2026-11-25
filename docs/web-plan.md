@@ -64,7 +64,9 @@ Measured 2026-11-25 on the current GTFS (both feeds) and snapshot
   - per-route detail, all shapes raw: median 38 KB, max 460 KB (route
     14, 38 shapes); at 2 m: max ~107 KB.
 - Detours (`121123Z`): 166 total, 161 matched to a route, 134 placed;
-  5 not matched (API routes H, L, R, two route 68 "EB" items).
+  5 not matched, all old Bus Revolution names (API routes H x2, L x2,
+  R). 14 matched detours have no shapes (e.g. route 68's two "EB" items:
+  the route has no EB direction), so `direction_id` is null for them.
 - `stop_times.txt`: bus 133 MB, rail 1.6 MB (matters for stops later:
   use lazy `scan_csv`).
 
@@ -135,8 +137,9 @@ GTFS or code gives a new directory.
 - `gtfs`: a provenance string per feed (e.g. `feed_info.txt` version, or
   the newest file mtime). **Confirm** which; GTFS provenance isn't
   recorded anywhere yet.
-- `unmatched`: detours whose route isn't in GTFS (the API's H, L, R; the
-  route 68 "EB" items). The page lists them in a "Not on the map" section
+- `unmatched`: detours whose route isn't in GTFS (the API's H, L, R).
+  Matched detours with no shapes (route 68's "EB" items) aren't here:
+  they're in their route's detail. The page lists these in a "Not on the map" section
   so nothing silently disappears. Same detour object as in route detail
   (below), with `route` = the API route name instead of a GTFS key.
 
@@ -250,7 +253,8 @@ one.
 - `direction_id`: from `RouteMatch.shapes` when they all agree, else
   `null`. `shape_ids`: `RouteMatch.shapes`, in order.
 - `route`: a route `key` for matched detours. For `status.unmatched` it's
-  the API `route_id` (`bus_route_H`) and `shape_ids` is `[]`.
+  the API `route_id` (`bus_route_H`) and `shape_ids` is `[]`. Built by
+  `detour_object(detour)` (no `key` argument: it derives `route` itself).
 - `message` is the raw API text. Times are ISO 8601 with the parsed
   offset (as `detour_properties` does today).
 

@@ -10,7 +10,7 @@ from typing import Final
 
 import polars as pl
 
-from septa_detours.export.contract import Bounds, Mode, RouteEntry
+from septa_detours.export.contract import Bounds, DetourObject, Mode, RouteEntry
 from septa_detours.export.geojson import _css_color  # private; same stage
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Detour
@@ -169,6 +169,47 @@ def route_catalog(
             entry["key"],
         ),
     )
+
+
+def detour_object(detour: Detour) -> DetourObject:
+    """One detour as the page reads it (route detail and ``status.json``).
+
+    ``route`` is the route's ``key`` when matched, else the alerts API's
+    route ID (``bus_route_H``), so an unmatched detour still says where it
+    was posted. ``direction_id`` is the matched shapes' direction when
+    they all agree, else ``None`` (no shapes, mixed, or unknown).
+    ``issues`` lists parse issues, then match issues. Times are ISO 8601
+    with the UTC offset as parsed; anything unknown is ``None``.
+    """
+    notice = detour.notice
+    match = detour.match
+    shapes = () if match is None else match.shapes
+    direction_ids = {shape.direction_id for shape in shapes}
+    start_point = None if match is None else match.start_point
+    return {
+        "source_key": notice.source_key,
+        "route": notice.source.route_id
+        if match is None
+        else route_key(match.feed, match.route_id),
+        "status": notice.status,
+        "direction": notice.direction,
+        "direction_id": direction_ids.pop() if len(direction_ids) == 1 else None,
+        "location_start": notice.location_start,
+        "location_end": notice.location_end,
+        "start": None if notice.start is None else notice.start.isoformat(),
+        "end": None if notice.end is None else notice.end.isoformat(),
+        "reason": notice.reason,
+        "message": notice.source.message,
+        "issues": [*notice.issues, *detour.issues],
+        "start_point": None
+        if start_point is None
+        else {
+            "lon": start_point.lon,
+            "lat": start_point.lat,
+            "node_id": start_point.node_id,
+        },
+        "shape_ids": [shape.shape_id for shape in shapes],
+    }
 
 
 def _blank_to_none(text: str | None) -> str | None:

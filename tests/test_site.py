@@ -1,4 +1,5 @@
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Sequence
 
 import polars as pl
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from septa_detours.export.contract import Mode
 from septa_detours.export.site import (
     MODE_ORDER,
+    detour_object,
     lines_bounds,
     route_catalog,
     route_key,
@@ -14,7 +16,13 @@ from septa_detours.export.site import (
 )
 from septa_detours.export.write import route_geojson_path
 from septa_detours.gtfs.load import Feed
-from septa_detours.model import Detour, DetourNotice, RouteMatch, StartPoint
+from septa_detours.model import (
+    AffectedShape,
+    Detour,
+    DetourNotice,
+    RouteMatch,
+    StartPoint,
+)
 from septa_detours.parse.notice import parse_snapshot
 
 
@@ -331,3 +339,155 @@ def test_catalog_rejects_a_detour_on_an_unknown_route(notice: DetourNotice) -> N
         ValueError, match=f"{notice.source_key} is on unknown route 'rail-21'"
     ):
         route_catalog(ROUTES, BOUNDS, detours)
+
+
+# --- detour_object ---------------------------------------------------------------
+
+
+@pytest.fixture
+def notices(read_alert_fixture) -> Callable[[str], list[DetourNotice]]:
+    """Fixture route name (``bus_route_2``) -> its parsed notices."""
+    stamp = "2026-11-25T025344Z"
+
+    def parse(route: str) -> list[DetourNotice]:
+        content = read_alert_fixture(f"{stamp}__{route}.json")
+        return parse_snapshot(b"[" + content + b"]", f"{stamp}.json")
+
+    return parse
+
+
+def with_shapes(
+    notice: DetourNotice, shapes: Sequence[tuple[str, int | None]], feed: Feed = "bus"
+) -> Detour:
+    match = RouteMatch(
+        feed=feed,
+        route_id="2" if feed == "bus" else "AIR",
+        shapes=tuple(AffectedShape(shape_id=s, direction_id=d) for s, d in shapes),
+        start_point=None,
+    )
+    return Detour(notice=notice, match=match)
+
+
+def test_detour_object_matched_and_placed(notices) -> None:
+    # Route 2 #0 with its real match: SB shape, start at 17th & Washington.
+    match = RouteMatch(
+        feed="bus",
+        route_id="2",
+        shapes=(AffectedShape(shape_id="317310", direction_id=0),),
+        start_point=StartPoint(node_id=110024066, lon=-75.1716, lat=39.9385),
+    )
+    detour = Detour(notice=notices("bus_route_2")[0], match=match, issues=("x: y",))
+    assert detour_object(detour) == {
+        "source_key": "5d0d22dfe7d86935",
+        "route": "bus-2",
+        "status": "complete",
+        "direction": "SB",
+        "direction_id": 0,
+        "location_start": "17th & Washington",
+        "location_end": "17th & Mifflin",
+        "start": "2026-11-11T06:30:00-05:00",
+        "end": "2026-11-27T16:00:00-05:00",
+        "reason": "Contractor",
+        "message": "7am - 4pm Mon thru Fri, 11/27/26, SB via 17th, Left on "
+        "Washington, Right on Broad, Right on Passyunk, Left on 17th, Reg Rt",
+        "issues": ["x: y"],
+        "start_point": {"lon": -75.1716, "lat": 39.9385, "node_id": 110024066},
+        "shape_ids": ["317310"],
+    }
+
+
+def test_detour_object_unmatched(notices) -> None:
+    # Route 68 #0: partial, a parse issue, a summer start and a winter end.
+    notice = notices("bus_route_68")[0]
+    detour = Detour(notice=notice, match=None, issues=("route: none",))
+    assert detour_object(detour) == {
+        "source_key": "697e7d24611e9d37",
+        "route": "bus_route_68",
+        "status": "partial",
+        "direction": "EB",
+        "direction_id": None,
+        "location_start": "PNC Center",
+        "location_end": "PNC Center",
+        "start": "2026-09-05T17:58:00-04:00",
+        "end": "2026-12-30T12:00:00-05:00",
+        "reason": "Sidewalk Repair",
+        "message": notice.source.message,
+        "issues": ["location_start: unrecognized location 'PNC Center'", "route: none"],
+        "start_point": None,
+        "shape_ids": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("shapes", "direction_id"),
+    [
+        ([], None),
+        ([("317310", 0)], 0),
+        ([("317312", 1), ("317313", 1)], 1),
+        ([("317310", 0), ("317312", 1)], None),
+        ([("317310", None)], None),
+        ([("317310", 0), ("317311", None)], None),
+    ],
+)
+def test_detour_object_direction_id_only_when_shapes_agree(
+    notices, shapes: list[tuple[str, int | None]], direction_id: int | None
+) -> None:
+    result = detour_object(with_shapes(notices("bus_route_2")[0], shapes))
+    assert result["direction_id"] == direction_id
+
+
+def test_detour_object_shape_ids_keep_match_order(notices) -> None:
+    shapes = [("317312", 1), ("317310", 1), ("317311", 1)]
+    result = detour_object(with_shapes(notices("bus_route_2")[0], shapes))
+    assert result["shape_ids"] == ["317312", "317310", "317311"]
+
+
+def test_detour_object_matched_but_not_placed(notices) -> None:
+    result = detour_object(with_shapes(notices("bus_route_2")[0], [("317310", 0)]))
+    assert (result["route"], result["start_point"]) == ("bus-2", None)
+
+
+def test_detour_object_rail_route_key(notices) -> None:
+    result = detour_object(with_shapes(notices("bus_route_2")[0], [], feed="rail"))
+    assert result["route"] == "rail-AIR"
+
+
+NOTICE_UNKNOWNS = (
+    "start",
+    "end",
+    "location_start",
+    "location_end",
+    "reason",
+    "direction",
+)
+
+
+def test_detour_object_unknowns_are_null(notices) -> None:
+    unknown = dict.fromkeys((*NOTICE_UNKNOWNS, "start_place", "end_place"))
+    original = notices("bus_route_2")[0]
+    notice = DetourNotice.model_validate(
+        original.model_copy(update=unknown).model_dump()
+    )
+    result = detour_object(Detour(notice=notice, match=None))
+    assert {field: result[field] for field in NOTICE_UNKNOWNS} == dict.fromkeys(
+        NOTICE_UNKNOWNS
+    )
+    assert (result["status"], result["issues"]) == ("unknown", [])
+
+
+def test_detour_object_is_json_with_issues_as_a_list(notices) -> None:
+    detour = Detour(notice=notices("bus_route_68")[0], match=None, issues=("a", "b"))
+    decoded = json.loads(json.dumps(detour_object(detour), allow_nan=False))
+    assert decoded["issues"] == [
+        "location_start: unrecognized location 'PNC Center'",
+        "a",
+        "b",
+    ]
+
+
+def test_detour_object_message_is_verbatim(notices) -> None:
+    # rr_route_mfo #1's real message ends with trailing spaces.
+    notice = notices("rr_route_mfo")[1]
+    assert notice.source.message != notice.source.message.rstrip()
+    result = detour_object(Detour(notice=notice, match=None))
+    assert result["message"] == notice.source.message
