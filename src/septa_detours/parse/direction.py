@@ -6,7 +6,13 @@ Two steps, kept separate so each can be tested alone:
 Deciding what a list means (one, none, conflicting) is ``notice.py``'s job.
 """
 
+import re
+
 from septa_detours.model import Direction
+
+_TOKEN_SEPARATOR = re.compile(r"[^\w/]+")
+"""Runs of characters that separate tokens: anything but word characters
+and ``/`` (kept so ``W/B`` survives as one token)."""
 
 _SPELLINGS: dict[str, Direction] = {
     "nb": "NB",
@@ -62,10 +68,12 @@ def find_directions(message: str) -> tuple[Direction, ...]:
         - ``"NB Via Gloria Dei, ... Recover NB On ..."`` -> ``("NB",)``
         - ``"..., Via Huntingdon Pke, ..."`` -> ``()``
 
-    Edge cases to test: a direction glued to punctuation
-    (``"11:59pm SB,"``), and words that merely contain the letters
-    (a street named ``"Webster"`` must not count as ``WB``).
+    Tokens are split on every character except letters, digits, ``_`` and
+    ``/``, so ``"11:59pm SB,"`` yields ``SB``, ``"W/B"`` stays whole, and
+    ``"Webster"`` is one token that isn't a direction. Known gap: a slash
+    between two directions (``"NB/SB"``, not seen in real data) is one
+    token and finds nothing.
     """
-    # TODO: split into tokens (think about which characters separate
-    #   tokens, given "W/B" must survive as one), then normalize each.
-    raise NotImplementedError
+    tokens = _TOKEN_SEPARATOR.split(message)
+    found = (normalize_direction(token) for token in tokens)
+    return tuple(dict.fromkeys(d for d in found if d is not None))
