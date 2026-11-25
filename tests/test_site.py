@@ -4,12 +4,19 @@ from collections.abc import Callable, Sequence
 import polars as pl
 import pytest
 
-from septa_detours.export.contract import Mode
+from septa_detours.export.contract import (
+    SHAPE_PROPERTIES,
+    DirectionEntry,
+    Mode,
+    RouteEntry,
+)
 from septa_detours.export.site import (
     MODE_ORDER,
+    RouteShape,
     detour_object,
     lines_bounds,
     route_catalog,
+    route_detail,
     route_key,
     route_mode,
     route_sort_key,
@@ -491,3 +498,122 @@ def test_detour_object_message_is_verbatim(notices) -> None:
     assert notice.source.message != notice.source.message.rstrip()
     result = detour_object(Detour(notice=notice, match=None))
     assert result["message"] == notice.source.message
+
+
+# --- route_detail ----------------------------------------------------------------
+
+ROUTE_2: RouteEntry = {
+    "key": "bus-2",
+    "feed": "bus",
+    "route_id": "2",
+    "short_name": "2",
+    "long_name": "16th-17th",
+    "mode": "bus",
+    "color": "#00A1DE",
+    "text_color": "#FFFFFF",
+    "has_shapes": True,
+    "bounds": ([-75.18, 39.91], [-75.16, 40.04]),
+    "detours": {"total": 2, "placed": 1},
+}
+# Route 2's real directions.txt rows.
+ROUTE_2_DIRECTIONS: list[DirectionEntry] = [
+    {"direction_id": 0, "name": "Southbound", "destination": "20th-Johnston"},
+    {"direction_id": 1, "name": "Northbound", "destination": "Pulaski-Hunting Park"},
+]
+# Every line distinct, lon ~ -75, lat ~ 40; trip counts all different.
+SOUTH = RouteShape("317310", 0, 301, True, [[-75.1716, 39.9405], [-75.1716, 39.9365]])
+NORTH = RouteShape("317312", 1, 289, True, [[-75.1706, 39.9365], [-75.1706, 39.9405]])
+SHORT = RouteShape("317315", 0, 14, False, [[-75.1716, 39.9405], [-75.1716, 39.9385]])
+
+
+def line(shape: RouteShape, color: str | None = "#00A1DE") -> dict[str, object]:
+    return {
+        "type": "Feature",
+        "geometry": {"type": "LineString", "coordinates": shape.line},
+        "properties": {
+            "shape_id": shape.shape_id,
+            "direction_id": shape.direction_id,
+            "trip_count": shape.trip_count,
+            "covering": shape.covering,
+            "color": color,
+        },
+    }
+
+
+def test_route_detail_whole_output(notices) -> None:
+    route_2 = notices("bus_route_2")
+    placed = Detour(
+        notice=route_2[0],
+        match=RouteMatch(
+            feed="bus",
+            route_id="2",
+            shapes=(AffectedShape(shape_id="317310", direction_id=0),),
+            start_point=StartPoint(node_id=110024066, lon=-75.1716, lat=39.9385),
+        ),
+    )
+    not_placed = with_shapes(route_2[1], [("317310", 0)])
+    detail = route_detail(
+        ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
+    )
+    assert detail == {
+        "schema_version": 1,
+        "key": "bus-2",
+        "directions": ROUTE_2_DIRECTIONS,
+        "shapes": {
+            "type": "FeatureCollection",
+            "features": [line(SOUTH), line(SHORT), line(NORTH)],
+        },
+        "detours": [detour_object(not_placed), detour_object(placed)],
+    }
+
+
+def test_route_detail_shape_properties_are_the_contract_ones() -> None:
+    detail = route_detail(ROUTE_2, [], [SOUTH, NORTH], [])
+    for feature in detail["shapes"]["features"]:
+        assert tuple(feature["properties"]) == SHAPE_PROPERTIES
+
+
+def test_route_detail_shape_in_both_directions_is_two_lines() -> None:
+    both = [SOUTH, SOUTH._replace(direction_id=1, trip_count=3, covering=False)]
+    detail = route_detail(ROUTE_2, [], both, [])
+    assert detail["shapes"]["features"] == [line(both[0]), line(both[1])]
+
+
+def test_route_detail_color_comes_from_the_entry() -> None:
+    entry: RouteEntry = {**ROUTE_2, "color": None}
+    detail = route_detail(entry, [], [SOUTH], [])
+    assert detail["shapes"]["features"] == [line(SOUTH, color=None)]
+
+
+def test_route_detail_without_shapes_or_detours() -> None:
+    entry: RouteEntry = {**ROUTE_2, "has_shapes": False, "bounds": None}
+    detail = route_detail(entry, ROUTE_2_DIRECTIONS, [], [])
+    assert detail["shapes"] == {"type": "FeatureCollection", "features": []}
+    assert detail["detours"] == []
+
+
+def test_route_detail_does_not_share_directions() -> None:
+    directions: list[DirectionEntry] = [
+        {"direction_id": 0, "name": "Southbound", "destination": "20th-Johnston"}
+    ]
+    detail = route_detail(ROUTE_2, directions, [], [])
+    detail["directions"][0]["name"] = "Northbound"
+    assert directions[0]["name"] == "Southbound"
+
+
+def test_route_detail_rejects_a_detour_on_another_route(notices) -> None:
+    detour = with_shapes(notices("bus_route_2")[0], [], feed="rail")
+    with pytest.raises(ValueError, match="is on 'rail-AIR', not 'bus-2'"):
+        route_detail(ROUTE_2, [], [], [detour])
+
+
+def test_route_detail_rejects_an_unmatched_detour(notices) -> None:
+    detour = Detour(notice=notices("bus_route_2")[0], match=None)
+    with pytest.raises(ValueError, match="is on 'bus_route_2', not 'bus-2'"):
+        route_detail(ROUTE_2, [], [], [detour])
+
+
+def test_route_detail_rejects_a_one_point_shape() -> None:
+    shape = SOUTH._replace(line=[[-75.1716, 39.9405]])
+    with pytest.raises(ValueError, match="317310"):
+        route_detail(ROUTE_2, [], [shape], [])

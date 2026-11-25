@@ -6,12 +6,24 @@ Pure functions: no file I/O (that's ``write.py``).
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Final
+from typing import Final, NamedTuple
 
 import polars as pl
 
-from septa_detours.export.contract import Bounds, DetourObject, Mode, RouteEntry
-from septa_detours.export.geojson import _css_color  # private; same stage
+from septa_detours.export.contract import (
+    SCHEMA_VERSION,
+    Bounds,
+    DetourObject,
+    DirectionEntry,
+    Mode,
+    RouteDetail,
+    RouteEntry,
+)
+from septa_detours.export.geojson import (
+    Position,
+    _css_color,  # private; same stage
+    line_feature,
+)
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Detour
 
@@ -209,6 +221,74 @@ def detour_object(detour: Detour) -> DetourObject:
             "node_id": start_point.node_id,
         },
         "shape_ids": [shape.shape_id for shape in shapes],
+    }
+
+
+class RouteShape(NamedTuple):
+    """One shape of a route in one direction, ready for its detail file.
+
+    A shape used in both directions is two ``RouteShape``s.
+    """
+
+    shape_id: str
+    direction_id: int | None
+    trip_count: int
+    """How many trips use this shape in this direction."""
+    covering: bool
+    """In this route-direction's covering set (``covering_shapes``)."""
+    line: list[Position]
+    """Already simplified and rounded (``simplify_line``, ``round_line``)."""
+
+
+def route_detail(
+    entry: RouteEntry,
+    directions: Sequence[DirectionEntry],
+    shapes: Sequence[RouteShape],
+    detours: Sequence[Detour],
+) -> RouteDetail:
+    """Build ``routes/<key>.json``: what the page shows when a route is focused.
+
+    Args:
+        entry: The route's ``routes.json`` entry (its ``key`` and ``color``
+            are used, so the two files can't disagree).
+        directions: The route's directions, as they should appear.
+        shapes: Every shape of the route, in drawing order.
+        detours: The route's matched detours, in snapshot order.
+
+    Returns:
+        The detail, with one LineString per shape (properties
+        ``SHAPE_PROPERTIES``) and one ``detour_object`` per detour.
+
+    Raises:
+        ValueError: A detour isn't matched to this route (a bug in the
+            caller's grouping), or a shape has fewer than two points.
+    """
+    key = entry["key"]
+    detour_objects = [detour_object(detour) for detour in detours]
+    for detour, obj in zip(detours, detour_objects, strict=True):
+        if obj["route"] != key:
+            raise ValueError(
+                f"detour {detour.notice.source_key} is on {obj['route']!r}, not {key!r}"
+            )
+    features = [
+        line_feature(
+            shape.line,
+            {
+                "shape_id": shape.shape_id,
+                "direction_id": shape.direction_id,
+                "trip_count": shape.trip_count,
+                "covering": shape.covering,
+                "color": entry["color"],
+            },
+        )
+        for shape in shapes
+    ]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "key": key,
+        "directions": [direction.copy() for direction in directions],
+        "shapes": {"type": "FeatureCollection", "features": features},
+        "detours": detour_objects,
     }
 
 
