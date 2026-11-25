@@ -126,9 +126,11 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Goal now: **implement `parse/`** (raw alert snapshot -> `DetourNotice`),
-driven by `tests/fixtures/alerts/`. Reached earlier: load GTFS and plot one
-route with MapLibre (route GeoJSON in `web/data/`). See "Next" at the end.
+Reached: **`parse/` is done** (raw alert snapshot bytes ->
+`list[DetourNotice]` via `parse_snapshot`), driven by
+`tests/fixtures/alerts/`. Earlier: load GTFS and plot one route with
+MapLibre (route GeoJSON in `web/data/`). Goal now: settle parse's open
+questions, then start `match/`. See "Next" at the end.
 
 Done: `gtfs/load.py`: `read_table` (all-string read, `""` -> null, `feed`
 column, ValueError naming feed/table on a missing column), private
@@ -421,11 +423,10 @@ ty and imports pass. Layout:
 - `direction.py`: `normalize_direction(token) -> Direction | None` and
   `find_directions(message) -> tuple[Direction, ...]`: **done** (see
   below). Finding is separate from deciding.
-- `notice.py`: `make_source_key(route_id, location_start, start) -> str`
-  (**done**, see below), `parse_detour(route, detour, snapshot) ->
-  DetourNotice`,
-  `parse_snapshot(content, snapshot) -> list[DetourNotice]` (API order;
-  routes without detours contribute nothing).
+- `notice.py`: `make_source_key(route_id, location_start, start) -> str`,
+  `parse_detour(route, detour, snapshot) -> DetourNotice`,
+  `parse_snapshot(content, snapshot) -> list[DetourNotice]`: all
+  **done** (see below).
 Decisions:
 - Field parsers raise `ValueError` with a reason; only `parse_detour`
   catches, turning it into `None` + an issue prefixed with the field name
@@ -435,7 +436,7 @@ Decisions:
   `None` + issue. Never pick one.
 - `end` < `start` -> keep both, add an issue. API `start`/`end` win over
   times in the message text.
-Open (TODOs in the docstrings; decide while implementing):
+Open (in `parse_detour`'s docstring; still undecided, see "Next"):
 - Whether recurring windows and message/API mismatches add an issue
   (adding one makes most notices `partial`).
 - A `kind` field (reroute / stop closure / relocation) would change
@@ -549,49 +550,76 @@ Claude habit to watch: it has twice typed literal NBSPs into test
 strings. Ruff RUF001 catches it; fix with `sed -i
 's/\xc2\xa0/\\u00a0/g' <file>` (Edit can't match the invisible char).
 
-Next (clean session): Claude implements `parse/`, one function at a
-time, with tests from the fixture index, stopping for my review after each.
-Order: ~~`clean_text`~~ -> ~~`parse_api_datetime`~~ ->
-~~`normalize_direction`~~ -> ~~`find_directions`~~ ->
-~~`make_source_key`~~ -> ~~`_api.read_snapshot`~~ -> **`parse_detour`**
--> `parse_snapshot`.
+Done: `parse/notice.py::parse_detour` and `parse_snapshot` (written by
+Claude in four increments, each reviewed). `parse_detour`:
+- `source` = `SourceText` with the raw strings verbatim; `source_key` =
+  `make_source_key` on the *raw* `(route_id, location_start, start)`.
+- `location_start`/`location_end`/`reason`: `clean_text`. Decided (my
+  choice): blank -> `None` with **no issue** (a `None` location_start
+  already makes `status` `unknown`; blank LE/reason are normal). So an
+  `unknown` notice can have empty `issues`: consumers must check
+  `status`, not just `issues`.
+- Private `_parse_time(field, raw) -> (datetime | None, issues)`: catches
+  `ValueError` -> `"start: unrecognized datetime '...'"` /
+  `"end: blank datetime ''"` (the parser's message, field-prefixed); a
+  parsed value keeps any `local_time_issue` as `"start: nonexistent
+  local time ..."` / `"end: ambiguous local time ..."`.
+- Private `_is_before(later, earlier)`: compares **instants**
+  (`.astimezone(UTC)`), not wall clocks: in a DST gap they disagree
+  (start 3/14/2027 2:30 AM = 07:30 UTC is after end 3:10 AM = 07:10 UTC).
+  Strictly before only; equal start/end is not flagged. Issue: `"end:
+  before start"`. Skipped if either time is `None`.
+- Private `_pick_direction(message)`: one distinct -> it; none ->
+  `"direction: none found in message"`; 2+ -> `"direction: conflicting
+  SB, NB in message"` (message order). No real message conflicts yet.
+- Issue order (documented): start, end, order check, direction.
+`parse_snapshot` = `[parse_detour(route, d, snapshot) for route in
+read_snapshot(content) for d in route.detour]`; catches nothing (a
+structural `ValidationError` fails the whole snapshot).
+Tests in `tests/test_notice.py`: helpers `load_route` (fixture ->
+`ApiRoute` via wrapped `read_snapshot`), `parse_fixture_item`,
+`make_api_detour(**overrides)`/`parse_made` (route 55 #0's raw strings;
+used for bad times, DST, conflicts: no fixture has those), and
+`mini_snapshot` (fixtures joined into one API list, deliberately
+unsorted: 55, APP, 64, trolley 15, 24). Route 55 #0 is compared as one
+whole hand-written notice. Fixture sweep: all **65** fixture items parse
+and JSON round-trip; a pinned `NOT_COMPLETE` dict lists the 4
+non-complete items (24 #1, 6 #0: partial, no direction; 64 #1, #2:
+unknown, no issues); the other 61 are complete. **Adding a fixture
+breaks the pin on purpose**: review its items, then update the count
+and `NOT_COMPLETE`. Mutations: 19 + 14 + 10 + 5 (sweep) + 6, all caught
+except equivalents (`directions[0]` vs `[-1]` when len is 1). Bad-time
+handling is covered only by hand-built tests (the sweep can't see it).
+428 tests total.
+Real snapshots, by hand: `025344Z` 140 notices (131 complete, 7 partial,
+2 unknown); `121123Z` 166 (157 / 7 / 2). Every partial is
+"direction: none found"; every unknown is route 64's blank-LS items.
+README "Expected" guesses held, except the ones that hinge on open
+questions (recurrence / mismatch issues are not added, so route 2 #0,
+32 #2, 44 #3 are `complete`). Route 24 has 4 items, not 3.
 
-Brief for `parse_detour(route, detour, snapshot) -> DetourNotice`
-(read its docstring in `notice.py` first; it lists the decisions):
-- `source`: `SourceText(snapshot=..., route_id=route.route_id,
-  mode=route.mode, ` + the six `detour` strings verbatim`)`.
-- `source_key`: `make_source_key(route.route_id, detour.location_start,
-  detour.start)` (raw strings; the function normalizes).
-- `location_start`/`location_end`/`reason`: `clean_text`; blank ->
-  `None`. Decide whether a blank `location_start` also adds an issue
-  (it already makes `status` `unknown`; ask me).
-- `start`/`end`: `parse_api_datetime`; catch `ValueError` -> `None` +
-  issue `f"start: {error}"`. Then call `local_time_issue` on each parsed
-  value and add any result as `"start: ..."` / `"end: ..."`.
-- `end < start` -> keep both, add an issue (wording to settle). Same-zone
-  aware datetimes compare by wall clock (see the `times.py` notes).
-- `direction`: `find_directions(detour.message)`; exactly one ->
-  it; none or 2+ -> `None` + issue (wording to settle). Never pick one.
-- `issues`: a tuple in a fixed, documented order (decide: field order,
-  e.g. start, end, order check, direction?). Each must be `CleanText`.
-- Must never raise on messy text: a test should run it over every detour
-  item in every fixture and assert it returns (and check `status`).
-- Expected results per item are in `tests/fixtures/alerts/README.md`
-  (guessed before the parser existed; challenge them). Build tests from
-  those rows; use `read_snapshot` on a wrapped fixture to get real
-  `ApiRoute`/`ApiDetour` objects.
-- Still open, ask me before deciding: recurring windows and
-  message-vs-API mismatches (flag or not; flagging makes most notices
-  `partial`); a `kind` field (changes `model.py`: flag it).
-Suggested increments: (1) the happy path on route 55 (clean baseline)
-building `source`/`source_key`/cleaned text; (2) times + DST + order
-issues; (3) direction issues; (4) the all-fixtures never-raises sweep.
-Then `parse_snapshot` (`read_snapshot` + `parse_detour` per item, API
-order). Keep
-collecting snapshots over several days: fetch on 11/26 while the parade
-detours are live, and again on 11/27 to see them removed. Add fixtures
-when a snapshot shows a new quirk (one README table per snapshot).
-Later, `match/` must map API
-route IDs and detour text ("Route 21", "the L") to GTFS `route_id` via
-`route_short_name` (not always equal to `route_id`; check rail and the
-Owl routes).
+Next (clean session). Ask me which to do first:
+1. **Settle parse's open questions** (each is my decision; ask):
+   recurring windows ("7am - 4pm Mon thru Fri") and message-vs-API
+   mismatches (route 44 #3, 61 #1): add an issue or not? Flagging makes
+   many notices `partial` and changes the pinned `NOT_COMPLETE`.
+   Detecting either means parsing message text (dates/times/weekdays),
+   which `parse/` doesn't do yet. And a `kind` field (reroute / stop
+   closure / relocation; see the route 6, 9, BSO findings): changes
+   `model.py`, so flag it to me first.
+2. **Keep collecting snapshots**: fetch on 11/26 while the parade detours
+   are live and on 11/27 to see them removed (`uv run python -m
+   septa_detours.ingest`). Run `parse_snapshot` over each new snapshot
+   and add fixtures when one shows a new quirk (one README table per
+   snapshot; then update the sweep pin).
+3. **Start `match/`**: map API route IDs (`bus_route_21`,
+   `trolley_route_15`, `rr_route_mfo`/`rr_route_bso` = Owl *buses*) and
+   detour text ("Route 21", "the L") to GTFS `route_id` via
+   `route_short_name` (not always equal to `route_id`; check rail and the
+   Owl routes). Produces `Detour` with `RouteMatch`/`AffectedShape`
+   (`route_shape_ids` in `gtfs/routes.py` already gives shapes per
+   direction). Direction (NB/SB/...) -> GTFS `direction_id` is unsolved:
+   GTFS has 0/1, not compass directions; it probably needs shape
+   geometry or `trip_headsign`. Ask before adding shapely/pyproj.
+Same way of working: small increments, tests from fixtures, mutation
+checks, stop for my review after each.
