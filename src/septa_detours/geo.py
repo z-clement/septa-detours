@@ -48,11 +48,15 @@ def distance_to_line_m(
     ]
     if len(points) == 1:
         return math.hypot(*points[0])
-    return min(_distance_to_segment(a, b) for a, b in pairwise(points))
+    return min(distance_to_segment(a, b) for a, b in pairwise(points))
 
 
-def _distance_to_segment(a: tuple[float, float], b: tuple[float, float]) -> float:
-    """Distance from the origin to segment ``a``-``b`` (flat coordinates)."""
+def distance_to_segment(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Distance from the origin to segment ``a``-``b``, in flat coordinates.
+
+    To measure from a point ``p``, pass ``a - p`` and ``b - p``. A
+    zero-length segment (``a == b``) is just a point.
+    """
     dx, dy = b[0] - a[0], b[1] - a[1]
     length_squared = dx * dx + dy * dy
     if length_squared == 0:
