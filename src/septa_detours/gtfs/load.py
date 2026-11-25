@@ -46,6 +46,12 @@ DIRECTION_COLUMNS = [
     "direction",
     "direction_destination",
 ]
+STOP_COLUMNS = [
+    "stop_id",
+    "stop_name",
+    "stop_lat",
+    "stop_lon",
+]
 SHAPE_COLUMNS = [
     "shape_id",
     "shape_pt_lat",
@@ -153,6 +159,28 @@ def load_directions(
     """
     df = _concat_feeds(feeds, "directions", DIRECTION_COLUMNS, root)
     return df.with_columns(pl.col("direction_id").cast(pl.Int8))
+
+
+def load_stops(
+    feeds: Sequence[Feed] = ALL_FEEDS,
+    root: Path = DEFAULT_GTFS_ROOT,
+) -> pl.DataFrame:
+    """Load ``stops`` for the given feeds, stacked into one frame.
+
+    Casts ``stop_lat`` / ``stop_lon`` to floats. ``stop_id`` stays a string.
+
+    Rows without coordinates are kept (null lat/lon), not dropped: GTFS
+    allows them for ``location_type`` 3 (generic node) and 4 (boarding
+    area), and the bus feed has 478 such rows inside stations (e.g.
+    "Track 1 Boarding - South Side"). Callers needing points must drop
+    nulls themselves. ``location_type`` isn't loaded: the rail feed lacks
+    the column, and only shared columns are loaded.
+    """
+    df = _concat_feeds(feeds, "stops", STOP_COLUMNS, root)
+    return df.with_columns(
+        pl.col("stop_lat").cast(pl.Float64),
+        pl.col("stop_lon").cast(pl.Float64),
+    )
 
 
 def load_shapes(
