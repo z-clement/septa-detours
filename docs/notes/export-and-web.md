@@ -183,3 +183,46 @@ swapped summary. JS checked by running `map.js`'s pure functions in Node
 is checked by eye. 1203 tests total. ty: 45 pre-existing diagnostics
 (the `**dict` test helpers; invariant `dict` vs `Properties`): don't add
 more (annotate `Properties`, or type test helpers `Any`).
+
+Done (2026-11-25): **`export/simplify.py`** (web plan P1-P2; pure, on
+`[lon, lat]` lines; written by Claude in reviewed increments). Shared
+geometry moved first (my choice): `distance_to_line_m`,
+`EARTH_RADIUS_M` and now-public `distance_to_segment` live in
+`septa_detours/geo.py` (not a stage), so export never imports `match/`.
+- `simplify_line(line, tolerance_m)`: Douglas-Peucker. Projects once to
+  flat metres from the first point, scaled at the line's **mean**
+  latitude. Distance to the *segment*, not the infinite line, so a loop
+  (first == last point) keeps its far side. A stack, not recursion (long
+  shapes). Kept only if **more than** the tolerance off (a repeated point
+  at tolerance 0 is dropped); a tie for farthest splits at the earlier
+  point. Endpoints always kept; < 2 points or a negative/NaN tolerance
+  -> `ValueError`; returns new lists.
+- `round_line(line, decimals)`: rounds, drops a point equal to the one
+  before it (decided: mine), a line that collapses to one position comes
+  back as two separate copies (still a valid LineString). Use after
+  simplifying. Real data: after simplifying at 2 or 5 m it drops nothing
+  (points are already > 1 m apart) and saves only ~7% of JSON; on raw
+  shapes it drops 788 of 532k points.
+- `covering_shapes(lines, tolerance_m=20)`: the overview's shapes for one
+  route-direction. Longest (metres) first, ties in input order; drop a
+  shape when **every point is within the tolerance of any kept shape**
+  (decided: mine, over "one kept shape covers it all": also drops shapes
+  stitched from kept branches). Checks points only, so pass 2 m-simplified
+  lines. Each kept shape gets a bounding box widened by the tolerance
+  (east-west margin sized at the box's highest latitude, so it's never
+  too small); the box is only a speed-up.
+- Real data (all 1,009 shapes, 532k points): simplify keeps 21% of points
+  at 2 m, 12.5% at 5 m, 9% at 10 m, ~2.2 s each; route 21's 284-point
+  shapes -> 21 points at 5 m. Covering on 2 m lines: 593 of 1,006 shapes
+  in ~4.4 s (200 route-directions need 1, 141 need 2+, max 8; route 14
+  dir 0: 20 -> 6). The first attempt, comparing **raw** shapes, took
+  108 s (the "one shape" rule: 629 kept); running two of those at once
+  crashed the machine. Run real-data scratch scripts one at a time,
+  `nice -n 19`, `POLARS_MAX_THREADS=2`, with a `timeout`.
+Tests: `tests/test_simplify.py` (53; hand-built lines near 17th &
+Washington), `tests/test_geo.py` (the moved distance tests). Mutation
+checks: every survivor fixed with a test except `simplify_line`'s y
+projection using `origin_lon` (a translation: equivalent) and two parts
+of the box margin (`+ lat_margin` in the latitude it's sized at, and
+`abs()`), which change the box by ~40 micrometres: correct, kept, too
+small to test. 1256 tests total.

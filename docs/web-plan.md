@@ -1,7 +1,7 @@
 # Web plan: data contract and map app
 
-Status: **planned, nothing built.** Written 2026-11-25 for a future session
-to pick up. Work through it with the usual rules in `CLAUDE.md` (small
+Status: **P1-P2 done** (`export/simplify.py`); P3 next. Written
+2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
 yet: ask before building them.
@@ -48,13 +48,18 @@ Measured 2026-11-25 on the current GTFS (both feeds) and snapshot
 - **"The shape most trips use" is a bad representative**: it differs
   from the longest shape in 116 of 341 route-directions, and is often a
   short-turn (route 55: 36% of the longest; 24, 26, 115 similar).
-- **Covering set** (keep a shape unless all its points lie within 20 m
-  of an already-kept, longer shape of the same route-direction): 622 of
-  1,006 shapes kept; 200 route-directions need 1, 141 need 2+, max 9
-  (route 14 dir 0). Route 24: 4 -> 1; route 55: 6 -> 5/4 (real branches).
+- **Covering set**, as decided (longest first, drop a shape when every
+  point lies within 20 m of *some* already-kept shape of the same
+  route-direction; compared on 2 m-simplified lines): **593** of 1,006
+  shapes kept; 200 route-directions need 1, 141 need 2+, max 8. Route 24:
+  4 -> 1; route 55: 6 -> 4/5 (real branches); route 14 dir 0: 20 -> 6.
+  The rejected rule (one kept shape must cover every point) kept 620
+  (622 on another run, 629 on raw shapes; max 9, route 14 dir 0).
+  ~4.4 s for all shapes, plus ~2.4 s to simplify them at 2 m.
 - Douglas-Peucker simplification (equirectangular metres) + coordinates
   rounded to 5 decimals (~1 m):
-  - overview from the covering set at 5 m tolerance: **~1.0 MB**, 44k points;
+  - overview from the covering set at 5 m tolerance: **~1.0 MB**, 44k points
+    (measured with the 622-shape rule; the 593 kept now should be a bit less);
   - most-trips shapes only: 4.8 MB raw -> 0.53 MB at 5 m, 0.40 MB at 10 m;
   - per-route detail, all shapes raw: median 38 KB, max 460 KB (route
     14, 38 shapes); at 2 m: max ~107 KB.
@@ -178,7 +183,7 @@ keeps it.
 ### `network.geojson`
 
 A FeatureCollection of LineStrings: the **covering set** of each
-route-direction (**Confirm** D1, see Facts), simplified at **5 m**
+route-direction (D1 decided, see Facts), simplified at **5 m**
 (**Confirm** D2), coordinates rounded to 5 decimals.
 
 Properties, kept minimal (this file is loaded once, up front):
@@ -269,9 +274,10 @@ nothing reaches into parse/match).
   (Douglas-Peucker in local equirectangular metres; endpoints always
   kept; never fewer than 2 points); `round_line(line, decimals)` (decided:
   drops consecutive duplicates that rounding creates, but always keeps at
-  least 2 points); `covering_shapes(lines: dict[shape_id, line],
-  tolerance_m=20) -> list[shape_id]` (longest first; keep unless every
-  point is within `tolerance_m` of an already-kept line). Geometry comes
+  least 2 points); `covering_shapes(lines: Mapping[shape_id, line],
+  tolerance_m=20) -> list[shape_id]` (decided: longest first in metres;
+  keep unless every point is within `tolerance_m` of *any* already-kept
+  line; pass 2 m-simplified lines, since only points are checked). Geometry comes
   from the shared `septa_detours/geo.py` (decided: `distance_to_line_m`
   moved there from `match/crossings.py`), never from `match/`.
 - `export/contract.py` (pure): TypedDicts for every file above (the
@@ -383,12 +389,11 @@ Each step: tests, lint, ty, mutation check, stop for review. Python
 first, so the web steps have real files to read.
 
 Python (the contract):
-1. **P1** `export/simplify.py`: `simplify_line` + `round_line`.
+1. **P1** (done) `export/simplify.py`: `simplify_line` + `round_line`.
    Hand-built lines (a straight line collapses to its endpoints; a corner
    survives above tolerance and goes below it; 2-point lines unchanged).
-2. **P2** `covering_shapes`. Hand-built short-turn, branch, and
-   reversed-direction cases; check the real-data numbers above (622 of
-   1,006 at 20 m) in a scratch run.
+2. **P2** (done) `covering_shapes`. Hand-built short-turn, branch,
+   stitched and reversed cases; real data: 593 of 1,006 at 20 m.
 3. **P3** `export/contract.py` types + `route_mode`, `route_sort_key`,
    `route_catalog`. Real names from the Facts list for the sort.
 4. **P4** `detour_object` + `route_detail` (directions, all shapes at
@@ -413,9 +418,11 @@ Web (plain JS):
 
 ## Decisions to confirm (with recommendations)
 
-- **D1** Overview shapes: covering set at 20 m (recommended; branches
-  kept, short-turns dropped, ~1.0 MB) vs. the longest shape per
-  route-direction (simpler; loses real branches, e.g. route 55).
+- **D1** (decided) Overview shapes: covering set at 20 m, where a shape
+  is covered if every point is near *any* kept shape (so shapes stitched
+  from kept branches are dropped too). Rejected: one kept shape must
+  cover it all; the longest shape per route-direction (loses real
+  branches, e.g. route 55).
 - **D2** Simplification: overview 5 m, detail 2 m, 5 decimals
   (recommended). 10 m overview saves little more (0.40 vs 0.53 MB on
   single shapes).

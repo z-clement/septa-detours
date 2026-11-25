@@ -3,7 +3,7 @@ import math
 
 import pytest
 
-from septa_detours.export.simplify import round_line, simplify_line
+from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
 
 # Near 17th & Washington. Worked out by hand from the mean Earth radius
 # (1 deg = 111,195 m): 0.00005 deg of latitude is 5.56 m; 0.00007 deg of
@@ -179,3 +179,105 @@ def test_round_line_accepts_tuples_and_returns_lists() -> None:
 def test_round_line_rejects_lines_under_two_points(line: list[list[float]]) -> None:
     with pytest.raises(ValueError, match=f"at least 2 points, got {len(line)}"):
         round_line(line, 5)
+
+
+# covering_shapes. Lines on a grid of 0.001 deg steps from (LON, LAT):
+# one step east is 85.27 m, one step north 111.20 m.
+def grid(*steps: tuple[float, float]) -> list[list[float]]:
+    return [[LON + x * 0.001, LAT + y * 0.001] for x, y in steps]
+
+
+MAIN = grid((0, 0), (1, 0), (2, 0), (3, 0), (4, 0))  # 341 m east
+
+
+def test_covering_no_lines() -> None:
+    assert covering_shapes({}) == []
+
+
+def test_covering_one_line_is_kept() -> None:
+    assert covering_shapes({"317337": MAIN}) == ["317337"]
+
+
+def test_covering_drops_a_short_turn() -> None:
+    short = grid((0, 0), (1, 0), (2, 0))
+    assert covering_shapes({"short": short, "main": MAIN}) == ["main"]
+
+
+def test_covering_keeps_a_branch_after_the_longer_line() -> None:
+    branch = grid((0, 0), (1, 0), (1, 1), (1, 2))  # 307 m, turns north
+    assert covering_shapes({"branch": branch, "main": MAIN}) == ["main", "branch"]
+
+
+def test_covering_drops_a_line_stitched_from_two_kept_lines() -> None:
+    # Neither kept line alone covers "stitched": its first points lie on
+    # "main" only, its last points on "branch" only.
+    main = grid(*((x, 0) for x in range(7)))  # 512 m
+    branch = grid((0, 0), (1, 0), (1, 1), (1, 2), (1, 3))  # 418 m
+    stitched = grid((3, 0), (2, 0), (1, 0), (1, 1), (1, 2))  # 392 m
+    lines = {"stitched": stitched, "branch": branch, "main": main}
+    assert covering_shapes(lines) == ["main", "branch"]
+
+
+def test_covering_ignores_direction_of_travel() -> None:
+    backwards = grid((3, 0), (2, 0), (1, 0), (0, 0))
+    assert covering_shapes({"backwards": backwards, "main": MAIN}) == ["main"]
+
+
+@pytest.mark.parametrize(
+    ("ids", "expected"), [(("a", "b"), ["a"]), (("b", "a"), ["b"])]
+)
+def test_covering_equal_lengths_keep_input_order(
+    ids: tuple[str, str], expected: list[str]
+) -> None:
+    assert covering_shapes(dict.fromkeys(ids, MAIN)) == expected
+
+
+@pytest.mark.parametrize(
+    ("north", "kept"), [(0.17, False), (0.19, True), (-0.17, False), (-0.19, True)]
+)
+def test_covering_tolerance_beside_a_line(north: float, kept: bool) -> None:
+    # 0.17 steps north or south is 18.9 m, 0.19 steps 21.1 m: outside
+    # MAIN's bare (zero-height) bounding box either way.
+    nearby = grid((0, north), (1, north), (2, north))
+    expected = ["main", "nearby"] if kept else ["main"]
+    assert covering_shapes({"main": MAIN, "nearby": nearby}) == expected
+
+
+@pytest.mark.parametrize(
+    ("tail", "kept"),
+    [
+        ([(3, 0), (4.2, 0)], False),  # 17.1 m past the east end
+        ([(3, 0), (4.25, 0)], True),  # 21.3 m past it
+        ([(1, 0), (-0.2, 0)], False),  # 17.1 m before the west start
+        ([(1, 0), (-0.25, 0)], True),  # 21.3 m before it
+    ],
+)
+def test_covering_tolerance_past_the_ends_of_a_line(
+    tail: list[tuple[float, float]], kept: bool
+) -> None:
+    expected = ["main", "tail"] if kept else ["main"]
+    assert covering_shapes({"main": MAIN, "tail": grid(*tail)}) == expected
+
+
+def test_covering_exactly_at_tolerance_counts_as_drawn() -> None:
+    # Points on MAIN's vertices are exactly 0 m away: a binary-exact tie.
+    on_vertices = grid((1, 0), (2, 0), (3, 0))
+    assert covering_shapes({"main": MAIN, "on": on_vertices}, 0) == ["main"]
+
+
+def test_covering_default_tolerance_is_20_m() -> None:
+    near = grid((0, 0.17), (1, 0.17))  # 18.9 m
+    far = grid((2, 0.19), (3, 0.19))  # 21.1 m
+    lines = {"main": MAIN, "near": near, "far": far}
+    assert covering_shapes(lines) == ["main", "far"]
+
+
+@pytest.mark.parametrize("tolerance_m", [-1, math.nan])
+def test_covering_rejects_negative_or_nan_tolerance(tolerance_m: float) -> None:
+    with pytest.raises(ValueError, match="tolerance_m must be >= 0"):
+        covering_shapes({"main": MAIN}, tolerance_m)
+
+
+def test_covering_rejects_a_line_under_two_points() -> None:
+    with pytest.raises(ValueError, match="shape '317338' has 1 point"):
+        covering_shapes({"main": MAIN, "317338": [[LON, LAT]]})
