@@ -5,12 +5,28 @@ catches it, turning each failure into ``None`` plus an ``issues`` entry
 prefixed with the field name, e.g. ``"start: unparseable '...'"``.
 """
 
+import hashlib
+import json
+
 from septa_detours.model import DetourNotice
 from septa_detours.parse._api import ApiDetour, ApiRoute
+from septa_detours.parse.text import clean_text
+
+SOURCE_KEY_LENGTH = 16
+"""Hex characters kept from the SHA-256 digest (64 bits)."""
 
 
 def make_source_key(route_id: str, location_start: str, start: str) -> str:
     """Hash the fields that loosely identify a detour across snapshots.
+
+    Each field is normalized with ``clean_text`` (whitespace runs collapse
+    to one space, ends stripped; blank becomes ``""``) and then casefolded,
+    so cosmetic edits between snapshots keep the same key. Nothing else is
+    forgiven: ``"9:30"`` and ``"09:30"`` give different keys.
+
+    The three fields are hashed as a JSON list, so text can't shift
+    between fields and collide: ``("Broad &", "Walnut")`` and
+    ``("Broad", "& Walnut")`` differ.
 
     Args:
         route_id: Raw API route ID.
@@ -18,16 +34,18 @@ def make_source_key(route_id: str, location_start: str, start: str) -> str:
         start: Raw ``start``.
 
     Returns:
-        A short hex digest. Inputs are normalized first (decide how: case,
-        whitespace) so cosmetic edits between snapshots keep the same key.
+        The first ``SOURCE_KEY_LENGTH`` hex characters of the SHA-256
+        digest. Changing the normalization or hashing changes every key.
 
     Not an identity (see ``DetourNotice.source_key``): route 68 #0/#1 are
     the same detour posted twice one minute apart and get different keys,
     and two genuinely different detours could share one.
     """
-    # TODO: normalize, join with a separator that can't appear in the
-    #   inputs (or can't be confused), hash with hashlib (stdlib).
-    raise NotImplementedError
+    fields = [
+        (clean_text(raw) or "").casefold() for raw in (route_id, location_start, start)
+    ]
+    payload = json.dumps(fields).encode()
+    return hashlib.sha256(payload).hexdigest()[:SOURCE_KEY_LENGTH]
 
 
 def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNotice:
