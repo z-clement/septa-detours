@@ -1,0 +1,74 @@
+{
+  "route": "MFO",
+  "route_id": "rr_route_mfo",
+  "route_name": "Market Frankford Owl",
+  "sequence": "4001",
+  "mode": "Market/ Frankford",
+  "isadvisory": "No",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 30 2023  5:00AM",
+  "isSnow": "N",
+  "description": "69th St. Trans Ctr. to Frankford Trans. Ctr. (Sun.-Thurs. ONLY)",
+  "alert": "",
+  "advisory": "",
+  "detour": [
+    {
+      "location_start": "JFK & Schuylkill",
+      "location_end": "22nd & Market",
+      "start": "8/24/2026   1:29 AM",
+      "end": "10/31/2027  11:59 PM",
+      "message": "Until 11:59pm 10/31/27, W/B via JFK,, Right on Schuylkill,, Left on Arch,, Left on 30th,, Right on Market,, Reg Rt",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "Market & Schuykill",
+      "location_end": "22nd & Market",
+      "start": "8/24/2026   1:31 AM",
+      "end": "10/31/2027  11:59 PM",
+      "message": "Until 11:59pm 10/31/27, EB via Market,, Left on Schuylkill,, Right on JFK,, Right on 20th,, Left on Market,, Reg Rt  ",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "5th St & Market",
+      "location_end": "5th St & Market",
+      "start": "8/24/2026   8:11 AM",
+      "end": "12/31/2026  11:00 PM",
+      "message": "24/7 EB 5th St & Market St, Transit Stop discontinued, until 12/3126",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "5th St & Market",
+      "location_end": "5th St & Market",
+      "start": "8/24/2026   8:11 AM",
+      "end": "12/31/2026  11:00 PM",
+      "message": "24/7 WB 5th St & Market St, Transit Stop discontinued, until 12/3126",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "15th & Chestnut Sts",
+      "location_end": "Market St btwn 23rd & 19th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, WB via 15th St, Left on Chestnut St, Right on Broad St, Right on Walnut St, Right on Schuylkill, Left on Market St, Reg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    },
+    {
+      "location_start": "Market & 30th St",
+      "location_end": "Market St btwn 23rd & 19th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, EB via Market St, Right on 30th St, Left on Chestnut St, Left on Broad St, Right on S. Penn Sq, Right on Market St, Reg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    }
+  ],
+  "elevator": []
+}

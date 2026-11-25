@@ -1,0 +1,50 @@
+{
+  "route": "32",
+  "route_id": "bus_route_32",
+  "route_name": "32",
+  "sequence": "1032",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 30 2023  1:16AM",
+  "isSnow": "N",
+  "description": "Broad-Carpenter to Ridge-Lyceum",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>  <h3 class=\"separated\">Modified Bus Schedules: Thanksgiving to President   s Day</h3><p>Due to adjusted school schedules between <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving</a> and President&rsquo;s Day, select bus routes operate on modified schedules between November 2026 and February 2027.</p>",
+  "detour": [
+    {
+      "location_start": "Broad & Chestnut Sts",
+      "location_end": "JFK Blvd btwn 17th & 30th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, NB via Broad St, Right on Chestnut St, Left on 13th St, Left on Vine St, Right on 16th St, Left on Ridge Ave, Right on 29th St, Right on Hunting Park Ave,Reg R",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    },
+    {
+      "location_start": "Pennsylvania Ave & Spring Garden St",
+      "location_end": "JFK Blvd btwn 17th & 30th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, SB via Pennsylvania Ave, Left on Spring Garden St, Right on Broad St, Right on Arch St, Left on 15th St, Reg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    },
+    {
+      "location_start": "20th & JFK",
+      "location_end": "18th & JFK",
+      "start": "11/23/2026   7:41 PM",
+      "end": "11/25/2026   5:00 AM",
+      "message": "Monday thru Wednesday, 7:00PM to 5:00AM, NB via JFK Blvd, Right on 20th, Left on  Ben Franklinn Pkwy, Reg Rt",
+      "reason": "Construction"
+    }
+  ],
+  "elevator": []
+}

@@ -1,0 +1,42 @@
+{
+  "route": "7",
+  "route_id": "bus_route_7",
+  "route_name": "7",
+  "sequence": "1007",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 30 2023  6:40AM",
+  "isSnow": "N",
+  "description": "Pier 70 to 33rd-Dauphin",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "Pennsylvania & Fairmount",
+      "location_end": "JFK Between  17th & 30th  Streets",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm - 2am 11/25/26, - 11/26/26, SB via Pennsylvania, L-Fairmount R--23rd L-, Spring Garden R-Broad, Right on Arch L-15th L-S. Penn, Sq, Right on Broad R-Walnut L-, 23rd, Reg Rt",
+      "reason": "Thanksgiving  Day Setup"
+    },
+    {
+      "location_start": "22nd  &  Chestnut",
+      "location_end": "JFK Between  17th & 30th  Streets",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm - 2am 11/25/26, - 11/26/26, NB via 22nd, Right on Chestnut, Left on 13th, Left on Vine, Right on 16th L-Spring Garden R-, Pennsylvania, Reg Rt",
+      "reason": "Thanksgiving Day Setup "
+    }
+  ],
+  "elevator": []
+}

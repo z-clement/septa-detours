@@ -1,0 +1,66 @@
+{
+  "route": "44",
+  "route_id": "bus_route_44",
+  "route_name": "44",
+  "sequence": "1044",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 25 2023  1:30PM",
+  "isSnow": "N",
+  "description": "5th-Market to Ardmore",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Notice of Long-term Rerouting</h3><p>Due to the Market Street Bridge Rehabilitation project, this bus has been rerouted until August 2027. The route you see in the digital tools has been updated to reflect this information. For more information, visit <a href=\"https://wwww.septa.org/news/market-st-bridge-rehab/\">septa.org/news/market-street-detours</a>.</p>  <h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "5th St & Market",
+      "location_end": "5th St & Market",
+      "start": "8/24/2026   8:12 AM",
+      "end": "12/31/2026  11:00 PM",
+      "message": "24/7 EB 5th St & Market St, Transit Stop discontinued, until 12/31/26",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "5th St & Market",
+      "location_end": "5th St & Market",
+      "start": "8/24/2026   8:13 AM",
+      "end": "12/31/2026  11:00 PM",
+      "message": "24/7 WB 5th St & Market St, Transit Stop discontinued, until 12/3126",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "Broad & Chestnut",
+      "location_end": "Market btwn 23rd & 19th",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "Until 2am 11/26/26, EB via Chestnut St, Left on  Broad St, Right on Penn Sq, Right on Market St, Reg Rt",
+      "reason": "ABC Thanksgiving Day Parade Set Up "
+    },
+    {
+      "location_start": "Market St & 2nd St",
+      "location_end": "2nd St & Market St",
+      "start": "11/23/2026  10:44 AM",
+      "end": "11/24/2026  11:59 PM",
+      "message": "Mon - Tues 9am -11:59 until, 11/23/26, EB via Market St, Right on 2nd St, Left on 38th Parallel Pl, Left on Dock St, Left on Front St, (Layover on Front Btwn, Market St & Arch St)",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "Market St & 13th St",
+      "location_end": "JFK/17th to 30th & Market 23rd to 19th",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "Until 2am on Thurs 11/26/26, WB via Market St, Right on 13th St, Left on Arch St, Left on 15th St, Left on S. Penn Sq, Right on Broad St, Right on Walnut St, Right on Schuylkill Ave, Reg Rt",
+      "reason": "Thanksgiving Parade Set Up Phase 2"
+    }
+  ],
+  "elevator": []
+}

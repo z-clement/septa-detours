@@ -1,0 +1,42 @@
+{
+  "route": "61",
+  "route_id": "bus_route_61",
+  "route_name": "61",
+  "sequence": "1061",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 31 2023  3:00AM",
+  "isSnow": "N",
+  "description": "9th-Market to Manayunk",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "Ridge Ave & Ridge Ave",
+      "location_end": "Umbria & Hermitage",
+      "start": "11/3/2026   9:21 AM",
+      "end": "12/26/2026   5:30 PM",
+      "message": "Mon thru Fri 7am - 5:30pm, 12/26/26, SB via Ridge Ave, Stay on Ridge Ave, Reg Rt",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "Ridge Ave & Ridge Ave",
+      "location_end": "Umbria & Hermitage",
+      "start": "11/14/2026   5:41 AM",
+      "end": "12/26/2026   5:00 PM",
+      "message": "Mon thru Fri 7am -5:30pm, 12/26/26, NB via Ridge Ave, Stay on Ridge Ave, Reg Rt",
+      "reason": "Construction "
+    }
+  ],
+  "elevator": []
+}

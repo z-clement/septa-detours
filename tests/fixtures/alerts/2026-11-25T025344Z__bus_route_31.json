@@ -1,0 +1,66 @@
+{
+  "route": "31",
+  "route_id": "bus_route_31",
+  "route_name": "31",
+  "sequence": "1031",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 31 2023  7:13AM",
+  "isSnow": "N",
+  "description": "City Hall to 76th-City",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Notice of Long-term Rerouting</h3><p><span data-teams=\"true\">Due to the Market Street Bridge Rehabilitation project, this bus has been rerouted until August 2027. The route you see in the digital tools has been updated to reflect this information. For more details, visit&nbsp;<a href=\"https://wwww.septa.org/news/market-st-bridge-rehab/\">septa.org/news/market-st-bridge-rehab</a>.</span></p>  <h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "30th & Market",
+      "location_end": "22nd & Market",
+      "start": "10/13/2026   9:30 AM",
+      "end": "10/31/2027  11:59 PM",
+      "message": "Until 11:59 pm, 10/31/27, EB via Market, Right on 30th, Left on Chestnut, Left on 22nd, Right on Market, Reg Rt",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "Market & 23rd Sts",
+      "location_end": "Market & Schuylkill Ave",
+      "start": "10/16/2026   8:14 AM",
+      "end": "10/16/2027   4:00 PM",
+      "message": "Until 10/16/27 at 4pm, WB via Market St, Left on 23rd St, Right on Walnut St, Right on 33rd St, Reg Rt",
+      "reason": "Bridge Construction "
+    },
+    {
+      "location_start": "34th & Chestnut",
+      "location_end": "",
+      "start": "11/16/2026   8:33 AM",
+      "end": "7/1/2027  11:59 PM",
+      "message": "24/7 until 11:59pm on 7-1-27, EB via 34th, Left on Chestnut,, Left on 33rd,, Right on Market,, Reg Rt 24/7 11/16/26-, 07/01/27",
+      "reason": "Construction"
+    },
+    {
+      "location_start": "Broad & Chestnut",
+      "location_end": "Market btwn 23rd & 19th",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "Until 2am 11/26/26, EB via Chestnut St, Right on Broad St, Take Recovery On Broad, & Walnut St",
+      "reason": "ABC Thanksgiving Day Parade Set Up "
+    },
+    {
+      "location_start": "Broad & Walnut",
+      "location_end": "Market btwn 23rd & 19th",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "Until 2am 11/26/26, WB via Broad St, Right on Walnut St, Reg Rt",
+      "reason": "ABC Thanksgiving Day Parade Set Up "
+    }
+  ],
+  "elevator": []
+}

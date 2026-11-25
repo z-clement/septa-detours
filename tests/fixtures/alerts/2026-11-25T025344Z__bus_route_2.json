@@ -1,0 +1,66 @@
+{
+  "route": "2",
+  "route_id": "bus_route_2",
+  "route_name": "2",
+  "sequence": "1002",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "Jun  1 2023  8:04AM",
+  "isSnow": "N",
+  "description": "20th-Johnston to Pulaski-Hunting Park",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "17th & Washington",
+      "location_end": "17th &  Mifflin",
+      "start": "11/11/2026   6:30 AM",
+      "end": "11/27/2026   4:00 PM",
+      "message": "7am - 4pm Mon thru Fri, 11/27/26, SB via 17th, Left on Washington, Right on Broad, Right on Passyunk, Left on 17th, Reg Rt",
+      "reason": "Contractor"
+    },
+    {
+      "location_start": "17th & Cecil B Moore",
+      "location_end": "17th btwn Master & Jefferson",
+      "start": "11/19/2026  10:00 AM",
+      "end": "12/1/2026  11:59 PM",
+      "message": "24/7 Until 11:59pm 12/1/26, SB via 17th, Left on Cecil B Moore Ave, Right on Broad St, Right on Fairmount Ave, Right on Ridge Ave, Left on Francis St, Reg Rt",
+      "reason": "Pothole"
+    },
+    {
+      "location_start": "17th & Spring Garden Sts",
+      "location_end": "17th & JFK Blvd",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pn on 11/25/26 thru 2am on, 11/26/26, SB via 17th St, Left on Spring Garden St, Right on Broad St, Right on Arch St, Left on 15th St, Right on Lombard St, Left on 17th St, Reg Rt",
+      "reason": "Thanksgiving Day Parade Set-up Phase 2"
+    },
+    {
+      "location_start": "16th St  & Locust St",
+      "location_end": "JFK/17th to 30th & Market 23rd to 19th",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "Until 2am on Thurs 11/26/26, NB via 16th St, Right on Locust St, Left on Broad St, Right on S Penn Sq,L - JFK Blvd, Right on Broad St, Right on Vine St, Left on 13th St, Left on Vine St, Right on, 16th St, Reg Rt",
+      "reason": "Thanksgiving Parade Set Up Phase 2"
+    },
+    {
+      "location_start": "16th & Pine",
+      "location_end": "16th & Spruce",
+      "start": "11/24/2026   7:33 PM",
+      "end": "11/25/2026   8:00 AM",
+      "message": "Until 8am 11/25/26, NB via 16th, Right on Pine, Left on Broad, Left on Spruce, Right on 16th, Reg Rte",
+      "reason": "Construction"
+    }
+  ],
+  "elevator": []
+}

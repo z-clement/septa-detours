@@ -1,0 +1,42 @@
+{
+  "route": "BSO",
+  "route_id": "rr_route_bso",
+  "route_name": "Broad Street Line Owl",
+  "sequence": "5001",
+  "mode": "Broad Street Line",
+  "isadvisory": "No",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 31 2023  4:50AM",
+  "isSnow": "N",
+  "description": "Fern Rock Transportation Center to South Philadelphia (Sun.-Thurs. ONLY)",
+  "alert": "",
+  "advisory": "",
+  "detour": [
+    {
+      "location_start": "15th & Market",
+      "location_end": "15th & Market",
+      "start": "8/19/2026   1:35 AM",
+      "end": "12/31/2026  11:59 PM",
+      "message": "Until 12/31/26 11:59pm SB, When servicing the transit, stop at 15th Street & Market, Street, please use the, designated Clothespin stop, as follows: Pick up and, discharge passengers on, 15th st, S. Market St (, Clothespin Side )",
+      "reason": "Safety "
+    },
+    {
+      "location_start": "15th & MArket",
+      "location_end": "15th & Market",
+      "start": "8/19/2026   1:37 AM",
+      "end": "12/31/2026  11:59 PM",
+      "message": "Until 12/31/26 11:59pm NB, When servicing the transit, stop at 15th Street & Market, Street, please use the, designated Clothespin stop, as follows: Pick up and, discharge passengers on, 15th & Market ( Clothespin, Side )",
+      "reason": "Safety "
+    }
+  ],
+  "elevator": []
+}

@@ -1,0 +1,50 @@
+{
+  "route": "68",
+  "route_id": "bus_route_68",
+  "route_name": "68",
+  "sequence": "1068",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May  6 2023 12:14PM",
+  "isSnow": "N",
+  "description": "Broad-Oregon to UPS or 69th Street Transportation Center",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "PNC Center",
+      "location_end": "PNC Center",
+      "start": "9/5/2026   5:58 PM",
+      "end": "12/30/2026  12:00 PM",
+      "message": "Until 12-30-26 PNC, EB Via Tinicum, Left on 90th, Left on Tinicum, Layover between 89th &, 90th st on Tinicum",
+      "reason": "Sidewalk Repair"
+    },
+    {
+      "location_start": "PNC Center",
+      "location_end": "PNC Center",
+      "start": "9/5/2026   5:59 PM",
+      "end": "12/30/2026  12:00 PM",
+      "message": "Until 12-30-26 PNC, EB Via Tinicum, Left on 90th, Left on Tinicum, Layover between 89th &, 90th st on Tinicum",
+      "reason": "Sidewalk Repair"
+    },
+    {
+      "location_start": "Broad & Pattison",
+      "location_end": "Broad & Pattison",
+      "start": "10/1/2026   3:14 AM",
+      "end": "12/15/2026  11:59 PM",
+      "message": "24/7 Until 12/15/26 11:59pm, Express Trips Only, NB via Broad, Right on Pattison, Left on Pennrose, Left on Enterprise, Reg Rt",
+      "reason": "Construction "
+    }
+  ],
+  "elevator": []
+}

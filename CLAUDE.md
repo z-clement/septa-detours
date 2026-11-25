@@ -357,8 +357,11 @@ Open: ~13 entries are discontinued stops ("Discontinued Transit Stop, at
 Ogontz and Roselyn"), not reroutes, and have no direction or turns. The
 model has no `kind` field; decide when building parse.
 
-Next: start `tests/fixtures/` from the ugliest real entries, then
-`parse/`. Keep collecting snapshots over several days. Later, `match/` must
+Next (clean session): write `tests/fixtures/` myself, choosing the
+ugliest real entries from `data/raw/alerts/` (e.g. "Eastbound"/"W/B"
+spellings, blank `location_end`, discontinued-stop entries, the
+"7am - 4pm Mon thru Fri" style schedules, doubled commas). Only after
+that, start `parse/`. Keep collecting snapshots over several days. Later, `match/` must
 map API route IDs and detour text ("Route 21", "the L") to GTFS
 `route_id` via `route_short_name` (not always equal to `route_id`;
 check rail).

@@ -1,0 +1,58 @@
+{
+  "route": "24",
+  "route_id": "bus_route_24",
+  "route_name": "24",
+  "sequence": "1024",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 11 2023  7:34PM",
+  "isSnow": "N",
+  "description": "Southampton & Rockledge to Frankford Transportation Center",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "Huntingdon Pk & Station Dr",
+      "location_end": "Gloria Dei Towers & Maner Discontinued",
+      "start": "10/9/2026  12:23 PM",
+      "end": "12/31/2027   4:00 PM",
+      "message": "Until 12/31/27 at 4pm, Gloria Dei Tower/Manor, Trips Only, NB Via Gloria Dei, Right on Welsh, Right on Huntingdon, Pike, Turn Right Into Holy, Redeemer DR, Recover NB On Huntingdon, pk Across From Holy Red, Hsp(RT 88 STAND)",
+      "reason": "Route Change/Layover Change"
+    },
+    {
+      "location_start": "Bethayres Station",
+      "location_end": "Gloria Dei Towers & Maner Discontinued",
+      "start": "10/9/2026  12:27 PM",
+      "end": "12/31/2027   4:00 PM",
+      "message": "Until 12/31/27 at 4pm, Gloria Dei Tower/Manor, Trips Only/ Leave 5min, Before Time, Via Huntingdon Pke, Left on Welsh, Left on Gloria Dei, Reg Rt",
+      "reason": "Route Change/Layover Change"
+    },
+    {
+      "location_start": "Pratt & Lorretto",
+      "location_end": "Summerdale Between Cheltenham & Alcott",
+      "start": "11/24/2026   7:37 AM",
+      "end": "11/25/2026   3:30 PM",
+      "message": "7am -330pm until 11/25/26, NB via Pratt, Right on Lorretto, Left on Oxford, Reg Rt",
+      "reason": "Contractor"
+    },
+    {
+      "location_start": "Oxford &  Lorretto",
+      "location_end": "Summerdale Between Cheltenham & Alcott",
+      "start": "11/24/2026   7:57 AM",
+      "end": "11/25/2026   3:30 PM",
+      "message": "7am -330pm until 11/25/26, SB via Oxford, Right on Lorretto, Left on Pratt, Reg Rt",
+      "reason": "Contractor"
+    }
+  ],
+  "elevator": []
+}

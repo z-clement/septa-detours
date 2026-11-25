@@ -1,0 +1,34 @@
+{
+  "route": "9",
+  "route_id": "bus_route_9",
+  "route_name": "9",
+  "sequence": "1009",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 31 2023  8:30AM",
+  "isSnow": "N",
+  "description": "4th-Walnut to Andorra",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "Schuylkill btw Walnut & Chestnut",
+      "location_end": "Schuylkill & JFK",
+      "start": "10/26/2026   8:10 AM",
+      "end": "12/31/2026   4:30 AM",
+      "message": "The NB Transit Stop at, Schuylkill and JFK and is, disontiuned until further, notice due to construction., Please board passengers, on Schuylkill between, Walnut and Chestnut",
+      "reason": "Construction"
+    }
+  ],
+  "elevator": []
+}

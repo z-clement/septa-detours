@@ -1,0 +1,74 @@
+{
+  "route": "49",
+  "route_id": "bus_route_49",
+  "route_name": "49",
+  "sequence": "1049",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 25 2023  7:16PM",
+  "isSnow": "N",
+  "description": "33rd-Dauphin to 29th-Snyder",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Notice of Long-term Rerouting</h3><p>Due to the Market Street Bridge Rehabilitation project, this bus has been rerouted until August 2027. The route you see in the digital tools has been updated to reflect this information. For more information, visit <a href=\"https://wwww.septa.org/news/market-st-bridge-rehab/\">septa.org/news/market-street-detours</a>.</p>  <h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "Market & Schuylkill Ave",
+      "location_end": "Market & Schuylkill Ave",
+      "start": "8/22/2026  11:01 PM",
+      "end": "12/20/2026   6:00 PM",
+      "message": "Until Further notice, SB Transit Stop at, Market & Schuylkill Ave, is Discontinued due to, Construction",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "Market & Schuylkill Ave",
+      "location_end": "Market & Schuylkill Ave",
+      "start": "8/22/2026  11:02 PM",
+      "end": "12/20/2026   6:00 PM",
+      "message": "Until Further notice, SB Transit stop at Market &, Schuylkill Ave discontinued, due to construction",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "University Ave at The VA Hospital",
+      "location_end": "University Ave at The VA Hospital",
+      "start": "9/17/2026   3:53 PM",
+      "end": "12/31/2026  12:59 AM",
+      "message": "Until Further Notice, Discontinued Transit Stop, SB Only due to Traffic &, Close Clearance",
+      "reason": "Close Clearance "
+    },
+    {
+      "location_start": "Convention btw Health Science  & 33rd St",
+      "location_end": "Convention btw Health Science  & 33rd St",
+      "start": "9/30/2026   4:17 PM",
+      "end": "9/30/2027  11:59 PM",
+      "message": "Discontinue the transit stop, NB on Convention Ave, between, Health Science Dr and 33rd, Street until further notice.",
+      "reason": "Hazard"
+    },
+    {
+      "location_start": "Broad & Chestnut Sts",
+      "location_end": "JFK Blvd btwn 17th & 30th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, SB via 23rd St, Left on Spring Garden St, Right on Broad St, Right on Arch St, Left on 15th St, Left on S Penn Sq.R-Broad, Right on Walnut, Right on Schuylkill,, Left on Market St, Reg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    },
+    {
+      "location_start": "Broad & Chestnut Sts",
+      "location_end": "JFK Blvd btwn 17th & 30th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, NB via Chestnut St, Left on Broad St, Right on S. Penn Sq, Left on JFK Blvd, Right on Broad St, Right on Vine St, Left on 13th St, Left on Vine,, Right on 16th, Left on Spring Garden, Right on Pennsylvania,Rg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    }
+  ],
+  "elevator": []
+}

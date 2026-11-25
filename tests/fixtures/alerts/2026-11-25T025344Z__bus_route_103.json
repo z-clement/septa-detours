@@ -1,0 +1,42 @@
+{
+  "route": "103",
+  "route_id": "bus_route_103",
+  "route_name": "103",
+  "sequence": "1103",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 31 2023  8:46AM",
+  "isSnow": "N",
+  "description": "Ardmore to 69th Street Transportation Center",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "West Chester Pike & Township line",
+      "location_end": "",
+      "start": "10/5/2026  10:16 AM",
+      "end": "11/30/2026   6:00 PM",
+      "message": "Weekdays only 7:40am -, 6:00 pm, NB via Township Line, Right on West Chester Pike, Right on Darby Road, Regular Route",
+      "reason": "Construction"
+    },
+    {
+      "location_start": "Darby Road & West Chester Pike",
+      "location_end": "",
+      "start": "10/5/2026  10:18 AM",
+      "end": "11/30/2026   6:00 PM",
+      "message": "Weekdays only 7:40 am -, 6:00 pm, SB via Darby Road, Left on West Chester Pike, Left on Township Line, Regular Route",
+      "reason": "Construction"
+    }
+  ],
+  "elevator": []
+}

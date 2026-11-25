@@ -1,0 +1,74 @@
+{
+  "route": "64",
+  "route_id": "bus_route_64",
+  "route_name": "64",
+  "sequence": "1064",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 31 2023 12:16PM",
+  "isSnow": "N",
+  "description": "50th-Parkside to Pier 70",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Notice of Bus Stop Changes</h3><p>Stops at Front &amp; Ellsworth, Washington &amp; 4th and <span class=\"NormalTextRun SpellingErrorV2Themed SCXW92640783 BCX0\">Moyamensing</span> &amp; 2nd are closed. Use nearby stops at Washington Ave &amp; Front, 3rd or 5th.</p>  <h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "2nd & Washington",
+      "location_end": "2nd & Washington",
+      "start": "3/11/2026   7:55 AM",
+      "end": "12/31/2026  11:59 PM",
+      "message": "Discontinued Transit Stop, EB at 2nd & Washington, until 12-31-2026",
+      "reason": "Construction"
+    },
+    {
+      "location_start": "",
+      "location_end": "",
+      "start": "9/5/2026   8:53 PM",
+      "end": "9/15/2027   4:30 AM",
+      "message": "Discontinued transit stops, EB,, 4th & Washington,, Moyamensing &, Washington",
+      "reason": "Stops Discontinued"
+    },
+    {
+      "location_start": "",
+      "location_end": "",
+      "start": "9/5/2026   8:55 PM",
+      "end": "9/15/2027   4:30 AM",
+      "message": "Discontinued transit stop, WB, Front & Ellsworth",
+      "reason": "Stops Discontinued"
+    },
+    {
+      "location_start": "32nd & Grays Ferry",
+      "location_end": "",
+      "start": "9/8/2026  12:52 PM",
+      "end": "12/31/2026  11:59 PM",
+      "message": "Until 23:59 on 12/31/26, Discontinued transit stops, @ 32nd & Grays Ferry, Eastbound",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "32nd & Grays Ferry",
+      "location_end": "",
+      "start": "9/8/2026  12:53 PM",
+      "end": "12/31/2026  11:59 PM",
+      "message": "Until 23:59 on 12/31/26, Discontinued transit stops, @ 32nd & Grays Ferry, Westbound",
+      "reason": "Construction "
+    },
+    {
+      "location_start": "48th & Brown",
+      "location_end": "49th & Westminster",
+      "start": "11/3/2026   6:36 AM",
+      "end": "12/31/2026   4:30 AM",
+      "message": "WB via 48th, Left on Brown, Right on 49th, Right on Westminster, Reg Rt",
+      "reason": "Sinkhole"
+    }
+  ],
+  "elevator": []
+}
