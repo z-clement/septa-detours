@@ -1,7 +1,8 @@
 """Tests for ``match.routes.find_gtfs_route``.
 
 GTFS is not committed, so ``routes`` is hand-built from real GTFS IDs
-(2026-11-25 feed). API IDs come from the alert fixtures where possible.
+(2026-11-25 feed) with ``routes_from_ids`` (conftest). API IDs come from
+the alert fixtures where possible.
 """
 
 import json
@@ -12,16 +13,7 @@ import pytest
 
 from septa_detours.match.routes import API_ROUTE_ALIASES, find_gtfs_route
 
-# Must match what ``load.load_routes`` returns (column order and dtypes).
-ROUTES_SCHEMA = {
-    "route_id": pl.String,
-    "route_short_name": pl.String,
-    "route_long_name": pl.String,
-    "route_type": pl.Int16,
-    "route_color": pl.String,
-    "route_text_color": pl.String,
-    "feed": pl.String,
-}
+type RoutesFromIds = Callable[[list[tuple[str, str]]], pl.DataFrame]
 
 BUS_ROUTE_IDS = (
     # Bus routes in the alert fixtures.
@@ -34,23 +26,10 @@ BUS_ROUTE_IDS = (
 RAIL_ROUTE_IDS = ("AIR", "CHE", "MED")
 
 
-def make_routes(rows: list[tuple[str, str]]) -> pl.DataFrame:
-    """Build a routes frame from ``(feed, route_id)`` pairs.
-
-    ``find_gtfs_route`` reads only ``feed`` and ``route_id``; the other
-    columns get placeholder values.
-    """
-    full_rows = [
-        (route_id, route_id, "Somewhere", 3, "EF3340", "FFFFFF", feed)
-        for feed, route_id in rows
-    ]
-    return pl.DataFrame(full_rows, schema=ROUTES_SCHEMA, orient="row")
-
-
 @pytest.fixture
-def routes() -> pl.DataFrame:
+def routes(routes_from_ids: RoutesFromIds) -> pl.DataFrame:
     """Real GTFS route IDs from both feeds, bus first (as ``load_routes``)."""
-    return make_routes(
+    return routes_from_ids(
         [("bus", r) for r in BUS_ROUTE_IDS] + [("rail", r) for r in RAIL_ROUTE_IDS]
     )
 
@@ -135,15 +114,15 @@ def test_every_alias_resolves(api_route_id: str, routes: pl.DataFrame):
     assert find_gtfs_route(api_route_id, routes) == API_ROUTE_ALIASES[api_route_id]
 
 
-def test_alias_wins_over_name_match():
+def test_alias_wins_over_name_match(routes_from_ids: RoutesFromIds):
     """If GTFS reused an old name, the alias still decides."""
-    routes = make_routes([("bus", "15"), ("bus", "G1")])
+    routes = routes_from_ids([("bus", "15"), ("bus", "G1")])
     assert find_gtfs_route("trolley_route_15", routes) == ("bus", "G1")
 
 
-def test_alias_target_missing_raises():
+def test_alias_target_missing_raises(routes_from_ids: RoutesFromIds):
     """An alias whose target isn't in ``routes`` raises, naming the target."""
-    routes = make_routes([("bus", "L1")])
+    routes = routes_from_ids([("bus", "L1")])
     with pytest.raises(ValueError, match="bus route 'L1_OWL'") as excinfo:
         find_gtfs_route("rr_route_mfo", routes)
     assert "'rr_route_mfo'" in str(excinfo.value)
@@ -158,14 +137,14 @@ def test_unaliased_rename_has_no_name_fallback(routes: pl.DataFrame):
 # --- Name matching ----------------------------------------------------------
 
 
-def test_bus_prefix_name_matches():
-    routes = make_routes([("bus", "21")])
+def test_bus_prefix_name_matches(routes_from_ids: RoutesFromIds):
+    routes = routes_from_ids([("bus", "21")])
     assert find_gtfs_route("bus_route_21", routes) == ("bus", "21")
 
 
-def test_trolley_prefix_name_matches():
+def test_trolley_prefix_name_matches(routes_from_ids: RoutesFromIds):
     """A ``trolley_route_`` ID with no alias still name-matches the bus feed."""
-    routes = make_routes([("bus", "99")])
+    routes = routes_from_ids([("bus", "99")])
     assert find_gtfs_route("trolley_route_99", routes) == ("bus", "99")
 
 
@@ -173,9 +152,9 @@ def test_letter_route_name_matches(routes: pl.DataFrame):
     assert find_gtfs_route("bus_route_K", routes) == ("bus", "K")
 
 
-def test_name_match_keeps_underscores_in_remainder():
+def test_name_match_keeps_underscores_in_remainder(routes_from_ids: RoutesFromIds):
     """Real GTFS IDs like ``T_BUS`` contain ``_``; only the prefix is removed."""
-    routes = make_routes([("bus", "BUS"), ("bus", "T_BUS")])
+    routes = routes_from_ids([("bus", "BUS"), ("bus", "T_BUS")])
     assert find_gtfs_route("bus_route_T_BUS", routes) == ("bus", "T_BUS")
 
 
@@ -185,9 +164,9 @@ def test_name_match_is_case_sensitive(routes: pl.DataFrame):
         find_gtfs_route("bus_route_k", routes)
 
 
-def test_name_match_uses_bus_feed_only():
+def test_name_match_uses_bus_feed_only(routes_from_ids: RoutesFromIds):
     """A rail ``route_id`` never satisfies a ``bus_route_`` name."""
-    routes = make_routes([("rail", "AIR")])
+    routes = routes_from_ids([("rail", "AIR")])
     with pytest.raises(ValueError, match="bus route 'AIR'"):
         find_gtfs_route("bus_route_AIR", routes)
 
@@ -218,15 +197,15 @@ def test_retired_bus_route_raises(routes: pl.DataFrame):
         "",
     ],
 )
-def test_malformed_ids_raise(api_route_id: str):
-    routes = make_routes([("bus", "21")])
+def test_malformed_ids_raise(api_route_id: str, routes_from_ids: RoutesFromIds):
+    routes = routes_from_ids([("bus", "21")])
     with pytest.raises(ValueError, match="no GTFS route"):
         find_gtfs_route(api_route_id, routes)
 
 
-def test_routes_without_bus_feed_match_nothing():
+def test_routes_without_bus_feed_match_nothing(routes_from_ids: RoutesFromIds):
     """With only rail loaded, a bus route can't match."""
-    routes = make_routes([("rail", "21")])
+    routes = routes_from_ids([("rail", "21")])
     with pytest.raises(ValueError, match="bus route '21'"):
         find_gtfs_route("bus_route_21", routes)
 

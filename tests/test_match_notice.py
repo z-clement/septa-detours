@@ -1,7 +1,8 @@
 """Tests for ``match.notice.match_notice``.
 
 Notices come from the real alert fixtures via ``parse_snapshot``; ``routes``
-is hand-built from real GTFS route IDs (GTFS is not committed).
+is hand-built from real GTFS route IDs with ``routes_from_ids`` (conftest;
+GTFS is not committed).
 """
 
 from collections.abc import Callable
@@ -14,16 +15,7 @@ from septa_detours.match.notice import match_notice
 from septa_detours.model import Detour, DetourNotice, RouteMatch
 from septa_detours.parse.notice import parse_snapshot
 
-# Must match what ``load.load_routes`` returns (column order and dtypes).
-ROUTES_SCHEMA = {
-    "route_id": pl.String,
-    "route_short_name": pl.String,
-    "route_long_name": pl.String,
-    "route_type": pl.Int16,
-    "route_color": pl.String,
-    "route_text_color": pl.String,
-    "feed": pl.String,
-}
+type RoutesFromIds = Callable[[list[tuple[str, str]]], pl.DataFrame]
 
 # Every route with detours in the fixtures, plus a rail route.
 ROUTE_IDS = [
@@ -37,18 +29,9 @@ ROUTE_IDS = [
 SNAPSHOT = "2026-11-25T025344Z.json"
 
 
-def make_routes(rows: list[tuple[str, str]]) -> pl.DataFrame:
-    """Build a routes frame from ``(feed, route_id)`` pairs."""
-    full_rows = [
-        (route_id, route_id, "Somewhere", 3, "EF3340", "FFFFFF", feed)
-        for feed, route_id in rows
-    ]
-    return pl.DataFrame(full_rows, schema=ROUTES_SCHEMA, orient="row")
-
-
 @pytest.fixture
-def routes() -> pl.DataFrame:
-    return make_routes(ROUTE_IDS)
+def routes(routes_from_ids: RoutesFromIds) -> pl.DataFrame:
+    return routes_from_ids(ROUTE_IDS)
 
 
 @pytest.fixture
@@ -146,10 +129,10 @@ def test_unmatched_notice_has_no_shapes_issue(fixture_notices, routes):
     assert detour.issues == ("route: no GTFS route for API route 'APP'",)
 
 
-def test_non_value_errors_propagate(fixture_notices):
+def test_non_value_errors_propagate(fixture_notices, routes: pl.DataFrame):
     """A malformed ``routes`` frame is a bug, not an unmatched notice."""
     notice = fixture_notices("2026-11-25T025344Z__bus_route_55.json")[0]
-    broken = make_routes(ROUTE_IDS).drop("feed")
+    broken = routes.drop("feed")
     with pytest.raises(ColumnNotFoundError):
         match_notice(notice, broken)
 
