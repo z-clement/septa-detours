@@ -8,23 +8,42 @@ Deciding what a list means (one, none, conflicting) is ``notice.py``'s job.
 
 from septa_detours.model import Direction
 
+_SPELLINGS: dict[str, Direction] = {
+    "nb": "NB",
+    "sb": "SB",
+    "eb": "EB",
+    "wb": "WB",
+    "n/b": "NB",
+    "s/b": "SB",
+    "e/b": "EB",
+    "w/b": "WB",
+    "northbound": "NB",
+    "southbound": "SB",
+    "eastbound": "EB",
+    "westbound": "WB",
+}
+"""Accepted spellings, casefolded. Each pattern covers all four directions,
+though real data (2026-11-25) only shows ``NB SB EB WB``, ``W/B``,
+``Eastbound`` and ``Westbound``."""
+
 
 def normalize_direction(token: str) -> Direction | None:
     """Map one direction spelling to its normalized form.
 
     Args:
-        token: A candidate word, e.g. ``"SB"``, ``"W/B"``, ``"Eastbound"``.
+        token: One whole token, already split from the message, e.g.
+            ``"SB"``, ``"W/B"``, ``"Eastbound"``.
 
     Returns:
         ``"NB"``, ``"SB"``, ``"EB"`` or ``"WB"``, or ``None`` if ``token``
         isn't a direction spelling. Not an error: most words aren't.
 
-    Spellings seen in real data: ``NB SB EB WB``, ``W/B``, ``Eastbound``,
-    ``Westbound``. Decide on case: fixtures only show upper ``NB`` and title
-    ``Eastbound``.
+    Case is ignored (``"nb"``, ``"EASTBOUND"`` match). Nothing else is
+    forgiven: attached punctuation or whitespace (``"SB,"``, ``" NB"``) gives
+    ``None``, since stripping it is the tokenizer's job, and so does a word
+    that merely contains a spelling (``"Webster"``).
     """
-    # TODO
-    raise NotImplementedError
+    return _SPELLINGS.get(token.casefold())
 
 
 def find_directions(message: str) -> tuple[Direction, ...]:
