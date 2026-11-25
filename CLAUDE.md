@@ -388,6 +388,25 @@ Findings from reading all 140 detours:
   NB On"), spelled out at the end ("..., Eastbound"), or after the time
   ("Until 12/31/26 11:59pm SB,"). LS and LE can both be blank (64 #1, #2).
 
+Done: second snapshot `2026-11-25T121123Z` (~9 h after the first, not a
+day): 140 -> 166 detours. 5 removed, all already past their API `end`
+(SEPTA removes promptly); 31 added, mostly Thanksgiving parade reroutes
+for 11/26, posted ~14 h before they start (parse must not assume a
+detour is active). No new direction spellings. Fixtures added:
+`2026-11-25T121123Z__bus_route_31.json` and `__bus_route_124.json`; the
+README now has one index table per snapshot. Findings:
+- Same detour across snapshots: route 31 #2 is byte-identical in both
+  route 31 fixtures (test `source_key` stability with it). Items 0-4 kept
+  their indices; new items were appended (not guaranteed by SEPTA).
+- Back-to-back phases: route 31 #3 ends 11/26 2:00 AM exactly when #5
+  starts.
+- Truncated LS `"Broad &"` (31 #6): not blank, so it's a known location
+  and the notice can be `complete`. Open: flag in parse/ or leave to
+  match/ (Claude leans match/).
+- Doubled-dash date `"11-26--26"` pasted onto 7 routes; `"S PEnn Sq"`,
+  `"Sping Garden"`; same place spelled `"30th & Chestnut Sts"` and
+  `"30th & Chestnut"` (124 #0 vs #3).
+
 Done: `parse/` skeleton (scaffolded by Claude at my request). Every function raises `NotImplementedError`; ruff,
 ty and imports pass. Layout:
 - `_api.py`: private raw models `ApiRoute` (`route_id`, `mode`,
@@ -400,8 +419,8 @@ ty and imports pass. Layout:
 - `times.py::parse_api_datetime(raw) -> datetime` and
   `local_time_issue(moment) -> str | None`: **done** (see below).
 - `direction.py`: `normalize_direction(token) -> Direction | None` and
-  `find_directions(message) -> tuple[Direction, ...]` (distinct, in
-  first-appearance order). Finding is separate from deciding.
+  `find_directions(message) -> tuple[Direction, ...]`: **done** (see
+  below). Finding is separate from deciding.
 - `notice.py`: `make_source_key(route_id, location_start, start) -> str`
   (hashlib), `parse_detour(route, detour, snapshot) -> DetourNotice`,
   `parse_snapshot(content, snapshot) -> list[DetourNotice]` (API order;
@@ -416,10 +435,8 @@ Decisions:
 - `end` < `start` -> keep both, add an issue. API `start`/`end` win over
   times in the message text.
 Open (TODOs in the docstrings; decide while implementing):
-- `normalize_direction`: case handling (data shows `NB` and
-  `Eastbound`); token splitting must keep `W/B` whole and must not read
-  `WB` into a word like "Webster".
 - `make_source_key`: normalization (case, whitespace) and separator.
+  Must give the same key for route 31 #2 in both snapshots' fixtures.
 - Whether recurring windows and message/API mismatches add an issue
   (adding one makes most notices `partial`).
 - A `kind` field (reroute / stop closure / relocation) would change
@@ -469,12 +486,41 @@ reusable mutation runner is a scratch script (not committed): copy the
 file, apply `[old, new]` pairs that must each match once, run pytest
 with `PYTHONDONTWRITEBYTECODE=1`, restore in `finally`. 256 tests total.
 
+Done: `parse/direction.py`.
+- `normalize_direction(token)`: lookup in `_SPELLINGS` (12 entries,
+  written out one by one, keyed casefolded) on `token.casefold()`.
+  Decided: **case ignored** (my choice). Each pattern covers all four
+  directions: `NB`, `N/B`, `Northbound` (seen so far: `NB SB EB WB`,
+  `W/B` once, `Eastbound`/`Westbound`). Nothing else forgiven: `"SB,"`,
+  `" NB"`, `"Webster"`, `"N.B."`, `"W / B"`, `"inbound"` -> `None`.
+  Stripping punctuation is the tokenizer's job.
+- `find_directions(message)`: split on `_TOKEN_SEPARATOR =
+  r"[^\w/]+"` (every char but letters, digits, `_`, `/`), normalize each
+  token, dedupe in first-appearance order with `dict.fromkeys`. `/` stays
+  inside tokens so `W/B` survives; dates and `Tower/Manor` become harmless
+  tokens. Known gaps, safe (no direction -> issue later): `"NB/SB"` is one
+  token (not seen; pinned by a test); a direction glued to digits or
+  letters (`11:59pmSB`) isn't found.
+On all 157 distinct real messages (both snapshots): 151 give one
+direction, 6 give none (5 "Discontinued Transit Stop" + route 24 #1),
+none give two different ones; ignoring case added no surprise matches.
+`tests/test_direction.py` (78): spellings, case, rejections, a
+fixture-driven `(stamp, route_id, index, expected)` table, hand-built
+order/dedupe/punctuation cases. Mutations: 15 + 10; 2 survivors, both
+equivalent (`.lower()` vs `.casefold()` on ASCII keys; dropping `+` from
+the separator only adds empty tokens, which normalize to `None`).
+334 tests total.
+
 Next (clean session): Claude implements `parse/`, one function at a
 time, with tests from the fixture index, stopping for my review after each.
-Order: ~~`clean_text`~~ -> ~~`parse_api_datetime`~~ -> `normalize_direction` ->
-`find_directions` -> `make_source_key` -> `_api.read_snapshot` ->
-`parse_detour` -> `parse_snapshot`. Keep
-collecting snapshots over several days. Later, `match/` must map API
+Order: ~~`clean_text`~~ -> ~~`parse_api_datetime`~~ ->
+~~`normalize_direction`~~ -> ~~`find_directions`~~ -> `make_source_key`
+(settle its normalization question first; ask me) ->
+`_api.read_snapshot` -> `parse_detour` -> `parse_snapshot`. Keep
+collecting snapshots over several days: fetch on 11/26 while the parade
+detours are live, and again on 11/27 to see them removed. Add fixtures
+when a snapshot shows a new quirk (one README table per snapshot).
+Later, `match/` must map API
 route IDs and detour text ("Route 21", "the L") to GTFS `route_id` via
 `route_short_name` (not always equal to `route_id`; check rail and the
 Owl routes).
