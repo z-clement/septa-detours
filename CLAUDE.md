@@ -105,6 +105,14 @@ notebooks/       exploration only, not production code
 - Choose integer widths from the GTFS spec's legal range, not today's data
   (e.g. `shape_pt_sequence` is Int32). Lat/lon are Float64.
 - GeoJSON coordinates are `[lon, lat]`; GTFS columns are lat, lon.
+- Direction names come from SEPTA's `directions.txt` (a non-standard GTFS
+  extension, both feeds): `(route_id, direction_id)` -> `"Northbound"` etc.
+  `direction_id` 0 means a different compass direction per route (route
+  2: SB, 24: NB, 64: WB). A few bus routes say Inbound/Outbound/Loop; rail
+  only Inbound/Outbound. The rail copy has CRLF line endings.
+- The alerts API still uses pre-2025 route names in places (MFO/BSO,
+  trolleys 10/11/13/15/34/36/101/102, MFL/BSL/NHSL; Bus Revolution H, L,
+  R); GTFS uses the new ones. See `match/routes.py`.
 - Detour text is messy and inconsistent. Real examples go in `tests/fixtures/`
   and should drive parser design. Never "fix" a fixture to make a test pass.
 - Treat unparseable or ambiguous detours as `unknown` rather than guessing.
@@ -126,11 +134,13 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Reached: **`parse/` is done** (raw alert snapshot bytes ->
-`list[DetourNotice]` via `parse_snapshot`), driven by
-`tests/fixtures/alerts/`. Earlier: load GTFS and plot one route with
-MapLibre (route GeoJSON in `web/data/`). Goal now: settle parse's open
-questions, then start `match/`. See "Next" at the end.
+Reached: **`match/` routes + directions are done**: parsed notices ->
+`list[Detour]` via `match_notices(notices, routes, trips, directions)`,
+with the GTFS route and every shape in the notice's direction. Before
+that: `parse/` (snapshot bytes -> `list[DetourNotice]` via
+`parse_snapshot`), and one route plotted with MapLibre. No geometry for
+the detour itself yet, and nothing consumes `Detour` yet. See "Geography
+plan" and "Next" at the end.
 
 Done: `gtfs/load.py`: `read_table` (all-string read, `""` -> null, `feed`
 column, ValueError naming feed/table on a missing column), private
@@ -598,28 +608,112 @@ README "Expected" guesses held, except the ones that hinge on open
 questions (recurrence / mismatch issues are not added, so route 2 #0,
 32 #2, 44 #3 are `complete`). Route 24 has 4 items, not 3.
 
+Done: `match/routes.py::find_gtfs_route(api_route_id, routes) ->
+(feed, route_id)` (raises `ValueError`). `API_ROUTE_ALIASES` first (12
+Metro renames, decided by me: "Metro rebrand only"): `rr_route_mfo` ->
+`L1_OWL`, `rr_route_bso` -> `B1_OWL`, `rr_route_mfl` -> `L1`,
+`rr_route_nhsl` -> `M1`, trolleys 10/34/13/11/36 -> `T1`-`T5`, 15 ->
+`G1`, 101/102 -> `D1`/`D2` (T/G1 checked by stop names on each old
+route's main street). Alias wins over name match (GTFS could reuse an
+old name). Otherwise `bus_route_X`/`trolley_route_X` -> bus-feed `X`,
+exact and case-sensitive; `rr_*`/`APP`/`cct`/`generic` never
+name-match. Alias targets must exist in `routes` too. Deliberately
+unaliased: `rr_route_bsl` (one API route = B1/B2/B3) and Bus Revolution
+renames. Evidence for later: L -> 51 is strong (51 serves both ends of
+L's detour); R -> K weak (one shared stop); H unknown. 136/149
+name-matched detours' first street is served by the matched route; the
+misses are spellings, so no sign of reused names. The API's `route`
+field (`AIR`, `LAN` = rail GTFS IDs) isn't kept by `ApiRoute`/`SourceText`;
+only matters for rail (no detours seen).
+
+Done: `gtfs/load.py::load_directions` (`DIRECTION_COLUMNS`: `route_id`,
+`direction_id` Int8 like trips, `direction`, `direction_destination`).
+Missing file -> `FileNotFoundError` (loud if SEPTA drops the extension).
+Every trips `(route, direction_id)` is covered; no duplicates.
+`tests/test_load_directions.py` (10, the first direct loader tests; real
+rows under `tmp_path`, incl. a CRLF rail file).
+
+Done: `match/directions.py::find_direction_id(directions, feed,
+route_id, direction) -> int`. `COMPASS_NAMES` (NB -> "Northbound", ...),
+exact match on `(feed, route_id, name)`. 0 rows -> `ValueError("bus
+route '68' has no Eastbound direction (has Northbound, Southbound)")`
+(`(has none)` for an unknown route; nulls skipped); 2+ -> `ValueError`.
+Never picks a nearest direction.
+
+Done: `match/notice.py`. `match_notice(notice, routes, trips,
+directions) -> Detour`; `match_notices(...)` = one per notice, input
+order, unmatched kept, equal notices not deduplicated, catches nothing.
+- Route lookup fails -> `match=None`, issue `"route: <reason>"`;
+  trips/directions are not read.
+- Otherwise private `_affected_shapes` -> `(shapes, issues)`, exactly one
+  non-empty: no direction -> `"shapes: no direction in notice"`; lookup
+  fails -> `"shapes: <reason>"` (decided by me: empty + issue, never
+  both directions); else every `route_shape_ids` row with that
+  `direction_id`, in trip order, no issue; none -> `"shapes: bus route
+  '55' has no shapes with direction_id 1"`.
+- Every notice is matched whatever its `status`; parse issues stay on
+  `notice.issues`, match issues on `Detour.issues`. Only `ValueError`
+  becomes an issue.
+- Known gap: `shapes` = all shapes in that direction, branches and
+  short-turns included (route 55 SB: 6). `RouteMatch`'s docstring says
+  "shapes the detour affects"; consider rewording in `model.py` (flag
+  first). Narrowing needs location (tier B below).
+Real snapshots: `025344Z` 126/140 get shapes (7 no direction, 5 no route:
+H, L, R, 2 route 68 "EB Via Tinicum" on a N/S route); `121123Z` 152/166
+(same 7/5/2).
+Tests: `test_match_routes.py` (53), `test_match_directions.py` (21),
+`test_match_notice.py` (28; one `gtfs` fixture = `(routes, trips,
+directions)` from real rows for all 17 fixture routes; trips interleave
+directions so a missing filter can't pass). Pins that break on purpose
+when a fixture is added: `FIXTURE_EXPECTED` (routes), the sweep's 65 and
+`NO_SHAPES` (notice), plus parse's `NOT_COMPLETE`. Shared builders in
+`tests/conftest.py`: `routes_from_ids`, `trips_from_rows`,
+`directions_from_rows` (fixtures returning callables; `test_geojson.py`
+and `test_routes.py` keep their own, differently shaped helpers).
+Mutations: routes 14/16 (2 equivalent: prefix anywhere / any case, since
+`removeprefix` only strips a true prefix), directions 14/15 (`int()`
+around `.item()` is redundant but kept for typing), notice 10 + 7 + 13,
+all caught. 540 tests total.
+
+Geography plan (agreed; not started). 170 distinct real messages: 126
+turn-by-turn with a rejoin ("SB via 17th St, Left on Spring Garden St,
+..., Reg Rt"), 12 turns without a rejoin (layovers), 32 stop-related
+(points; `stops.txt`). GTFS shapes can't supply detour streets, so build
+paths on a street network, in tiers, each useful alone:
+- **A**: point at `location_start` (intersection lookup) or the closed
+  stop.
+- **B**: highlight the skipped part of the regular route (A + rejoin
+  point snapped to the route shape). Also narrows `shapes` to the right
+  branch.
+- **C**: full detour path: parse the message's steps (in `parse/`), find
+  the start intersection, walk each named street to its intersection with
+  the next, snap the end onto the route shape. Any missing street,
+  non-meeting pair, or multiple plausible meetings -> `unknown`.
+Open decisions (mine): street data, OSM (covers suburbs: routes 103, 124
+leave the city; names need normalizing) vs City of Philadelphia
+centerlines (closer names, city only); Claude leans OSM. Libraries:
+shapely + pyproj, likely networkx (or heavier osmnx); not a routing
+engine (it picks its own streets). Street-name matching: exact after
+normalizing plus a small alias table from fixtures, not fuzzy ("Sping
+Garden", "Graysferry", "Garney", "Broad &"). Each tier adds geometry to
+`RouteMatch` -> a `model.py` change, flag first.
+
 Next (clean session). Ask me which to do first:
-1. **Settle parse's open questions** (each is my decision; ask):
+1. **Get `Detour`s onto the map**: nothing consumes them yet. A
+   `python -m septa_detours.match` command (snapshot -> `Detour` JSON in
+   `data/processed/`), and/or `export/` GeoJSON of detoured routes
+   (affected shapes, styled by direction) for `web/`.
+2. **Tier A** of the geography plan (decide the street data source first
+   if intersection lookup needs it; stop closures can use `stops.txt`).
+3. **Settle parse's open questions** (each is my decision; ask):
    recurring windows ("7am - 4pm Mon thru Fri") and message-vs-API
    mismatches (route 44 #3, 61 #1): add an issue or not? Flagging makes
    many notices `partial` and changes the pinned `NOT_COMPLETE`.
-   Detecting either means parsing message text (dates/times/weekdays),
-   which `parse/` doesn't do yet. And a `kind` field (reroute / stop
-   closure / relocation; see the route 6, 9, BSO findings): changes
-   `model.py`, so flag it to me first.
-2. **Keep collecting snapshots**: fetch on 11/26 while the parade detours
-   are live and on 11/27 to see them removed (`uv run python -m
-   septa_detours.ingest`). Run `parse_snapshot` over each new snapshot
-   and add fixtures when one shows a new quirk (one README table per
-   snapshot; then update the sweep pin).
-3. **Start `match/`**: map API route IDs (`bus_route_21`,
-   `trolley_route_15`, `rr_route_mfo`/`rr_route_bso` = Owl *buses*) and
-   detour text ("Route 21", "the L") to GTFS `route_id` via
-   `route_short_name` (not always equal to `route_id`; check rail and the
-   Owl routes). Produces `Detour` with `RouteMatch`/`AffectedShape`
-   (`route_shape_ids` in `gtfs/routes.py` already gives shapes per
-   direction). Direction (NB/SB/...) -> GTFS `direction_id` is unsolved:
-   GTFS has 0/1, not compass directions; it probably needs shape
-   geometry or `trip_headsign`. Ask before adding shapely/pyproj.
+   Detecting either means parsing message text, which `parse/` doesn't do
+   yet. And a `kind` field (reroute / stop closure / relocation; route 6,
+   9, BSO findings): changes `model.py`, so flag it first.
+4. **Keep collecting snapshots** (`uv run python -m septa_detours.ingest`);
+   run parse + match over each and add fixtures for new quirks (then
+   update all the pins listed above).
 Same way of working: small increments, tests from fixtures, mutation
 checks, stop for my review after each.
