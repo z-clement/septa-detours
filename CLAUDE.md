@@ -49,7 +49,8 @@ src/septa_detours/gtfs/   shared GTFS reference data (not a stage): load.py
 src/septa_detours/io.py   shared helper (not a stage): write_bytes_atomic
 src/septa_detours/model.py
 web/             map frontend
-tests/fixtures/  saved real alerts, including ugly/ambiguous ones
+tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
+                 alerts/ holds API route entries + an annotated README
 notebooks/       exploration only, not production code
 ```
 
@@ -121,8 +122,9 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Goal: load GTFS and plot one route with **MapLibre** (export the route as
-GeoJSON to `web/data/`).
+Goal now: **implement `parse/`** (raw alert snapshot -> `DetourNotice`),
+driven by `tests/fixtures/alerts/`. Reached earlier: load GTFS and plot one
+route with MapLibre (route GeoJSON in `web/data/`). See "Next" at the end.
 
 Done: `gtfs/load.py`: `read_table` (all-string read, `""` -> null, `feed`
 column, ValueError naming feed/table on a missing column), private
@@ -308,8 +310,9 @@ Alerts API shape (observed 2026-11-24): a JSON list of ~185 per-route
 entries with keys `route`, `route_id`, `route_name`, `mode`, flags
 (`isdetour` "Y"/"N", `isadvisory` "Yes"/"No", ...), `last_updated`,
 `advisory` (HTML), and `detour`: a list of `{location_start,
-location_end, start, end, message, reason}`. That day: 57 routes, 147
-detours. Quirks that matter for parse/match:
+location_end, start, end, message, reason}`. That day: 57 routes, 140
+detours (`isdetour` is "Y" exactly when the list is non-empty). API
+`route_id` is unique within a snapshot. Quirks that matter for parse/match:
 - API `route_id` is `bus_route_21` / `trolley_route_15`, not the GTFS
   `route_id` `21`. Trolley 15 has `mode: "Bus"`.
 - `last_updated` is stale (2023) on every route; useless for change
@@ -353,15 +356,86 @@ Decisions:
 Tests: `tests/test_model.py` (35; `make_notice(**overrides)` over a real
 route 2 entry). 15 mutations, all caught. 185 tests total.
 
-Open: ~13 entries are discontinued stops ("Discontinued Transit Stop, at
-Ogontz and Roselyn"), not reroutes, and have no direction or turns. The
-model has no `kind` field; decide when building parse.
+Done: alert fixtures (chosen by Claude at my request, approved by me).
+`tests/fixtures/alerts/`: 18 route entries from snapshot
+`2026-11-25T025344Z`, named `<snapshot stamp>__<api route_id>.json`
+(provenance-based; quirks live in the README, not the name). One file =
+one whole route entry with its full `detour` list; tests pick items by
+index. Copied with `jq` and checked equal to the source entry: decoded
+values are identical, only formatting differs (the API's `\/` becomes
+`/`). `README.md` holds the copy command and an index: one row per
+interesting detour item (route, index, what makes it ugly, *expected*
+result guessed before the parser exists). Parse tests are built from
+those rows; challenge the guesses when writing them. Coverage includes
+`bus_route_55` (clean baseline), `APP` and `trolley_route_15` (no
+detours), and the Owl buses `rr_route_mfo`/`rr_route_bso` (`rr_` IDs and
+rail-named modes, but buses).
+Findings from reading all 140 detours:
+- Stop entries come in three kinds: closures (route 6), prose closures
+  where LS is the *replacement* stop and LE the closed one (route 9), and
+  relocations (BSO "Clothespin stop"). Strengthens the `kind` question.
+- Message text can contradict API fields (route 44 #3 "until 11/23" vs
+  API end 11/24; route 61 #1 5:30pm vs 5:00 PM).
+- Recurring windows ("7am - 4pm Mon thru Fri", "Monday thru Wednesday,
+  7:00PM to 5:00AM") are common; the model can't represent them.
+- "Trips Only" scoping (route 24 "Gloria Dei", route 68 "Express")
+  affects only some trips: a `match/` problem.
+- Direction can be missing (24 #1), repeated (24 #0 "NB Via ... Recover
+  NB On"), spelled out at the end ("..., Eastbound"), or after the time
+  ("Until 12/31/26 11:59pm SB,"). LS and LE can both be blank (64 #1, #2).
 
-Next (clean session): write `tests/fixtures/` myself, choosing the
-ugliest real entries from `data/raw/alerts/` (e.g. "Eastbound"/"W/B"
-spellings, blank `location_end`, discontinued-stop entries, the
-"7am - 4pm Mon thru Fri" style schedules, doubled commas). Only after
-that, start `parse/`. Keep collecting snapshots over several days. Later, `match/` must
-map API route IDs and detour text ("Route 21", "the L") to GTFS
-`route_id` via `route_short_name` (not always equal to `route_id`;
-check rail).
+Done: `parse/` skeleton (scaffolded by Claude at my request; **bodies
+are mine to write**). Every function raises `NotImplementedError`; ruff,
+ty and imports pass. Layout:
+- `_api.py`: private raw models `ApiRoute` (`route_id`, `mode`,
+  `detour`) / `ApiDetour` (the six strings), `extra="ignore"` (outside
+  format; unlike `model.py`'s `forbid`), strict, frozen. Fields written;
+  `read_snapshot(content: bytes) -> list[ApiRoute]` body is a TODO. A
+  structural error fails the whole snapshot (`ValidationError`): API
+  drift should be loud, not skipped.
+- `text.py::clean_text(raw) -> str | None`: strip; blank -> `None`;
+  never raises.
+- `times.py::parse_api_datetime(raw) -> datetime`: fixed API format
+  only, attach `SEPTA_ZONE` (stdlib `zoneinfo`, America/New_York);
+  raises `ValueError` quoting `raw`.
+- `direction.py`: `normalize_direction(token) -> Direction | None` and
+  `find_directions(message) -> tuple[Direction, ...]` (distinct, in
+  first-appearance order). Finding is separate from deciding.
+- `notice.py`: `make_source_key(route_id, location_start, start) -> str`
+  (hashlib), `parse_detour(route, detour, snapshot) -> DetourNotice`,
+  `parse_snapshot(content, snapshot) -> list[DetourNotice]` (API order;
+  routes without detours contribute nothing).
+Decisions:
+- Field parsers raise `ValueError` with a reason; only `parse_detour`
+  catches, turning it into `None` + an issue prefixed with the field name
+  (`"start: ..."`). Messy text never raises out of `parse_detour`; bugs
+  (e.g. a `CleanText` violation) still do.
+- Directions: exactly one distinct -> it; none or 2+ different ->
+  `None` + issue. Never pick one.
+- `end` < `start` -> keep both, add an issue. API `start`/`end` win over
+  times in the message text.
+Open (TODOs in the docstrings; decide while implementing):
+- `clean_text`: collapse inner whitespace runs ("22nd  &  Chestnut")?
+  Also check non-breaking spaces vs `str.strip()` and `CleanText`'s `\S`.
+- `parse_api_datetime`: DST fall-back (ambiguous, `zoneinfo` silently
+  picks `fold=0`) and spring-forward (nonexistent, accepted silently):
+  raise, or accept and note?
+- `normalize_direction`: case handling (data shows `NB` and
+  `Eastbound`); token splitting must keep `W/B` whole and must not read
+  `WB` into a word like "Webster".
+- `make_source_key`: normalization (case, whitespace) and separator.
+- Whether recurring windows and message/API mismatches add an issue
+  (adding one makes most notices `partial`).
+- A `kind` field (reroute / stop closure / relocation) would change
+  `model.py`: flag it before changing.
+
+Next (clean session): implement `parse/` myself, one function at a time,
+with tests from the fixture index, and ask Claude for review after each.
+Order: `clean_text` -> `parse_api_datetime` -> `normalize_direction` ->
+`find_directions` -> `make_source_key` -> `_api.read_snapshot` ->
+`parse_detour` -> `parse_snapshot`. Fixture-driven tests need a small
+loader helper in `tests/` (reads a fixture's bytes by name). Keep
+collecting snapshots over several days. Later, `match/` must map API
+route IDs and detour text ("Route 21", "the L") to GTFS `route_id` via
+`route_short_name` (not always equal to `route_id`; check rail and the
+Owl routes).
