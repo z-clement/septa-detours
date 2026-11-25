@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from septa_detours.model import Intersection
+from septa_detours.model import Intersection, Segment
 from septa_detours.parse.location import PLURAL_TYPES, parse_location
 
 
@@ -61,6 +61,55 @@ def test_parse_location_intersection_rules(raw: str, streets: tuple[str, str]) -
     assert parse_location(raw) == Intersection(streets=streets)
 
 
+@pytest.mark.parametrize(
+    ("raw", "street", "between"),
+    [
+        # Real location text, each marker spelling SEPTA uses.
+        ("Spruce btw 34th & 36th", "Spruce", ("34th", "36th")),
+        ("Market btwn 23rd & 19th", "Market", ("23rd", "19th")),
+        ("Henry Ave Btwn Fox St & Midvale", "Henry Ave", ("Fox St", "Midvale")),
+        (
+            "Devereaux Between Battersby & Harbison",
+            "Devereaux",
+            ("Battersby", "Harbison"),
+        ),
+        # Names kept as written, cleaned.
+        ("MalvernAve btwn 64th & Wynnewood", "MalvernAve", ("64th", "Wynnewood")),
+        (
+            "Convention btw Health Science  & 33rd St",
+            "Convention",
+            ("Health Science", "33rd St"),
+        ),
+        # A plural after C goes onto B and C only, never the street.
+        ("JFK Blvd btwn 17th & 30th Sts", "JFK Blvd", ("17th St", "30th St")),
+        ("Market St btwn 23rd & 19th Sts", "Market St", ("23rd St", "19th St")),
+        ("JFK Between  17th & 30th  Streets", "JFK", ("17th Street", "30th Street")),
+        # Bounds in text order, not sorted (23rd before 19th above too).
+        (
+            "Old York Rd Btwn 65th Ave & 66th Ave",
+            "Old York Rd",
+            ("65th Ave", "66th Ave"),
+        ),
+        # Hand-built: marker case, "and" between the bounds, spacing.
+        ("Market BTWN 23rd & 19th", "Market", ("23rd", "19th")),
+        ("Market between 23rd and 19th", "Market", ("23rd", "19th")),
+        ("Market btwn 23rd&19th", "Market", ("23rd", "19th")),
+        # The marker only as a whole word.
+        ("Btwnville btwn 1st & 2nd", "Btwnville", ("1st", "2nd")),
+    ],
+)
+def test_parse_location_segment(
+    raw: str, street: str, between: tuple[str, str]
+) -> None:
+    assert parse_location(raw) == Segment(street=street, between=between)
+
+
+def test_marker_inside_a_word_is_not_a_segment() -> None:
+    assert parse_location("Betweenwood & Pine") == Intersection(
+        streets=("Betweenwood", "Pine")
+    )
+
+
 @pytest.mark.parametrize("raw", ["", "   ", "\u00a0"])
 def test_parse_location_rejects_blank(raw: str) -> None:
     with pytest.raises(ValueError, match=r"^blank location "):
@@ -77,10 +126,8 @@ def test_parse_location_rejects_blank(raw: str) -> None:
         "Chester Pk/Morton Ave & 9th St",
         "Frankford av & Hunting Prk to Torresdale",
         "University Ave at The VA Hospital",
-        "Market St btwn 23rd & 19th Sts",
-        "Schuylkill btw Walnut & Chestnut",
-        "Devereaux Between Battersby & Harbison",
-        "Henry Ave Btwn Fox St & Midvale",
+        "JFK btwn 20th & 15th/ Art Museum 16th",
+        "JFK/17th to 30th & Market 23rd to 19th",
         # Hand-built.
         "& Broad",
         "&",
@@ -92,10 +139,23 @@ def test_parse_location_rejects_blank(raw: str) -> None:
         # Each form marker alone, with an "&" that would otherwise split.
         "University Ave at VA & Woodland",
         "Frankford & Hunting Park to Torresdale",
-        "Market btwn 23rd & 19th",
-        "Market BTW 23rd & 19th",
-        "Market between 23rd & 19th",
         "Spring Garden/Art Museum & Pennsylvania",
+        # ...also inside a segment.
+        "Market btwn 23rd to 19th",
+        "Market at 30th btwn 23rd & 19th",
+        "Market btwn 23rd & 19th/20th",
+        # Segments with a missing, extra or misplaced part.
+        "btwn 23rd & 19th",
+        "Market btwn",
+        "Market btwn 23rd",
+        "Market btwn & 19th",
+        "Market btwn 23rd &",
+        "Market btwn 23rd & Sts",
+        "Market btwn 23rd & 19th & 20th",
+        "Market btwn 23rd btwn 19th & 20th",
+        "Market btwn 23rd & 19th between 20th & 21st",
+        "Arch & Market btwn 23rd & 19th",
+        "Arch and Market btwn 23rd & 19th",
     ],
 )
 def test_parse_location_rejects_unrecognized(raw: str) -> None:
@@ -109,6 +169,11 @@ def test_parse_location_rejects_unrecognized(raw: str) -> None:
         "Ridge Ave & Ridge Ave",  # real
         "Ridge Ave & ridge ave",
         "Arch & Arch Sts",
+        # A segment bounded by itself, or by one street twice.
+        "Market btwn Market & 19th",
+        "Market St btwn 23rd & market st",
+        "Market btwn 23rd & 23rd",
+        "Market btwn 23rd & 23rd Sts",
     ],
 )
 def test_parse_location_rejects_same_street_twice(raw: str) -> None:
@@ -135,21 +200,12 @@ def test_plural_types_keys_are_casefolded() -> None:
 # Every fixture location that doesn't parse, with the reason. Adding a fixture
 # breaks this on purpose: review its locations, then update the pin.
 UNPARSED_FIXTURE_LOCATIONS = {
-    "17th btwn Master & Jefferson": "unrecognized",
     "Bethayres Station": "unrecognized",
     "Broad &": "unrecognized",
-    "Convention btw Health Science  & 33rd St": "unrecognized",
-    "JFK Between  17th & 30th  Streets": "unrecognized",
-    "JFK Blvd btwn 17th & 30th Sts": "unrecognized",
     "JFK btwn 20th & 15th/ Art Museum 16th": "unrecognized",
     "JFK/17th to 30th & Market 23rd to 19th": "unrecognized",
-    "Market St btwn 23rd & 19th Sts": "unrecognized",
-    "Market btwn 23rd & 19th": "unrecognized",
-    "Old York Rd Btwn 65th Ave & 66th Ave": "unrecognized",
     "PNC Center": "unrecognized",
     "Ridge Ave & Ridge Ave": "same street twice",
-    "Schuylkill btw Walnut & Chestnut": "unrecognized",
-    "Summerdale Between Cheltenham & Alcott": "unrecognized",
     "University Ave at The VA Hospital": "unrecognized",
 }
 
