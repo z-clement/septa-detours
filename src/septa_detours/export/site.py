@@ -24,8 +24,10 @@ from septa_detours.export.contract import (
 from septa_detours.export.geojson import (
     FeatureCollection,
     Position,
+    Properties,
     _css_color,  # private; same stage
     line_feature,
+    point_feature,
 )
 from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
 from septa_detours.gtfs.load import Feed
@@ -505,6 +507,49 @@ def detour_timing(
     if now > end:
         return "ended"
     return "active"
+
+
+def starts_collection(
+    catalog: Sequence[RouteEntry], detours: Sequence[Detour], now: datetime
+) -> FeatureCollection:
+    """Build ``starts.geojson``: one dot per placed detour, all routes.
+
+    Args:
+        catalog: Output of ``route_catalog`` (each dot's ``color``).
+        detours: The snapshot's detours; only placed ones (a matched route
+            and a ``start_point``) get a dot.
+        now: When the export runs: ``timing`` is computed for this moment,
+            as a first-paint default (the page recomputes it).
+
+    Returns:
+        One Point per placed detour at its exact start node, in snapshot
+        order, properties ``START_PROPERTIES``.
+
+    Raises:
+        ValueError: A placed detour's route isn't in ``catalog``, or ``now``
+            has no time zone (``detour_timing``).
+    """
+    colors = {entry["key"]: entry["color"] for entry in catalog}
+    features = []
+    for detour in detours:
+        match = detour.match
+        if match is None or match.start_point is None:
+            continue
+        key = route_key(match.feed, match.route_id)
+        if key not in colors:
+            raise ValueError(
+                f"detour {detour.notice.source_key} is on unknown route {key!r}"
+            )
+        notice = detour.notice
+        properties: Properties = {
+            "key": key,
+            "source_key": notice.source_key,
+            "color": colors[key],
+            "timing": detour_timing(notice.start, notice.end, now),
+        }
+        position = [match.start_point.lon, match.start_point.lat]
+        features.append(point_feature(position, properties))
+    return {"type": "FeatureCollection", "features": features}
 
 
 def _blank_to_none(text: str | None) -> str | None:

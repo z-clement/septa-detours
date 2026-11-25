@@ -9,6 +9,7 @@ import pytest
 from septa_detours.export.contract import (
     NETWORK_PROPERTIES,
     SHAPE_PROPERTIES,
+    START_PROPERTIES,
     DirectionEntry,
     Mode,
     RouteEntry,
@@ -27,6 +28,7 @@ from septa_detours.export.site import (
     route_mode,
     route_shapes,
     route_sort_key,
+    starts_collection,
 )
 from septa_detours.export.write import route_geojson_path
 from septa_detours.gtfs.load import Feed
@@ -1056,3 +1058,94 @@ def test_detour_timing_zero_length_detour(now: datetime, timing: str) -> None:
 def test_detour_timing_rejects_a_naive_now() -> None:
     with pytest.raises(ValueError, match="now must have a time zone"):
         detour_timing(START, END, datetime(2026, 11, 25, 12, 0))  # noqa: DTZ001
+
+
+# --- starts_collection -------------------------------------------------------------
+
+STARTS_NOW = datetime(2026, 11, 25, 14, 0, tzinfo=UTC)
+
+
+def placed_at(
+    notice: DetourNotice,
+    lon: float,
+    lat: float,
+    feed: Feed = "bus",
+    route_id: str = "2",
+) -> Detour:
+    start = StartPoint(node_id=110024066, lon=lon, lat=lat)
+    return Detour(
+        notice=notice,
+        match=RouteMatch(feed=feed, route_id=route_id, start_point=start),
+    )
+
+
+def dot(
+    lon: float, lat: float, key: str, source_key: str, color: str | None, timing: str
+):
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [lon, lat]},
+        "properties": {
+            "key": key,
+            "source_key": source_key,
+            "color": color,
+            "timing": timing,
+        },
+    }
+
+
+def test_starts_whole_output(notices) -> None:
+    # At 14:00 UTC: #0 runs until 11/27 (active), #2 starts 15:00 local
+    # (upcoming), #4 ended 08:00 local (ended).
+    route_2 = notices("bus_route_2")
+    detours = [
+        placed_at(route_2[2], -75.1690, 39.9620),
+        with_shapes(route_2[1], [("317310", 0)]),  # matched, not placed
+        Detour(notice=route_2[3], match=None),  # unmatched
+        placed_at(route_2[4], -75.2345, 39.8765, feed="rail", route_id="AIR"),
+        placed_at(route_2[0], -75.1716, 39.9385),
+    ]
+    assert starts_collection([ROUTE_2, AIR], detours, STARTS_NOW) == {
+        "type": "FeatureCollection",
+        "features": [
+            dot(-75.1690, 39.9620, "bus-2", "f92dcfe1cd1904c8", "#00A1DE", "upcoming"),
+            dot(-75.2345, 39.8765, "rail-AIR", "ff53152c4c7f9011", "#5A6F7B", "ended"),
+            dot(-75.1716, 39.9385, "bus-2", "5d0d22dfe7d86935", "#00A1DE", "active"),
+        ],
+    }
+
+
+def test_starts_properties_are_the_contract_ones(notices) -> None:
+    detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
+    [feature] = starts_collection([ROUTE_2], detours, STARTS_NOW)["features"]
+    assert tuple(feature["properties"]) == START_PROPERTIES
+
+
+def test_starts_color_may_be_null(notices) -> None:
+    entry: RouteEntry = {**ROUTE_2, "color": None}
+    detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
+    [feature] = starts_collection([entry], detours, STARTS_NOW)["features"]
+    assert feature["properties"]["color"] is None
+
+
+def test_starts_no_placed_detours(notices) -> None:
+    detours = [Detour(notice=notices("bus_route_2")[0], match=None)]
+    assert starts_collection([ROUTE_2], detours, STARTS_NOW) == {
+        "type": "FeatureCollection",
+        "features": [],
+    }
+
+
+def test_starts_rejects_a_route_not_in_the_catalog(notices) -> None:
+    notice = notices("bus_route_2")[0]
+    detours = [placed_at(notice, -75.1716, 39.9385, route_id="21")]
+    with pytest.raises(
+        ValueError, match=f"{notice.source_key} is on unknown route 'bus-21'"
+    ):
+        starts_collection([ROUTE_2], detours, STARTS_NOW)
+
+
+def test_starts_rejects_a_naive_now(notices) -> None:
+    detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
+    with pytest.raises(ValueError, match="now must have a time zone"):
+        starts_collection([ROUTE_2], detours, datetime(2026, 11, 25, 14, 0))  # noqa: DTZ001
