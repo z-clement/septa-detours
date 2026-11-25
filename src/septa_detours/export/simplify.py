@@ -65,6 +65,38 @@ def simplify_line(
     ]
 
 
+def round_line(line: Sequence[Sequence[float]], decimals: int) -> list[Position]:
+    """Round coordinates to ``decimals`` places, dropping repeats it creates.
+
+    Use after ``simplify_line``: rounding first would shift the points it
+    measures. 5 decimals is ~1 m, finer than the map's line widths.
+
+    Args:
+        line: ``[lon, lat]`` pairs in order, at least two.
+        decimals: Places to keep (Python ``round``).
+
+    Returns:
+        A new list of new ``[lon, lat]`` lists. A point that rounds to the
+        same position as the point before it is dropped (a zero-length
+        segment); a repeat further along, like a loop's end, stays. If the
+        whole line rounds to one position, that position is returned
+        twice, so the result is still a valid two-point LineString.
+
+    Raises:
+        ValueError: ``line`` has fewer than two points.
+    """
+    if len(line) < 2:
+        raise ValueError(f"a line needs at least 2 points, got {len(line)}")
+    rounded: list[Position] = []
+    for point in line:
+        position = [round(point[0], decimals), round(point[1], decimals)]
+        if not rounded or position != rounded[-1]:
+            rounded.append(position)
+    if len(rounded) == 1:
+        rounded.append(rounded[0].copy())
+    return rounded
+
+
 def _to_metres(line: Sequence[Sequence[float]]) -> list[tuple[float, float]]:
     """Project to flat metres from the first point, scaled at the mean latitude."""
     origin_lon, origin_lat = line[0][0], line[0][1]

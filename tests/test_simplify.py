@@ -3,7 +3,7 @@ import math
 
 import pytest
 
-from septa_detours.export.simplify import simplify_line
+from septa_detours.export.simplify import round_line, simplify_line
 
 # Near 17th & Washington. Worked out by hand from the mean Earth radius
 # (1 deg = 111,195 m): 0.00005 deg of latitude is 5.56 m; 0.00007 deg of
@@ -115,3 +115,67 @@ def test_rejects_lines_under_two_points(line: list[list[float]]) -> None:
 def test_rejects_negative_or_nan_tolerance(tolerance_m: float) -> None:
     with pytest.raises(ValueError, match="tolerance_m must be >= 0"):
         simplify_line([WEST, EAST], tolerance_m)
+
+
+# round_line. Raw GTFS-like coordinates and what they round to at 5
+# decimals; the *_NEAR points round to the same position as their partner.
+A_RAW, A_NEAR, A = (
+    [-75.171634, 39.938512],
+    [-75.171628, 39.938508],
+    [-75.17163, 39.93851],
+)
+B_RAW, B_NEAR, B = [-75.170001, 39.939104], [-75.169998, 39.939096], [-75.17, 39.9391]
+
+
+def test_round_line_rounds_each_coordinate() -> None:
+    assert round_line([A_RAW, B_RAW], 5) == [A, B]
+
+
+def test_round_line_uses_decimals() -> None:
+    assert round_line([A_RAW, B_RAW], 3) == [[-75.172, 39.939], [-75.17, 39.939]]
+
+
+def test_round_line_drops_a_repeat_created_by_rounding() -> None:
+    assert round_line([A_RAW, A_NEAR, B_RAW], 5) == [A, B]
+
+
+def test_round_line_drops_a_repeat_at_the_end() -> None:
+    assert round_line([A_RAW, B_RAW, B_NEAR], 5) == [A, B]
+
+
+def test_round_line_drops_a_run_of_repeats() -> None:
+    assert round_line([A_RAW, A_NEAR, A_RAW, B_RAW], 5) == [A, B]
+
+
+def test_round_line_keeps_a_repeat_further_along() -> None:
+    # A loop back to the start is not a zero-length segment.
+    assert round_line([A_RAW, B_RAW, A_NEAR], 5) == [A, B, A]
+
+
+def test_round_line_keeps_a_point_differing_only_in_latitude() -> None:
+    same_lon = [A_RAW[0], B_RAW[1]]
+    assert round_line([A_RAW, same_lon, B_RAW], 5) == [A, [A[0], B[1]], B]
+
+
+def test_round_line_collapsed_line_keeps_two_separate_points() -> None:
+    result = round_line([A_RAW, A_NEAR], 5)
+    assert result == [A, A]
+    result[0][0] = 0.0
+    assert result[1] == A
+
+
+def test_round_line_does_not_change_its_input() -> None:
+    line = [A_RAW.copy(), B_RAW.copy()]
+    result = round_line(line, 5)
+    result[0][0] = 0.0
+    assert line == [A_RAW, B_RAW]
+
+
+def test_round_line_accepts_tuples_and_returns_lists() -> None:
+    assert round_line((tuple(A_RAW), tuple(B_RAW)), 5) == [A, B]
+
+
+@pytest.mark.parametrize("line", [[], [A_RAW]])
+def test_round_line_rejects_lines_under_two_points(line: list[list[float]]) -> None:
+    with pytest.raises(ValueError, match=f"at least 2 points, got {len(line)}"):
+        round_line(line, 5)
