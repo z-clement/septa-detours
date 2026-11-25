@@ -105,3 +105,89 @@ export function summarize(collection) {
   );
   return `${plural(starts.length, "detour start point")} on ${plural(routes.size, "route")}`;
 }
+
+// --- The data contract's text (status.json, routes.json, detour objects) ---
+
+/**
+ * "Route 21 Chestnut-Walnut", or "Route K" when there's no long name.
+ *
+ * @param {object} route a routes.json entry
+ * @returns {string}
+ */
+export function routeLabel(route) {
+  return route.long_name === null
+    ? `Route ${route.short_name}`
+    : `Route ${route.short_name} ${route.long_name}`;
+}
+
+/**
+ * The status line: when the detours are from and how many are drawn.
+ *
+ * e.g. "Detours as of Nov 25, 2026, 7:11 AM: 166 total, 134 on the map,
+ * 27 without a location, 5 not matched to a route". The last two parts are
+ * left out when zero. A hand-named snapshot has no fetch time, so its file
+ * name is shown instead.
+ *
+ * @param {object} status status.json
+ * @returns {string}
+ */
+export function statusLine(status) {
+  const { total, matched, placed } = status.detours;
+  const when =
+    status.snapshot_fetched_at === null
+      ? `in ${status.snapshot}`
+      : `as of ${formatTime(status.snapshot_fetched_at)}`;
+  if (total === 0) {
+    return `No detours ${when}`;
+  }
+  const parts = [`${total} total`, `${placed} on the map`];
+  if (matched > placed) {
+    parts.push(`${matched - placed} without a location`);
+  }
+  if (total > matched) {
+    parts.push(`${total - matched} not matched to a route`);
+  }
+  return `Detours ${when}: ${parts.join(", ")}`;
+}
+
+/**
+ * Popup text for one detour (a detour object from routes/<key>.json).
+ *
+ * Plain JSON keeps missing values as explicit `null` (unlike clicked
+ * features), and `issues` is a list.
+ *
+ * @param {object} detour a detour object
+ * @param {object} route its routes.json entry
+ * @returns {string}
+ */
+export function describeDetour(detour, route) {
+  const issues = detour.issues.length > 0 ? detour.issues.join("; ") : "(none)";
+  const node =
+    detour.start_point === null ? "not placed" : `OSM node ${detour.start_point.node_id}`;
+  return [
+    `${routeLabel(route)}, ${detour.direction ?? "(no direction)"}`,
+    `From: ${detour.location_start ?? "(unknown)"}`,
+    `To: ${detour.location_end ?? "(unknown)"}`,
+    `${formatTime(detour.start)} to ${formatTime(detour.end)}`,
+    `Reason: ${detour.reason ?? "(none given)"}`,
+    `Status: ${detour.status}`,
+    `Issues: ${issues}`,
+    "",
+    detour.message,
+    "",
+    `source_key ${detour.source_key}, ${node}`,
+  ].join("\n");
+}
+
+/**
+ * Popup text for a route line: its name and its detours.
+ *
+ * @param {object} route a routes.json entry
+ * @returns {string}
+ */
+export function describeRoute(route) {
+  const { total, placed } = route.detours;
+  const detours =
+    total === 0 ? "No detours" : `${plural(total, "detour")} (${placed} on the map)`;
+  return `${routeLabel(route)}\n${detours}`;
+}
