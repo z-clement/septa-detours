@@ -9,9 +9,10 @@ import hashlib
 import json
 from datetime import UTC, datetime
 
-from septa_detours.model import DetourNotice, Direction, SourceText
+from septa_detours.model import DetourNotice, Direction, Location, SourceText
 from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
 from septa_detours.parse.direction import find_directions
+from septa_detours.parse.location import parse_location
 from septa_detours.parse.text import clean_text
 from septa_detours.parse.times import local_time_issue, parse_api_datetime
 
@@ -67,9 +68,15 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         The notice, with ``source`` holding the raw strings verbatim.
 
     Issues come in field order: start, end, the end-before-start check,
-    then direction. Each is prefixed with its field name.
+    location_start, location_end, then direction. Each is prefixed with
+    its field name.
 
     Decisions this function owns (each needs a test):
+        - Locations: ``parse_location`` result -> ``start_place`` /
+          ``end_place``. Blank text -> ``None`` with no issue (as for
+          ``location_start``); text in an unrecognized form -> ``None`` +
+          issue, e.g. ``"location_start: unrecognized location
+          'Dickinson'"``, so the notice is ``partial``.
         - Directions: exactly one found -> it; none -> ``None`` + issue;
           two or more different -> ``None`` + issue (never pick one).
         - ``end`` earlier than ``start`` (as real instants) -> keep both,
@@ -103,6 +110,11 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
     issues = [*start_issues, *end_issues]
     if start is not None and end is not None and _is_before(end, start):
         issues.append("end: before start")
+    start_place, start_place_issues = _parse_place(
+        "location_start", detour.location_start
+    )
+    end_place, end_place_issues = _parse_place("location_end", detour.location_end)
+    issues.extend([*start_place_issues, *end_place_issues])
     direction, direction_issues = _pick_direction(detour.message)
     issues.extend(direction_issues)
     return DetourNotice(
@@ -112,6 +124,8 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         end=end,
         location_start=clean_text(detour.location_start),
         location_end=clean_text(detour.location_end),
+        start_place=start_place,
+        end_place=end_place,
         reason=clean_text(detour.reason),
         direction=direction,
         issues=tuple(issues),
@@ -131,6 +145,21 @@ def _parse_time(field: str, raw: str) -> tuple[datetime | None, tuple[str, ...]]
         return None, (f"{field}: {error}",)
     issue = local_time_issue(moment)
     return moment, () if issue is None else (f"{field}: {issue}",)
+
+
+def _parse_place(field: str, raw: str) -> tuple[Location | None, tuple[str, ...]]:
+    """Parse one location's text, turning problems into field-prefixed issues.
+
+    Blank text -> ``None`` and no issue (a blank location is "not given",
+    not a problem). Unrecognized text -> ``None`` and one issue, e.g.
+    ``"location_end: unrecognized location 'Broad &'"``.
+    """
+    if clean_text(raw) is None:
+        return None, ()
+    try:
+        return parse_location(raw), ()
+    except ValueError as error:
+        return None, (f"{field}: {error}",)
 
 
 def _pick_direction(message: str) -> tuple[Direction | None, tuple[str, ...]]:

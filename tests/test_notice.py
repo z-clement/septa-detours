@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from septa_detours.model import DetourNotice, SourceText
+from septa_detours.model import DetourNotice, Intersection, Segment, SourceText
 from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
 from septa_detours.parse.notice import (
     SOURCE_KEY_LENGTH,
@@ -189,6 +189,8 @@ def test_parse_detour_route_55_baseline(
         end=datetime(2026, 12, 31, 23, 0, tzinfo=SEPTA_ZONE),
         location_start="65th Ave & Broad St",
         location_end="Old York Rd Btwn 65th Ave & 66th Ave",
+        start_place=Intersection(streets=("65th Ave", "Broad St")),
+        end_place=Segment(street="Old York Rd", between=("65th Ave", "66th Ave")),
         reason="Sinkhole",
         direction="SB",
     )
@@ -353,7 +355,9 @@ def test_parse_detour_direction_fixtures(
 ) -> None:
     notice = parse_fixture_item(read_alert_fixture, stamp, route_id, index)
     assert notice.direction == direction
-    assert notice.issues == issues
+    # Direction issues only: 24 #1 also has a location issue (pinned below).
+    direction_issues = tuple(i for i in notice.issues if i.startswith("direction:"))
+    assert direction_issues == issues
 
 
 def test_parse_detour_no_direction_is_partial(
@@ -398,6 +402,97 @@ def test_parse_detour_blank_location_start_is_unknown_without_issue(
     assert notice.status == "unknown"
 
 
+# --- parse_detour: locations -----------------------------------------------
+
+
+def test_parse_detour_places_keep_location_text() -> None:
+    """Text and structure side by side: the cleaned text is unchanged."""
+    notice = parse_made(
+        location_start="22nd  &  Chestnut", location_end="Spruce btw 34th & 36th"
+    )
+    assert notice.location_start == "22nd & Chestnut"
+    assert notice.start_place == Intersection(streets=("22nd", "Chestnut"))
+    assert notice.location_end == "Spruce btw 34th & 36th"
+    assert notice.end_place == Segment(street="Spruce", between=("34th", "36th"))
+    assert notice.issues == ()
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_parse_detour_blank_location_end_has_no_issue(blank: str) -> None:
+    notice = parse_made(location_end=blank)
+    assert notice.location_end is None
+    assert notice.end_place is None
+    assert notice.issues == ()
+    assert notice.status == "complete"
+
+
+def test_parse_detour_blank_location_start_has_no_issue() -> None:
+    """Blank LS is already ``unknown`` by status; no issue is added."""
+    notice = parse_made(location_start=" ")
+    assert notice.start_place is None
+    assert notice.issues == ()
+    assert notice.status == "unknown"
+
+
+def test_parse_detour_unrecognized_location_start() -> None:
+    notice = parse_made(location_start="Dickinson")
+    assert notice.location_start == "Dickinson"
+    assert notice.start_place is None
+    assert notice.issues == ("location_start: unrecognized location 'Dickinson'",)
+    assert notice.status == "partial"
+
+
+def test_parse_detour_unrecognized_location_end() -> None:
+    """An optional field, but unreadable text is still doubt: ``partial``."""
+    notice = parse_made(location_end="Broad &")
+    assert notice.end_place is None
+    assert notice.start_place == Intersection(streets=("65th Ave", "Broad St"))
+    assert notice.issues == ("location_end: unrecognized location 'Broad &'",)
+    assert notice.status == "partial"
+
+
+def test_parse_detour_same_street_twice_is_an_issue() -> None:
+    notice = parse_made(location_start="Ridge Ave & Ridge Ave")
+    assert notice.start_place is None
+    assert notice.issues == (
+        "location_start: same street twice in location 'Ridge Ave & Ridge Ave'",
+    )
+
+
+def test_parse_detour_location_issues_quote_raw_text() -> None:
+    """The issue shows what SEPTA sent, spacing included."""
+    notice = parse_made(location_start="Broad  & ")
+    assert notice.issues == ("location_start: unrecognized location 'Broad  & '",)
+
+
+def test_parse_detour_issue_order_with_locations() -> None:
+    """start, end, the order check, location_start, location_end, direction."""
+    notice = parse_made(
+        start="",
+        end="garbage",
+        location_start="Dickinson",
+        location_end="PNC Center",
+        message="no direction here",
+    )
+    assert notice.issues == (
+        "start: blank datetime ''",
+        "end: unrecognized datetime 'garbage'",
+        "location_start: unrecognized location 'Dickinson'",
+        "location_end: unrecognized location 'PNC Center'",
+        NONE_FOUND,
+    )
+
+
+def test_parse_detour_location_issue_after_order_check() -> None:
+    notice = parse_made(
+        start="1/2/2027 1:00 PM", end="1/1/2027 1:00 PM", location_start="Dickinson"
+    )
+    assert notice.issues == (
+        "end: before start",
+        "location_start: unrecognized location 'Dickinson'",
+    )
+
+
 # --- parse_detour: every fixture item --------------------------------------
 
 
@@ -427,11 +522,52 @@ def test_parse_detour_every_fixture_item_round_trips(
         assert reloaded == notice, key
 
 
+JFK_TO_MARKET = "unrecognized location 'JFK/17th to 30th & Market 23rd to 19th'"
+JFK_ART_MUSEUM = "unrecognized location 'JFK btwn 20th & 15th/ Art Museum 16th'"
+VA_HOSPITAL = "unrecognized location 'University Ave at The VA Hospital'"
+PNC_CENTER = "unrecognized location 'PNC Center'"
+RIDGE_TWICE = "location_start: same street twice in location 'Ridge Ave & Ridge Ave'"
+
 NOT_COMPLETE = {
-    (f"{OLD}__bus_route_24.json", 1): ("partial", (NONE_FOUND,)),
+    (f"{OLD}__bus_route_2.json", 3): ("partial", (f"location_end: {JFK_TO_MARKET}",)),
+    (f"{OLD}__bus_route_24.json", 1): (
+        "partial",
+        ("location_start: unrecognized location 'Bethayres Station'", NONE_FOUND),
+    ),
+    (f"{OLD}__bus_route_44.json", 4): ("partial", (f"location_end: {JFK_TO_MARKET}",)),
+    (f"{OLD}__bus_route_49.json", 2): (
+        "partial",
+        (f"location_start: {VA_HOSPITAL}", f"location_end: {VA_HOSPITAL}"),
+    ),
     (f"{OLD}__bus_route_6.json", 0): ("partial", (NONE_FOUND,)),
+    (f"{OLD}__bus_route_61.json", 0): ("partial", (RIDGE_TWICE,)),
+    (f"{OLD}__bus_route_61.json", 1): ("partial", (RIDGE_TWICE,)),
     (f"{OLD}__bus_route_64.json", 1): ("unknown", ()),
     (f"{OLD}__bus_route_64.json", 2): ("unknown", ()),
+    (f"{OLD}__bus_route_68.json", 0): (
+        "partial",
+        (f"location_start: {PNC_CENTER}", f"location_end: {PNC_CENTER}"),
+    ),
+    (f"{OLD}__bus_route_68.json", 1): (
+        "partial",
+        (f"location_start: {PNC_CENTER}", f"location_end: {PNC_CENTER}"),
+    ),
+    (f"{NEW}__bus_route_124.json", 2): (
+        "partial",
+        (f"location_end: {JFK_ART_MUSEUM}",),
+    ),
+    (f"{NEW}__bus_route_124.json", 3): (
+        "partial",
+        (f"location_end: {JFK_ART_MUSEUM}",),
+    ),
+    (f"{NEW}__bus_route_31.json", 5): ("partial", (f"location_end: {JFK_ART_MUSEUM}",)),
+    (f"{NEW}__bus_route_31.json", 6): (
+        "partial",
+        (
+            "location_start: unrecognized location 'Broad &'",
+            f"location_end: {JFK_ART_MUSEUM}",
+        ),
+    ),
 }
 """Every fixture item that isn't ``complete``, with its issues."""
 

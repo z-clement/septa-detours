@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -44,6 +45,8 @@ def make_notice(**overrides) -> DetourNotice:
         "end": datetime(2026, 11, 27, 16, 0, tzinfo=PHILLY),
         "location_start": "17th & Washington",
         "location_end": "17th & Mifflin",
+        "start_place": Intersection(streets=("17th", "Washington")),
+        "end_place": Intersection(streets=("17th", "Mifflin")),
         "reason": "Contractor",
         "direction": "SB",
         "issues": (),
@@ -252,3 +255,29 @@ def test_location_names_must_be_clean(name):
 def test_location_kind_cannot_be_overridden():
     with pytest.raises(ValidationError):
         Intersection(kind="segment", streets=("17th", "Pine"))
+
+
+@pytest.mark.parametrize("field", ["start_place", "end_place"])
+def test_places_are_required(field):
+    # Decided: no default, so a constructor that forgets them fails loudly.
+    fields = make_notice().model_dump()
+    del fields[field]
+    with pytest.raises(ValidationError, match=field):
+        DetourNotice.model_validate(fields)
+
+
+@pytest.mark.parametrize("field", ["start_place", "end_place"])
+def test_place_json_without_kind_is_rejected(field):
+    data = json.loads(make_notice().model_dump_json())
+    del data[field]["kind"]
+    with pytest.raises(ValidationError, match=field):
+        DetourNotice.model_validate_json(json.dumps(data))
+
+
+def test_notice_places_round_trip_with_both_kinds():
+    notice = make_notice(
+        end_place=Segment(street="Spruce", between=("34th", "36th")),
+    )
+    reloaded = DetourNotice.model_validate_json(notice.model_dump_json())
+    assert reloaded == notice
+    assert isinstance(reloaded.end_place, Segment)

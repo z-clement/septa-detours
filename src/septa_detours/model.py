@@ -129,6 +129,10 @@ class DetourNotice(_Frozen):
         end: When the detour ends, or ``None``.
         location_start: Cleaned start location, or ``None`` if blank.
         location_end: Cleaned end location, or ``None`` if blank.
+        start_place: ``location_start`` split into street names, or
+            ``None`` if it is blank (no issue) or not in a recognized form
+            (with an issue).
+        end_place: The same for ``location_end``.
         reason: Stripped reason, or ``None`` if blank.
         direction: Affected direction from the message, or ``None``.
         issues: Why fields are ``None`` or doubtful, one string each, e.g.
@@ -146,6 +150,8 @@ class DetourNotice(_Frozen):
     end: AwareDatetime | None
     location_start: CleanText | None
     location_end: CleanText | None
+    start_place: Location | None
+    end_place: Location | None
     reason: CleanText | None
     direction: Direction | None
     issues: tuple[CleanText, ...] = ()

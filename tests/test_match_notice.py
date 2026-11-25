@@ -242,8 +242,11 @@ def test_parse_issues_stay_on_notice(fixture_notices, gtfs: Gtfs):
     notice = fixture_notices("2026-11-25T025344Z__bus_route_24.json")[1]
     detour = match_notice(notice, *gtfs)
     assert notice is detour.notice
-    assert detour.notice.issues == ("direction: none found in message",)
-    assert "direction: none found in message" not in detour.issues
+    assert detour.notice.issues == (
+        "location_start: unrecognized location 'Bethayres Station'",
+        "direction: none found in message",
+    )
+    assert not set(detour.notice.issues) & set(detour.issues)
 
 
 # --- Unmatched --------------------------------------------------------------
