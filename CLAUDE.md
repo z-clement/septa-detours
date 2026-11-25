@@ -396,8 +396,7 @@ ty and imports pass. Layout:
   `read_snapshot(content: bytes) -> list[ApiRoute]` body is a TODO. A
   structural error fails the whole snapshot (`ValidationError`): API
   drift should be loud, not skipped.
-- `text.py::clean_text(raw) -> str | None`: strip; blank -> `None`;
-  never raises.
+- `text.py::clean_text(raw) -> str | None`: **done** (see below).
 - `times.py::parse_api_datetime(raw) -> datetime`: fixed API format
   only, attach `SEPTA_ZONE` (stdlib `zoneinfo`, America/New_York);
   raises `ValueError` quoting `raw`.
@@ -418,8 +417,6 @@ Decisions:
 - `end` < `start` -> keep both, add an issue. API `start`/`end` win over
   times in the message text.
 Open (TODOs in the docstrings; decide while implementing):
-- `clean_text`: collapse inner whitespace runs ("22nd  &  Chestnut")?
-  Also check non-breaking spaces vs `str.strip()` and `CleanText`'s `\S`.
 - `parse_api_datetime`: DST fall-back (ambiguous, `zoneinfo` silently
   picks `fold=0`) and spring-forward (nonexistent, accepted silently):
   raise, or accept and note?
@@ -432,12 +429,23 @@ Open (TODOs in the docstrings; decide while implementing):
 - A `kind` field (reroute / stop closure / relocation) would change
   `model.py`: flag it before changing.
 
+Done: `parse/text.py::clean_text` = `" ".join(raw.split()) or None`.
+Decided: inner whitespace runs collapse to one space (typing slips in 9
+fixture values; match/ compares street names; `SourceText` keeps the
+original). No-arg `split()` covers all Unicode whitespace incl. NBSP,
+the same set `CleanText`'s `\S` rejects, so output always validates.
+Never raises. `tests/conftest.py` holds the fixture loaders (pytest
+fixtures, since `tests/` has no `__init__.py`): `read_alert_fixture`
+(full file name -> bytes) and `alert_fixture_names` (sorted `*.json`).
+`tests/test_text.py` (18) includes a sweep validating every fixture
+location/reason against the real `CleanText`; 8 mutations, all caught.
+Write NBSP in tests as `" "` (RUF001). 203 tests total.
+
 Next (clean session): Claude implements `parse/`, one function at a
 time, with tests from the fixture index, stopping for my review after each.
-Order: `clean_text` -> `parse_api_datetime` -> `normalize_direction` ->
+Order: ~~`clean_text`~~ -> `parse_api_datetime` -> `normalize_direction` ->
 `find_directions` -> `make_source_key` -> `_api.read_snapshot` ->
-`parse_detour` -> `parse_snapshot`. Fixture-driven tests need a small
-loader helper in `tests/` (reads a fixture's bytes by name). Keep
+`parse_detour` -> `parse_snapshot`. Keep
 collecting snapshots over several days. Later, `match/` must map API
 route IDs and detour text ("Route 21", "the L") to GTFS `route_id` via
 `route_short_name` (not always equal to `route_id`; check rail and the
