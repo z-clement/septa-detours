@@ -139,9 +139,16 @@ def osm_street_keys(name: str) -> tuple[StreetName, ...]:
 
 
 STREET_KEYS_SCHEMA = pl.Schema(
-    {"way_id": pl.Int64, "base": pl.String, "street_type": pl.String}
+    {
+        "way_id": pl.Int64,
+        "base": pl.String,
+        "street_type": pl.String,
+        "prefix_dropped": pl.Boolean,
+    }
 )
-"""Columns of ``street_key_table``; ``street_type`` null = no type."""
+"""Columns of ``street_key_table``. ``street_type`` null = no type;
+``prefix_dropped`` = the key without the name's direction word (a looser
+match than the full name)."""
 
 
 def street_key_table(ways: pl.DataFrame) -> pl.DataFrame:
@@ -164,17 +171,26 @@ def street_key_table(ways: pl.DataFrame) -> pl.DataFrame:
     ``osm_street_keys`` runs once per distinct name (40,003 for 146,871
     real ways), not once per way.
     """
-    rows: list[tuple[str, str, str | None]] = []
+    rows: list[tuple[str, str, str | None, bool]] = []
     for name in ways["name"].unique(maintain_order=True).to_list():
         try:
             keys = osm_street_keys(name)
         except ValueError as error:
             way_id = ways.filter(pl.col("name") == name)["way_id"].first()
             raise ValueError(f"way {way_id}: {error}") from None
-        rows.extend((name, key.base, key.street_type) for key in keys)
+        # osm_street_keys puts the full key first; any later one dropped a prefix.
+        rows.extend(
+            (name, key.base, key.street_type, index > 0)
+            for index, key in enumerate(keys)
+        )
     keys_by_name = pl.DataFrame(
         rows,
-        schema={"name": pl.String, "base": pl.String, "street_type": pl.String},
+        schema={
+            "name": pl.String,
+            "base": pl.String,
+            "street_type": pl.String,
+            "prefix_dropped": pl.Boolean,
+        },
         orient="row",
     )
     # "left_right": way order, then each name's keys in osm_street_keys order.
@@ -182,4 +198,70 @@ def street_key_table(ways: pl.DataFrame) -> pl.DataFrame:
         ways.select("way_id", "name")
         .join(keys_by_name, on="name", how="inner", maintain_order="left_right")
         .select(STREET_KEYS_SCHEMA.names())
+    )
+
+
+STREET_MATCH_SCHEMA = pl.Schema({"way_id": pl.Int64, "specificity": pl.Int8})
+"""Columns of ``street_matches``."""
+
+
+def street_matches(keys: pl.DataFrame, name: str) -> pl.DataFrame:
+    """List the OSM ways one alert street name matches, and how closely.
+
+    The rule: same base; a type in ``name`` must equal the way's type (no
+    type in ``name`` accepts any). ``"Broad"`` matches ``North Broad
+    Street`` (by its prefix-less key) and ``Broad Avenue``; ``"Broad St"``
+    only the first.
+
+    Args:
+        keys: Output of ``street_key_table``.
+        name: One street name as written in the alert, e.g. ``"Broad St"``.
+
+    Returns:
+        A ``STREET_MATCH_SCHEMA`` frame, one row per matching way, in
+        ``keys`` order. ``specificity`` ranks the match for
+        ``split_shared_ways``: 2 if it matched the way's full name (not the
+        prefix-less key), plus 1 if ``name`` gave a type. So 0..3.
+
+    Raises:
+        ValueError: ``name`` is blank (see ``split_street_type``).
+    """
+    wanted = split_street_type(name)
+    condition = pl.col("base") == wanted.base
+    if wanted.street_type is not None:
+        condition &= pl.col("street_type") == wanted.street_type
+    typed = int(wanted.street_type is not None)
+    specificity = (~pl.col("prefix_dropped")).cast(pl.Int8) * 2 + typed
+    return keys.filter(condition).select(
+        "way_id", specificity.cast(pl.Int8).alias("specificity")
+    )
+
+
+def split_shared_ways(
+    first: pl.DataFrame, second: pl.DataFrame
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Give each way matched by both names of a pair to one side only.
+
+    A way on both sides stays on the side with the higher ``specificity``
+    (full-name match beats prefix-less; then a given type beats none). On
+    a tie it stays with ``first``: both names then describe the same
+    street, and leaving ``second`` without it means a street is never found
+    crossing itself.
+
+    Args:
+        first: ``street_matches`` for the first-listed name (``"A"`` in
+            ``"A & B"``).
+        second: ``street_matches`` for the second.
+
+    Returns:
+        ``(first, second)`` with each shared way removed from the losing
+        side; rows otherwise unchanged, order kept.
+    """
+    shared = first.join(second, on="way_id", how="inner", suffix="_second")
+    second_wins = pl.col("specificity_second") > pl.col("specificity")
+    to_second = shared.filter(second_wins).select("way_id")
+    to_first = shared.filter(~second_wins).select("way_id")
+    return (
+        first.join(to_second, on="way_id", how="anti", maintain_order="left"),
+        second.join(to_first, on="way_id", how="anti", maintain_order="left"),
     )

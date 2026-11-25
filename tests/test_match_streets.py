@@ -4,12 +4,15 @@ import pytest
 from septa_detours.match import streets
 from septa_detours.match.streets import (
     STREET_KEYS_SCHEMA,
+    STREET_MATCH_SCHEMA,
     STREET_TYPES,
     WORD_ALIASES,
     StreetName,
     osm_street_keys,
+    split_shared_ways,
     split_street_type,
     street_key_table,
+    street_matches,
 )
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
@@ -279,16 +282,16 @@ def test_street_key_table_rows() -> None:
         ]
     )
     assert street_key_table(ways).rows() == [
-        (101, "north broad", "street"),
-        (101, "broad", "street"),
-        (102, "washington", "avenue"),
-        (103, "south", "street"),
-        (104, "spring garden", None),
+        (101, "north broad", "street", False),
+        (101, "broad", "street", True),
+        (102, "washington", "avenue", False),
+        (103, "south", "street", False),
+        (104, "spring garden", None, False),
     ]
 
 
 def test_street_key_table_schema_is_exact() -> None:
-    # Only the three key columns: no name, highway or geometry leak through.
+    # Only the key columns: no name, highway or geometry leak through.
     table = street_key_table(make_ways([(101, "North Broad Street")]))
     assert table.schema == STREET_KEYS_SCHEMA
 
@@ -305,16 +308,16 @@ def test_street_key_table_keeps_way_order_for_repeated_names() -> None:
     )
     assert street_key_table(ways)["way_id"].to_list() == [101, 101, 102, 103, 103]
     assert street_key_table(ways).filter(pl.col("way_id") == 103).rows() == [
-        (103, "north broad", "street"),
-        (103, "broad", "street"),
+        (103, "north broad", "street", False),
+        (103, "broad", "street", True),
     ]
 
 
 def test_street_key_table_applies_aliases() -> None:
     ways = make_ways([(7, "Schuykill Parkway"), (8, "JFK Drive")])
     assert street_key_table(ways).rows() == [
-        (7, "schuylkill parkway", None),
-        (8, "john f kennedy", "drive"),
+        (7, "schuylkill parkway", None, False),
+        (8, "john f kennedy", "drive", False),
     ]
 
 
@@ -343,3 +346,136 @@ def test_street_key_table_normalizes_each_name_once(monkeypatch) -> None:
     )
     street_key_table(ways)
     assert calls == ["Broad Street", "Pine Street"]
+
+
+BROAD_WAYS = [
+    (1, "North Broad Street"),
+    (2, "Broad Avenue"),
+    (3, "Broad Street"),
+    (4, "South Broad Street"),
+    (5, "Broadway"),
+    (6, "West Chester Pike"),
+    (7, "Chester Pike"),
+    (8, "John F. Kennedy Boulevard"),
+]
+
+
+@pytest.fixture
+def broad_keys() -> pl.DataFrame:
+    return street_key_table(make_ways(BROAD_WAYS))
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # No type: any type; prefix-less match 0, full-name match 2.
+        ("Broad", [(1, 0), (2, 2), (3, 2), (4, 0)]),
+        # Type given: must equal; +1 for it.
+        ("Broad St", [(1, 1), (3, 3), (4, 1)]),
+        ("Broad Ave", [(2, 3)]),
+        # The alert's own prefix matches the full key only.
+        ("North Broad", [(1, 2)]),
+        ("North Broad St", [(1, 3)]),
+        # A prefix-less key can be a different real road.
+        ("Chester Pk", [(6, 1), (7, 3)]),
+        # Same normalization as OSM: dots, case, aliases.
+        ("J.F.K. Blvd", [(8, 3)]),
+        ("BROAD street", [(1, 1), (3, 3), (4, 1)]),
+        # Whole base only: "Broad" is not "Broadway".
+        ("Broadway", [(5, 2)]),
+    ],
+)
+def test_street_matches(broad_keys, name: str, expected: list[tuple[int, int]]) -> None:
+    assert street_matches(broad_keys, name).rows() == expected
+
+
+@pytest.mark.parametrize("name", ["Broad Rd", "Walnut", "South Chester Pike"])
+def test_street_matches_none(broad_keys, name: str) -> None:
+    result = street_matches(broad_keys, name)
+    assert result.is_empty()
+    assert result.schema == STREET_MATCH_SCHEMA
+
+
+def test_street_matches_schema_is_exact(broad_keys) -> None:
+    assert street_matches(broad_keys, "Broad").schema == STREET_MATCH_SCHEMA
+
+
+def test_street_matches_rejects_blank(broad_keys) -> None:
+    with pytest.raises(ValueError, match="blank street name"):
+        street_matches(broad_keys, " ")
+
+
+def make_matches(rows: list[tuple[int, int]]) -> pl.DataFrame:
+    return pl.DataFrame(rows, schema=STREET_MATCH_SCHEMA, orient="row")
+
+
+def test_split_shared_ways_no_overlap_is_unchanged() -> None:
+    first = make_matches([(1, 2), (2, 0)])
+    second = make_matches([(3, 3)])
+    new_first, new_second = split_shared_ways(first, second)
+    assert new_first.rows() == [(1, 2), (2, 0)]
+    assert new_second.rows() == [(3, 3)]
+    assert new_first.schema == new_second.schema == STREET_MATCH_SCHEMA
+
+
+@pytest.mark.parametrize(
+    ("first_spec", "second_spec", "winner"),
+    [(3, 2, "first"), (0, 1, "second"), (2, 2, "first"), (0, 0, "first")],
+)
+def test_split_shared_ways_specificity_decides(
+    first_spec: int, second_spec: int, winner: str
+) -> None:
+    first = make_matches([(10, 2), (1, first_spec), (11, 0)])
+    second = make_matches([(20, 3), (1, second_spec), (21, 1)])
+    new_first, new_second = split_shared_ways(first, second)
+    if winner == "first":
+        assert new_first.rows() == [(10, 2), (1, first_spec), (11, 0)]
+        assert new_second.rows() == [(20, 3), (21, 1)]
+    else:
+        assert new_first.rows() == [(10, 2), (11, 0)]
+        assert new_second.rows() == [(20, 3), (1, second_spec), (21, 1)]
+
+
+def test_split_shared_ways_keeps_schema_and_order() -> None:
+    first = make_matches([(5, 2), (1, 0), (4, 2), (2, 3)])
+    second = make_matches([(1, 3), (3, 0), (2, 1)])
+    new_first, new_second = split_shared_ways(first, second)
+    assert new_first.rows() == [(5, 2), (4, 2), (2, 3)]
+    assert new_second.rows() == [(1, 3), (3, 0)]
+    assert new_first.schema == new_second.schema == STREET_MATCH_SCHEMA
+
+
+def test_split_shared_ways_full_name_beats_prefix_less(broad_keys) -> None:
+    # "North Broad & Broad": way 1 matches both; its full name is "North
+    # Broad Street", so it stays with "North Broad".
+    first, second = split_shared_ways(
+        street_matches(broad_keys, "North Broad"), street_matches(broad_keys, "Broad")
+    )
+    assert first.rows() == [(1, 2)]
+    assert second.rows() == [(2, 2), (3, 2), (4, 0)]
+
+
+def test_split_shared_ways_given_type_beats_none(broad_keys) -> None:
+    # Way 3 "Broad Street": full name both sides; the typed name wins.
+    first, second = split_shared_ways(
+        street_matches(broad_keys, "Broad"), street_matches(broad_keys, "Broad St")
+    )
+    assert first.rows() == [(2, 2)]
+    assert second.rows() == [(1, 1), (3, 3), (4, 1)]
+
+
+def test_split_shared_ways_same_street_leaves_second_empty(broad_keys) -> None:
+    # Both names normalize alike (an alias): every way ties and stays first.
+    first, second = split_shared_ways(
+        street_matches(broad_keys, "JFK Blvd"),
+        street_matches(broad_keys, "John F Kennedy Blvd"),
+    )
+    assert first.rows() == [(8, 3)]
+    assert second.is_empty()
+
+
+def test_street_matches_typed_name_skips_typeless_way() -> None:
+    # Strict if given: an OSM name with no type isn't a "St".
+    keys = street_key_table(make_ways([(1, "Broad"), (2, "Broad Street")]))
+    assert street_matches(keys, "Broad St").rows() == [(2, 3)]
+    assert street_matches(keys, "Broad").rows() == [(1, 2), (2, 2)]
