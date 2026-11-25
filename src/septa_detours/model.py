@@ -85,6 +85,38 @@ class SourceText(_Frozen):
     reason: str
 
 
+class Intersection(_Frozen):
+    """Two streets that meet, from location text like ``"17th & Washington"``.
+
+    Attributes:
+        streets: The two street names as written (cleaned, a plural type
+            like ``"Sts"`` moved onto both), not normalized:
+            ``("Arch St", "15th St")``. Matching names to OSM is
+            ``match/``'s job.
+    """
+
+    kind: Literal["intersection"] = "intersection"
+    streets: tuple[CleanText, CleanText]
+
+
+class Segment(_Frozen):
+    """A stretch of one street, from ``"Market St btwn 23rd & 19th Sts"``.
+
+    Attributes:
+        street: The street the stretch is on, as written.
+        between: The two cross streets bounding it, as written, in text
+            order (not necessarily travel order).
+    """
+
+    kind: Literal["segment"] = "segment"
+    street: CleanText
+    between: tuple[CleanText, CleanText]
+
+
+type Location = Annotated[Intersection | Segment, Field(discriminator="kind")]
+"""A structured location; ``kind`` says which, also in JSON."""
+
+
 class DetourNotice(_Frozen):
     """What can be learned from one API detour entry, without GTFS.
 

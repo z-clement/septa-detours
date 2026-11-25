@@ -2,13 +2,16 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from septa_detours.model import (
     AffectedShape,
     Detour,
     DetourNotice,
+    Intersection,
+    Location,
     RouteMatch,
+    Segment,
     SourceText,
 )
 
@@ -180,3 +183,72 @@ def test_direction_id_rejects_other_values(value):
 def test_unknown_feed_is_rejected():
     with pytest.raises(ValidationError):
         RouteMatch(feed="trolley", route_id="15")
+
+
+LOCATION = TypeAdapter(Location)
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        Intersection(streets=("Arch St", "15th St")),
+        Segment(street="Market St", between=("23rd St", "19th St")),
+    ],
+)
+def test_location_round_trips_through_json(location):
+    assert LOCATION.validate_json(LOCATION.dump_json(location)) == location
+
+
+def test_location_json_names_its_kind():
+    assert LOCATION.dump_python(
+        Intersection(streets=("17th", "Washington")), mode="json"
+    ) == {"kind": "intersection", "streets": ["17th", "Washington"]}
+    assert LOCATION.dump_python(
+        Segment(street="Spruce", between=("34th", "36th")), mode="json"
+    ) == {"kind": "segment", "street": "Spruce", "between": ["34th", "36th"]}
+
+
+@pytest.mark.parametrize(
+    "json_text",
+    [
+        # Fields of the other kind are rejected, not silently matched.
+        '{"kind": "segment", "streets": ["17th", "Pine"]}',
+        '{"kind": "intersection", "street": "Spruce", "between": ["34th", "36th"]}',
+        # JSON must say which kind it is.
+        '{"streets": ["17th", "Pine"]}',
+        '{"kind": "corner", "streets": ["17th", "Pine"]}',
+    ],
+)
+def test_location_kind_decides_the_type(json_text):
+    # JSON, as data/processed/ is read back (strict Python input would
+    # reject the lists for an unrelated reason).
+    with pytest.raises(ValidationError):
+        LOCATION.validate_json(json_text)
+
+
+def test_location_json_with_matching_kind_is_accepted():
+    # Control for the test above: the same JSON with the right kind is fine.
+    assert LOCATION.validate_json(
+        '{"kind": "intersection", "streets": ["17th", "Pine"]}'
+    ) == Intersection(streets=("17th", "Pine"))
+
+
+@pytest.mark.parametrize("streets", [("17th",), ("17th", "Pine", "Broad")])
+def test_intersection_needs_exactly_two_streets(streets):
+    with pytest.raises(ValidationError):
+        Intersection(streets=streets)
+
+
+@pytest.mark.parametrize("name", ["", " Pine", "Pine "])
+def test_location_names_must_be_clean(name):
+    with pytest.raises(ValidationError):
+        Intersection(streets=("17th", name))
+    with pytest.raises(ValidationError):
+        Segment(street=name, between=("34th", "36th"))
+    with pytest.raises(ValidationError):
+        Segment(street="Spruce", between=(name, "36th"))
+
+
+def test_location_kind_cannot_be_overridden():
+    with pytest.raises(ValidationError):
+        Intersection(kind="segment", streets=("17th", "Pine"))
