@@ -1,5 +1,7 @@
 import json
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import polars as pl
 import pytest
@@ -15,6 +17,7 @@ from septa_detours.export.site import (
     MODE_ORDER,
     RouteShape,
     detour_object,
+    detour_timing,
     lines_bounds,
     network_collection,
     route_catalog,
@@ -1004,3 +1007,52 @@ def test_network_rejects_a_covering_shape_without_coordinates() -> None:
     shapes = {"rail-AIR": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
     with pytest.raises(ValueError, match=r"\('rail', '317310'\) has no coordinates"):
         network_collection([AIR], shapes, NETWORK_RAW)
+
+
+# --- detour_timing ---------------------------------------------------------------
+
+PHILLY = ZoneInfo("America/New_York")
+# Route 2 #0's real dates; "now" values are given in UTC.
+START = datetime(2026, 11, 11, 6, 30, tzinfo=PHILLY)
+END = datetime(2026, 11, 27, 16, 0, tzinfo=PHILLY)
+TICK = timedelta(microseconds=1)
+
+
+@pytest.mark.parametrize(
+    ("now", "timing"),
+    [
+        (datetime(2026, 11, 25, 12, 11, 23, tzinfo=UTC), "active"),  # snapshot time
+        (datetime(2026, 11, 11, 11, 30, tzinfo=UTC), "active"),  # == START
+        (datetime(2026, 11, 27, 21, 0, tzinfo=UTC), "active"),  # == END
+        (datetime(2026, 11, 11, 11, 30, tzinfo=UTC) - TICK, "upcoming"),
+        (datetime(2026, 11, 27, 21, 0, tzinfo=UTC) + TICK, "ended"),
+    ],
+)
+def test_detour_timing(now: datetime, timing: str) -> None:
+    assert detour_timing(START, END, now) == timing
+
+
+@pytest.mark.parametrize(("start", "end"), [(None, END), (START, None), (None, None)])
+@pytest.mark.parametrize("now", [START - TICK, START, END + TICK])
+def test_detour_timing_missing_time_is_unknown(
+    start: datetime | None, end: datetime | None, now: datetime
+) -> None:
+    assert detour_timing(start, end, now) == "unknown"
+
+
+@pytest.mark.parametrize("now", [END - TICK, END, START, START + TICK])
+def test_detour_timing_end_before_start_is_unknown(now: datetime) -> None:
+    assert detour_timing(END, START, now) == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("now", "timing"),
+    [(START - TICK, "upcoming"), (START, "active"), (START + TICK, "ended")],
+)
+def test_detour_timing_zero_length_detour(now: datetime, timing: str) -> None:
+    assert detour_timing(START, START, now) == timing
+
+
+def test_detour_timing_rejects_a_naive_now() -> None:
+    with pytest.raises(ValueError, match="now must have a time zone"):
+        detour_timing(START, END, datetime(2026, 11, 25, 12, 0))  # noqa: DTZ001

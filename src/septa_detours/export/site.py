@@ -6,6 +6,7 @@ Pure functions: no file I/O (that's ``write.py``).
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import datetime
 from typing import Final, NamedTuple
 
 import polars as pl
@@ -18,6 +19,7 @@ from septa_detours.export.contract import (
     Mode,
     RouteDetail,
     RouteEntry,
+    Timing,
 )
 from septa_detours.export.geojson import (
     FeatureCollection,
@@ -477,6 +479,32 @@ def network_collection(
             }
             features.append(line_feature(simplified[source], properties))
     return {"type": "FeatureCollection", "features": features}
+
+
+def detour_timing(
+    start: datetime | None, end: datetime | None, now: datetime
+) -> Timing:
+    """Whether a detour is in effect at ``now``, by its overall start and end.
+
+    ``active`` from ``start`` to ``end`` inclusive, ``upcoming`` before,
+    ``ended`` after. ``unknown`` when a time is missing, or when ``end`` is
+    before ``start`` (bad data: "upcoming" and "ended" could both be
+    wrong). Recurring windows ("7am - 4pm Mon thru Fri") aren't parsed, so
+    ``active`` means "inside the overall dates", not "running right now".
+    The page has the same rule in JS; keep them in step.
+
+    Raises:
+        ValueError: ``now`` has no time zone (it couldn't be compared).
+    """
+    if now.tzinfo is None:
+        raise ValueError("now must have a time zone")
+    if start is None or end is None or end < start:
+        return "unknown"
+    if now < start:
+        return "upcoming"
+    if now > end:
+        return "ended"
+    return "active"
 
 
 def _blank_to_none(text: str | None) -> str | None:
