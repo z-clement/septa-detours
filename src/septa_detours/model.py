@@ -198,6 +198,24 @@ class AffectedShape(_Frozen):
     direction_id: DirectionId | None
 
 
+class StartPoint(_Frozen):
+    """Where a detour leaves the regular route: one OSM street crossing.
+
+    Attributes:
+        node_id: The OSM node standing for the crossing (a real node, so a
+            later path search can start from it). Positive: real OSM data
+            has no negative IDs.
+        lon: The node's longitude (WGS84 degrees).
+        lat: The node's latitude (WGS84 degrees).
+
+    The bounds also reject NaN and infinity, which JSON can't hold.
+    """
+
+    node_id: Annotated[int, Field(gt=0)]
+    lon: Annotated[float, Field(ge=-180, le=180)]
+    lat: Annotated[float, Field(ge=-90, le=90)]
+
+
 class RouteMatch(_Frozen):
     """A notice tied to the GTFS network.
 
@@ -207,6 +225,11 @@ class RouteMatch(_Frozen):
         shapes: Shapes the detour affects, in first-appearance order. Empty
             if the route matched but the affected shapes could not be
             determined.
+        start_point: The crossing at the notice's start location near this
+            route, or ``None`` if it could not be placed (the reason is in
+            ``Detour.issues``, unless the notice has no start intersection
+            at all). Required, so forgetting to look it up can't pass for
+            "not found".
 
     The detoured path itself (coordinates or street segments) is not here
     yet; add it when ``match/`` can produce one.
@@ -215,6 +238,7 @@ class RouteMatch(_Frozen):
     feed: Feed
     route_id: CleanText
     shapes: tuple[AffectedShape, ...] = ()
+    start_point: StartPoint | None
 
 
 class Detour(_Frozen):

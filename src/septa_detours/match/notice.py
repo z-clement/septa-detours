@@ -59,7 +59,7 @@ def match_notice(
     )
     return Detour(
         notice=notice,
-        match=RouteMatch(feed=feed, route_id=route_id, shapes=shapes),
+        match=RouteMatch(feed=feed, route_id=route_id, shapes=shapes, start_point=None),
         issues=issues,
     )
 

@@ -14,6 +14,7 @@ from septa_detours.model import (
     RouteMatch,
     Segment,
     SourceText,
+    StartPoint,
 )
 
 PHILLY = ZoneInfo("America/New_York")
@@ -54,11 +55,18 @@ def make_notice(**overrides) -> DetourNotice:
     return DetourNotice(**(fields | overrides))
 
 
+def make_start_point(**overrides) -> StartPoint:
+    # Near 17th & Washington (route 2's start); lon ~ -75 so a swap shows.
+    fields = {"node_id": 109729327, "lon": -75.1716, "lat": 39.9385}
+    return StartPoint(**(fields | overrides))
+
+
 def make_detour() -> Detour:
     match = RouteMatch(
         feed="bus",
         route_id="2",
         shapes=(AffectedShape(shape_id="001005", direction_id=1),),
+        start_point=make_start_point(),
     )
     return Detour(notice=make_notice(), match=match, issues=("one issue",))
 
@@ -185,7 +193,67 @@ def test_direction_id_rejects_other_values(value):
 
 def test_unknown_feed_is_rejected():
     with pytest.raises(ValidationError):
-        RouteMatch(feed="trolley", route_id="15")
+        RouteMatch(feed="trolley", route_id="15", start_point=None)
+
+
+# --- start point ----------------------------------------------------------------
+
+
+def test_start_point_is_required():
+    # Decided: no default, so a constructor that forgets it fails loudly.
+    with pytest.raises(ValidationError, match="start_point"):
+        RouteMatch(feed="bus", route_id="2")  # ty: ignore[missing-argument]
+
+
+def test_missing_start_point_round_trips_as_null():
+    detour = Detour(
+        notice=make_notice(),
+        match=RouteMatch(feed="bus", route_id="2", start_point=None),
+    )
+    assert '"start_point":null' in detour.model_dump_json()
+    assert Detour.model_validate_json(detour.model_dump_json()) == detour
+
+
+def test_start_point_json_keeps_named_coordinates():
+    data = json.loads(make_start_point().model_dump_json())
+    assert data == {"node_id": 109729327, "lon": -75.1716, "lat": 39.9385}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("lon", -180),
+        ("lon", 180),
+        ("lat", -90),
+        ("lat", 90),
+        ("node_id", 1),
+    ],
+)
+def test_start_point_accepts_bounds(field, value):
+    assert getattr(make_start_point(**{field: value}), field) == value
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("node_id", 0),
+        ("node_id", -5),
+        ("node_id", True),
+        ("node_id", 5.0),
+        ("node_id", "5"),
+        ("lon", -180.000001),
+        ("lon", 180.000001),
+        ("lat", -90.000001),
+        ("lat", 90.000001),
+        ("lon", float("nan")),
+        ("lat", float("inf")),
+        ("lat", "39.9"),
+        ("lat", True),
+    ],
+)
+def test_start_point_rejects_bad_values(field, value):
+    with pytest.raises(ValidationError, match=field):
+        make_start_point(**{field: value})
 
 
 LOCATION = TypeAdapter(Location)

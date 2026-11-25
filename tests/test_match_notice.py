@@ -141,6 +141,7 @@ def test_complete_notice_gets_its_direction_shapes(fixture_notices, gtfs: Gtfs):
                 AffectedShape(shape_id="317635", direction_id=1),
                 AffectedShape(shape_id="317637", direction_id=1),
             ),
+            start_point=None,
         ),
         issues=(),
     )
@@ -152,7 +153,10 @@ def test_alias_route_gets_shapes(fixture_notices, gtfs: Gtfs):
     notice = fixture_notices("2026-11-25T025344Z__rr_route_mfo.json")[0]
     detour = match_notice(notice, *gtfs)
     expected = RouteMatch(
-        feed="bus", route_id="L1_OWL", shapes=affected(("320011",), 1)
+        feed="bus",
+        route_id="L1_OWL",
+        shapes=affected(("320011",), 1),
+        start_point=None,
     )
     assert expected == detour.match
     assert detour.issues == ()
@@ -190,7 +194,9 @@ def test_unknown_notice_still_gets_shapes(fixture_notices, gtfs: Gtfs):
     notice = fixture_notices("2026-11-25T025344Z__bus_route_64.json")[1]
     assert notice.status == "unknown"
     detour = match_notice(notice, *gtfs)
-    expected = RouteMatch(feed="bus", route_id="64", shapes=affected(("317769",), 1))
+    expected = RouteMatch(
+        feed="bus", route_id="64", shapes=affected(("317769",), 1), start_point=None
+    )
     assert expected == detour.match
 
 
@@ -202,7 +208,7 @@ def test_notice_without_direction(fixture_notices, gtfs: Gtfs):
     notice = fixture_notices("2026-11-25T025344Z__bus_route_24.json")[1]
     expected = Detour(
         notice=notice,
-        match=RouteMatch(feed="bus", route_id="24", shapes=()),
+        match=RouteMatch(feed="bus", route_id="24", shapes=(), start_point=None),
         issues=("shapes: no direction in notice",),
     )
     assert expected == match_notice(notice, *gtfs)
@@ -214,7 +220,7 @@ def test_direction_not_on_route(fixture_notices, gtfs: Gtfs):
     assert notice.direction == "EB"  # the premise
     expected = Detour(
         notice=notice,
-        match=RouteMatch(feed="bus", route_id="68", shapes=()),
+        match=RouteMatch(feed="bus", route_id="68", shapes=(), start_point=None),
         issues=(
             "shapes: bus route '68' has no Eastbound direction"
             " (has Northbound, Southbound)",
@@ -231,7 +237,10 @@ def test_direction_with_no_shapes(fixture_notices, gtfs: Gtfs):
     )
     notice = fixture_notices("2026-11-25T025344Z__bus_route_55.json")[0]
     detour = match_notice(notice, routes, trips, directions)
-    assert RouteMatch(feed="bus", route_id="55", shapes=()) == detour.match
+    assert (
+        RouteMatch(feed="bus", route_id="55", shapes=(), start_point=None)
+        == detour.match
+    )
     assert detour.issues == (
         "shapes: bus route '55' has no shapes with direction_id 1",
     )
