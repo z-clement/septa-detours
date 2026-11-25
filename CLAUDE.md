@@ -157,13 +157,15 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Reached: **tier A lookup works end to end, but isn't wired in yet**:
-notice `start_place` -> OSM ways per name (`match/streets.py`) -> shared
-nodes grouped into crossings -> the one crossing within 500 m of the route
-(`match/crossings.py`). In a scratch run it places 110 of 140 and 134 of
-166 real notices, with **no ambiguous ones**. Nothing stores the point
-yet: the next step is a `model.py` change (see "Next"). Before that:
-alert street names normalize to OSM's, and notices carry their
+Reached: **tier A is wired in**: `match_notice` fills
+`RouteMatch.start_point` (an OSM node near the route where the detour
+starts) or adds a `"start: ..."` issue. Chain: notice `start_place` -> OSM
+ways per name (`match/streets.py`) -> shared nodes grouped into crossings
+-> the one crossing within 500 m of the route (`match/crossings.py`),
+run by `match/place.py`. On real snapshots it places 110 of 140 and 134
+of 166 notices, with **no ambiguous ones**. Nothing consumes `Detour`
+yet (see "Next"). Before that: alert street names normalize to OSM's,
+and notices carry their
 locations split into street names (`DetourNotice.start_place`/
 `end_place`, from `parse/location.py`). Before that: **OSM street
 data**: Geofabrik extracts
@@ -950,7 +952,65 @@ directions), as `list[list[float]]`.
   none within 500 m 5 / 6 (the parade points); **ambiguous (2+ within
   500 m) 0 / 0**.
 
-Geography plan (agreed; tier A in progress: lookup done, not yet stored). 170 distinct real messages: 126
+Done: tier A wired into `Detour` (written by Claude in four reviewed
+increments).
+- `model.py`: `StartPoint(node_id, lon, lat)`: `node_id` strict int
+  `> 0` (real OSM IDs are positive), `lon` in [-180, 180], `lat` in
+  [-90, 90] (the bounds also reject NaN/inf); named fields, not a pair.
+  `RouteMatch.start_point: StartPoint | None` is **required, no
+  default** (decided by me, like `start_place`): forgetting the lookup
+  can't pass for "not found". `None` = not placed; the reason is in
+  `Detour.issues`, unless the notice has no start place at all.
+- `match/place.py::find_start_point(place, ways, keys, lines) ->
+  (StartPoint | None, issues)`. Exactly one of them is empty, except a
+  `None` place -> `(None, ())` (parse already flagged it, or it was
+  blank). Issues (wording agreed): `"start: segments are not placed
+  yet"` (segments wait for tier B: guessing which end is wrong half the
+  time); `"start: route has no shapes to compare with"`; `"start: no
+  crossing of 'A' and 'B' in OSM"`; `"start: no crossing of 'A' and 'B'
+  within 500 m of the route"`; `"start: N crossings of 'A' and 'B'
+  within 500 m of the route"` (never guesses). Names quoted as the alert
+  wrote them; `500` comes from `ROUTE_RADIUS_M`.
+- `match/notice.py`: `MatchReference` (frozen, **keyword-only**
+  dataclass, decided by me: five frames of one type can't be swapped by
+  position): `routes`, `trips`, `directions`, `ways`, `street_keys`,
+  `shape_lines` (`(feed, shape_id)` -> `[[lon, lat], ...]`, type
+  `ShapeLines`). `build_match_reference(*, routes, trips, directions,
+  shapes, ways)` runs `street_key_table` and `shape_coordinates` **once
+  per run**; load only the bus feed (rail has no detours). Signatures
+  are now `match_notice(notice, reference)` /
+  `match_notices(notices, reference)`.
+- `match_notice` looks the start point up for **every matched route**,
+  with private `_route_lines`: every shape of the route, **both
+  directions**, each once, in trip order (so a notice with no direction
+  is still placed). Issue order: shapes, then start. An unmatched route
+  reads no streets or shapes. A trip shape missing from `shape_lines`
+  raises `KeyError` (a bug: wrong feed loaded), not an issue.
+Tests: `test_model.py` (`make_start_point`; bounds and bad values),
+`test_match_place.py` (hand-built ways around 17th & Washington; traps:
+a far crossing with the *smaller* node ID, `Ridge` & `Ridge Ave` sharing
+ways, a three-node crossing whose representative is the middle node),
+`test_match_notice.py`. Its `reference` fixture now holds invented
+streets for two crossings (17th & Washington: route 2 runs on 17th;
+Broad & Chestnut: route 31 on Chestnut) and a placeholder line ~10 km
+away for every other shape. Helper `shape_issues(detour)` lets
+shape-focused tests ignore start issues. New pins (break on purpose
+when a fixture is added): `PLACED` (3 items -> node ID),
+`NOT_NEAR_ROUTE` (4 Broad & Chestnut items on far routes),
+`START_OUTCOMES` counts (placed 3, not near route 4, not in OSM 47,
+segment 2, no start place 9). Mutation survivors are equivalents only
+(dedupe of shapes used in both directions; a hard-coded `"bus"` feed,
+since `find_gtfs_route` never returns rail; `near[0]` vs `(crossing,) =
+near`). 1078 tests total.
+Real run (scratch, not committed), `025344Z` / `121123Z`: reference
+built in 0.7 s, matching ~1 s per snapshot. Placed 110 / 134; no start
+place 14 / 15; segment 2 / 2; not in OSM 4 / 4; not within 500 m 5 / 6;
+route not in GTFS 5 / 5; ambiguous 0 / 0 (same as the scratch lookup).
+The mutation runner is now a scratch script taking a mutations file
+(`MUTATIONS = [(old, new), ...]`) plus target and test paths.
+
+Geography plan (agreed; tier A done for intersections: start point
+stored; stop closures not yet). 170 distinct real messages: 126
 turn-by-turn with a rejoin ("SB via 17th St, Left on Spring Garden St,
 ..., Reg Rt"), 12 turns without a rejoin (layovers), 32 stop-related
 (points; `stops.txt`). GTFS shapes can't supply detour streets, so build
@@ -971,46 +1031,67 @@ Street-name matching: exact after normalizing plus a small alias table
 from fixtures, not fuzzy (done: `match/streets.py`). Each tier adds
 geometry to `RouteMatch` -> a `model.py` change, flag first.
 
-Next: **tier A matching in `match/`** (agreed). Steps, each my decision
-where noted; ask before each:
-1. ~~Street-name normalization~~ (done) and ~~location splitting~~
-   (done).
-2. ~~Intersection lookup~~ (done, see "Done: intersection lookup").
-3. **Wire tier A into `Detour`** (next; a `model.py` change, flag it
-   first). Open questions, each mine to decide; ask before writing:
-   - Where the point goes: on `RouteMatch` (it needs the route's shapes,
-     so it only exists when the route matched) or on `Detour`.
-   - What it holds: probably the representative `node_id` plus `lon`/
-     `lat` (a new frozen model; `Crossing` is a match-internal
-     `NamedTuple`, so it can't go in `model.py` as is). Maybe `node_ids`
-     too, for tier C.
-   - Rule for the result of `crossings_near_route`: exactly one -> the
-     point; none or several -> no point + a `Detour.issues` entry. Agree
-     the issue wording (e.g. `"start: no crossing of 'A' and 'B' in OSM"`,
-     `"start: no crossing within 500 m of the route"`, `"start: N
-     crossings within 500 m of the route"`).
-   - Segments (`A btwn B & C`, ~23 notices): a point now (e.g. the
-     `A & B` end), or wait for tier B.
-   - Plumbing: `match_notice(notice, routes, trips, directions)` must
-     gain the street cache + key table + shape coordinates. Build the key
-     table and coordinates **once per run**, not per notice; load only
-     the bus feed's shapes (the rail feed has no detours).
-   - Probably a new `match/place.py` (or similar) for the one function
-     that runs the chain above, keeping `match/notice.py` as glue.
-   Then: every existing `Detour`/`RouteMatch` builder in tests needs the
-   new field; `test_match_notice.py`'s pins (`FIXTURE_EXPECTED`,
-   `NO_SHAPES`, the sweep count 65) may need a place pin alongside. The
-   `gtfs` test fixture there is built from real rows; it will need
-   hand-built street ways (see `make_ways` in `test_match_crossings.py`)
-   and shapes.
-4. Stop-closure notices: point at the stop (`load_stops`; maybe needs
-   `location_type` from the bus feed only, which breaks "shared columns
-   only": ask).
+Tier A steps (agreed): 1. ~~street-name normalization~~ and
+~~location splitting~~; 2. ~~intersection lookup~~; 3. ~~wire into
+`Detour`~~ (`node_ids` was left out of `StartPoint`; add it, a
+`model.py` change, if tier C needs it); 4. stop-closure notices: point
+at the stop (`load_stops`; maybe needs `location_type` from the bus feed
+only, which breaks "shared columns only": ask). Step 4 is postponed
+behind the map work below.
+
+Next: **`Detour`s on the map** (agreed, my choices: two commands, start
+points **and** the detoured routes' lines, latest snapshot by default).
+Nothing consumes `Detour` yet; this makes tier A checkable by eye.
+Pipeline: `ingest` -> raw snapshot -> **`match` command** ->
+`data/processed/detours-<stamp>.json` (a list of `Detour`) -> **`export
+detours`** -> `web/data/detours.geojson` -> map. Each stage talks to the
+next only through `Detour` JSON. Increments (ask before each where a
+question is marked):
+1. **`match/__main__.py`**: `python -m septa_detours.match [snapshot]`.
+   Same pattern as the other commands (`main(argv) -> int`, `ValueError`/
+   `FileNotFoundError` -> `error:` + exit 1, `wrote <path>` on stdout).
+   - `find_latest_snapshot(root=data/raw/alerts)`: newest file whose
+     name fullmatches the `snapshot_path` stamp (`.tmp` and strays
+     ignored); none -> `FileNotFoundError` naming the ingest command.
+     The optional argument is a path to any snapshot file.
+   - Glue: read bytes -> `parse_snapshot(content, path.name)` -> load the
+     **bus feed** + street cache -> `build_match_reference` ->
+     `match_notices` -> write.
+   - Output name: `detours-<snapshot stem>.json` (provenance, like
+     fixtures). Ask: keep one file per snapshot (history) or overwrite a
+     single `detours.json`; gitignore them or commit samples.
+   - Serializing `list[Detour]`: a `TypeAdapter(list[Detour])`,
+     `dump_json` -> `write_bytes_atomic`; a reader validates the same
+     way. Ask: where the adapter + `read_detours` live (both stages need
+     them: `model.py` is the shared place, but that's a `model.py`
+     change; flag it).
+   - Tests: fake repo under `tmp_path` (as `test_export_main.py` and
+     `test_streets_main.py` do), a tiny snapshot built from fixtures, a
+     tiny street cache and bus GTFS.
+2. **`export/` detours GeoJSON** (pure first, then I/O + command).
+   - Points: one `Point` Feature per detour with a `start_point`.
+     Properties (ask to confirm the list): route (GTFS `route_id`,
+     `route_color`), direction, `location_start`, `start`/`end` (ISO
+     strings), reason, message, status, `source_key`.
+   - Lines: the affected shapes (`RouteMatch.shapes`) of every matched
+     detour, **deduplicated** by `(feed, shape_id, direction_id)`
+     (several detours share a route's shapes). Ask: lines for every
+     matched detour, or only for placed ones; the line's properties.
+   - New `Point` TypedDict in `export/geojson.py` beside `LineString`.
+     Ask: one FeatureCollection with both geometry types (MapLibre
+     filters by `$type`), or two files.
+   - Reuses `join_route_lines`/`route_properties`/`write_geojson`;
+     needs GTFS shapes in export (it already loads them for routes).
+   - Command: `python -m septa_detours.export detours [detours.json]`
+     (latest by default, like `match`). The existing `export <feed>
+     <route_id>` must keep working: ask how the CLI splits (subcommand
+     vs. a separate module).
+3. **`web/`**: draw the lines (route color, offset by direction as now)
+   and the start points (circles on top), popup with the point's
+   properties via `textContent`. Ask: a new page (`detours.html`) or
+   replace the single-route page. Unplaced detours aren't drawn; maybe a
+   count in a banner ("12 of 140 detours not placed").
 Other options, for later:
-- **Get `Detour`s onto the map**: nothing consumes them yet. A
-  `python -m septa_detours.match` command (snapshot -> `Detour` JSON in
-  `data/processed/`), and/or `export/` GeoJSON of detoured routes
-  (affected shapes, styled by direction) for `web/`.
 - **Settle parse's open questions** (each is my decision; ask):
   recurring windows ("7am - 4pm Mon thru Fri") and message-vs-API
   mismatches (route 44 #3, 61 #1): add an issue or not? Flagging makes
