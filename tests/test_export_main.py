@@ -1,4 +1,4 @@
-"""Tests for ``export.__main__``: the route export entry point.
+"""Tests for ``export.__main__``: the ``route`` and ``detours`` commands.
 
 The ``mini_gtfs`` fixture writes a tiny fake bus feed under ``tmp_path``
 and ``chdir``s there, so the real default paths (``data/gtfs``,
@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from septa_detours.export import __main__ as export_main
 from septa_detours.export.__main__ import (
     DEFAULT_DETOURS_DIR,
     DETOURS_GEOJSON,
@@ -220,7 +221,7 @@ def test_export_route_no_shapes_fails_before_reading_shapes():
 
 @pytest.mark.usefixtures("mini_gtfs")
 def test_main_success_returns_0_and_reports_path(capsys):
-    code = main(["bus", "21"])
+    code = main(["route", "bus", "21"])
 
     out, err = capsys.readouterr()
     assert code == 0
@@ -231,7 +232,7 @@ def test_main_success_returns_0_and_reports_path(capsys):
 
 @pytest.mark.usefixtures("mini_gtfs")
 def test_main_value_error_returns_1_with_message_on_stderr(capsys):
-    code = main(["bus", "NOPE"])
+    code = main(["route", "bus", "NOPE"])
 
     out, err = capsys.readouterr()
     assert code == 1
@@ -240,13 +241,32 @@ def test_main_value_error_returns_1_with_message_on_stderr(capsys):
 
 
 @pytest.mark.usefixtures("mini_gtfs")
+def test_main_missing_gtfs_returns_1(capsys):
+    # Decided: a missing file is an explainable failure (like the match and
+    # streets commands), not a bug, so no traceback.
+    (BUS_DIR / "routes.txt").unlink()
+
+    code = main(["route", "bus", "21"])
+
+    out, err = capsys.readouterr()
+    assert (code, out) == (1, "")
+    assert err.startswith("error: ")
+    assert "routes.txt" in err
+    assert not WEB_DATA.exists()
+
+
+@pytest.mark.usefixtures("mini_gtfs")
 @pytest.mark.parametrize(
     "argv",
     [
-        pytest.param(["bsu", "21"], id="bad-feed"),
-        pytest.param(["bus"], id="missing-route-id"),
-        pytest.param([], id="no-args"),
-        pytest.param(["bus", "21", "extra"], id="extra-arg"),
+        pytest.param([], id="no-command"),
+        pytest.param(["bus", "21"], id="old-form-without-command"),
+        pytest.param(["routes", "bus", "21"], id="unknown-command"),
+        pytest.param(["route", "bsu", "21"], id="bad-feed"),
+        pytest.param(["route", "bus"], id="missing-route-id"),
+        pytest.param(["route"], id="route-no-args"),
+        pytest.param(["route", "bus", "21", "extra"], id="route-extra-arg"),
+        pytest.param(["detours", "a.json", "b.json"], id="detours-extra-arg"),
     ],
 )
 def test_main_bad_arguments_exit_2_without_writing(argv, capsys):
@@ -259,13 +279,18 @@ def test_main_bad_arguments_exit_2_without_writing(argv, capsys):
 
 
 @pytest.mark.usefixtures("mini_gtfs")
-def test_main_does_not_catch_unexpected_errors():
-    # A missing GTFS file is not a "can't export this route" case: it
-    # should surface as its own exception with a traceback, not exit 1.
-    (BUS_DIR / "routes.txt").unlink()
+@pytest.mark.parametrize("command", ["route", "detours"])
+def test_main_does_not_catch_unexpected_errors(monkeypatch, command):
+    # Anything but FileNotFoundError / ValueError is a bug: keep the traceback.
+    def broken(*args, **kwargs):
+        raise RuntimeError("bug")
 
-    with pytest.raises(FileNotFoundError):
-        main(["bus", "21"])
+    monkeypatch.setattr(export_main, "export_route", broken)
+    monkeypatch.setattr(export_main, "export_detours", broken)
+    argv = ["route", "bus", "21"] if command == "route" else ["detours", "x.json"]
+
+    with pytest.raises(RuntimeError, match="bug"):
+        main(argv)
 
 
 # --- python -m entry point -------------------------------------------------
@@ -273,17 +298,19 @@ def test_main_does_not_catch_unexpected_errors():
 
 @pytest.mark.usefixtures("mini_gtfs")
 @pytest.mark.parametrize(
-    ("route_id", "expected_code"),
+    ("argv", "expected_code"),
     [
-        pytest.param("21", 0, id="success"),
-        pytest.param("NOPE", 1, id="unknown-route"),
+        pytest.param(["route", "bus", "21"], 0, id="route-success"),
+        pytest.param(["route", "bus", "NOPE"], 1, id="unknown-route"),
+        pytest.param(["detours"], 1, id="no-detours-file"),
+        pytest.param(["bus", "21"], 2, id="old-form"),
     ],
 )
-def test_python_dash_m_exit_code(route_id, expected_code):
+def test_python_dash_m_exit_code(argv, expected_code):
     # Checks the `raise SystemExit(main())` wiring that in-process tests
     # can't reach.
     result = subprocess.run(
-        [sys.executable, "-m", "septa_detours.export", "bus", route_id],
+        [sys.executable, "-m", "septa_detours.export", *argv],
         capture_output=True,
         text=True,
         check=False,
@@ -501,3 +528,60 @@ def test_export_detours_gtfs_disagreement_keeps_old_output(notices):
     with pytest.raises(ValueError, match="000000"):
         export_detours(DETOURS_FILE)
     assert DETOURS_GEOJSON.read_text() == "old"
+
+
+# --- main: detours command --------------------------------------------------
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_main_detours_uses_newest_file(notices, capsys):
+    write_detours([], DEFAULT_DETOURS_DIR / "detours-2026-11-24T000000Z.json")
+    write_detours([on_route_21(notices[0], ("317337", 0), placed=True)])
+
+    code = main(["detours"])
+
+    out, err = capsys.readouterr()
+    assert (code, err) == (0, "")
+    assert out == (
+        f"wrote {DETOURS_GEOJSON} (1 lines, 1 start points from 1 detours "
+        f"in {DETOURS_FILE.name})\n"
+    )
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_main_detours_explicit_file(notices, capsys):
+    write_detours([on_route_21(notices[0], None, placed=True)])  # the newest
+    mine = Path("elsewhere/detours-mine.json")
+    write_detours([], mine)
+
+    code = main(["detours", str(mine)])
+
+    out, _ = capsys.readouterr()
+    assert code == 0
+    assert out.endswith("from 0 detours in detours-mine.json)\n")
+    assert read_json(DETOURS_GEOJSON) == {"type": "FeatureCollection", "features": []}
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_main_detours_none_found_names_match_command(capsys):
+    code = main(["detours"])
+
+    out, err = capsys.readouterr()
+    assert (code, out) == (1, "")
+    assert err.startswith("error: no detours file")
+    assert MATCH_COMMAND in err
+    assert not WEB_DATA.exists()
+
+
+@pytest.mark.usefixtures("mini_gtfs")
+def test_main_detours_invalid_file_returns_1(capsys):
+    DETOURS_FILE.parent.mkdir(parents=True)
+    DETOURS_FILE.write_bytes(b"not json")
+
+    code = main(["detours"])
+
+    out, err = capsys.readouterr()
+    assert (code, out) == (1, "")
+    assert err.startswith("error: ")
+    assert "validation error" in err
+    assert not WEB_DATA.exists()

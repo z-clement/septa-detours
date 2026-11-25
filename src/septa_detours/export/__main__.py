@@ -1,16 +1,23 @@
-"""Export one route's shapes as GeoJSON for the web map.
+"""Export GeoJSON for the web map: one route's shapes, or the detours.
 
 Usage (from the repo root, since default paths are relative to it)::
 
-    uv run python -m septa_detours.export bus 21
+    uv run python -m septa_detours.export route bus 21
+    uv run python -m septa_detours.export detours [detours.json]
 
-Writes ``web/data/<feed>-<route_id>.geojson``. Glue only: every decision
-about *what* goes in the file lives in ``gtfs/`` and ``export/geojson.py``,
-and *how* it is written lives in ``export/write.py``.
+``route`` writes ``web/data/<feed>-<route_id>.geojson``. ``detours`` reads
+a ``match`` output (default: the newest ``data/processed/detours-*.json``)
+and writes ``web/data/detours.geojson``. Glue only: every decision about
+*what* goes in a file lives in ``gtfs/``, ``export/geojson.py`` and
+``export/detours.py``, and *how* it is written lives in ``export/write.py``.
+
+Output: one ``wrote <path>...`` line on stdout.
 
 Exit codes:
     0: file written.
-    1: the route can't be exported (unknown route, no shapes, bad data).
+    1: nothing written: a missing file (GTFS, detours), or data that can't
+       be exported (unknown route, no shapes, invalid detours, detours that
+       disagree with GTFS). ``error: ...`` on stderr.
     2: bad command-line arguments (argparse's own convention).
 """
 
@@ -56,19 +63,33 @@ DETOURS_GEOJSON = DEFAULT_WEB_DATA_DIR / "detours.geojson"
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser: positional ``feed`` and ``route_id``.
+    """Build the argument parser: a required ``route`` or ``detours`` command.
 
-    ``feed`` is limited to ``ALL_FEEDS`` via ``choices``, so a typo is
-    rejected by argparse (exit 2, usage message) before any GTFS loads.
+    ``route``'s ``feed`` is limited to ``ALL_FEEDS`` via ``choices``, so a
+    typo is rejected by argparse (exit 2, usage message) before any GTFS
+    loads.
     """
     parser = argparse.ArgumentParser(
         prog="python -m septa_detours.export",
-        description="Write one route's shapes to web/data/ as GeoJSON.",
+        description="Write GeoJSON for the web map to web/data/.",
     )
-    parser.add_argument("feed", choices=ALL_FEEDS, help="GTFS feed to read.")
-    parser.add_argument(
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    route = commands.add_parser("route", help="Write one route's shapes.")
+    route.add_argument("feed", choices=ALL_FEEDS, help="GTFS feed to read.")
+    route.add_argument(
         "route_id",
         help="GTFS route_id (e.g. 21, L1); not always the public route name.",
+    )
+
+    detours = commands.add_parser(
+        "detours", help="Write detoured route lines and start points."
+    )
+    detours.add_argument(
+        "detours_file",
+        nargs="?",
+        type=Path,
+        help="match output to read (default: the newest in data/processed/).",
     )
     return parser
 
@@ -179,18 +200,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         return: argparse raises ``SystemExit(2)`` itself.
     """
     args = _build_parser().parse_args(argv)
-    # argparse types attributes as Any; `choices` guarantees it's a Feed.
-    feed = cast("Feed", args.feed)
 
     try:
-        path = export_route(feed, args.route_id)
-    except ValueError as exc:
+        if args.command == "route":
+            # argparse types attributes as Any; `choices` guarantees a Feed.
+            feed = cast("Feed", args.feed)
+            summary = f"wrote {export_route(feed, args.route_id)}"
+        else:
+            detours_file: Path = args.detours_file or find_latest_detours()
+            summary = export_detours(detours_file)
+    except (FileNotFoundError, ValueError) as exc:
         # Expected, explainable failures only. Anything else is a bug and
         # should surface with its full traceback.
         print(f"error: {exc}", file=sys.stderr)  # noqa: T201
         return 1
 
-    print(f"wrote {path}")  # noqa: T201
+    print(summary)  # noqa: T201
     return 0
 
 
