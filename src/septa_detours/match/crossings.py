@@ -9,6 +9,8 @@ for the caller to choose between (e.g. by distance to the route).
 """
 
 import math
+from collections.abc import Sequence
+from itertools import pairwise
 from typing import NamedTuple
 
 import polars as pl
@@ -19,6 +21,16 @@ CROSSING_RADIUS_M = 100.0
 Real name pairs (2026-11-25 alerts vs the 2026-11-24 cache) share nodes
 either at most 62 m apart (one wide crossing) or over 1 km apart
 (different places), never in between.
+"""
+
+ROUTE_RADIUS_M = 500.0
+"""A crossing this close to any of the route's shapes can be its detour start.
+
+Decided from real data (2026-11-25 alerts): right crossings are 0-998 m
+off the route (110 of 132 within 7 m; one-way pairs and parade closure
+points up to ~1 km), wrong ones (same names, other towns) always at least
+1,496 m. 500 m places 127 of 132 and stays 3x inside the nearest wrong
+candidate.
 """
 
 EARTH_RADIUS_M = 6_371_008.8
@@ -144,3 +156,81 @@ def _metres_between(p: _Point, q: _Point) -> float:
     dx = math.radians(q[1] - p[1]) * math.cos(mean_lat)
     dy = math.radians(q[2] - p[2])
     return EARTH_RADIUS_M * math.hypot(dx, dy)
+
+
+def distance_to_line_m(
+    lon: float, lat: float, line: Sequence[Sequence[float]]
+) -> float:
+    """Approximate ground distance from a point to a polyline, in metres.
+
+    Args:
+        lon: The point's longitude.
+        lat: The point's latitude.
+        line: ``[lon, lat]`` pairs in order (a GTFS shape from
+            ``gtfs.shapes.shape_coordinates``). One pair is a single point.
+
+    Returns:
+        The distance to the nearest point on any segment (not just the
+        nearest vertex). Vertices are projected to flat metres centred on
+        the point (equirectangular), accurate to well under 1% within a few
+        kilometres: plenty for ``ROUTE_RADIUS_M``.
+
+    Raises:
+        ValueError: ``line`` is empty (a bug: shapes have points).
+    """
+    if not line:
+        raise ValueError("empty line")
+    scale = math.cos(math.radians(lat))
+    points = [
+        (
+            math.radians(vertex[0] - lon) * scale * EARTH_RADIUS_M,
+            math.radians(vertex[1] - lat) * EARTH_RADIUS_M,
+        )
+        for vertex in line
+    ]
+    if len(points) == 1:
+        return math.hypot(*points[0])
+    return min(_distance_to_segment(a, b) for a, b in pairwise(points))
+
+
+def _distance_to_segment(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Distance from the origin to segment ``a``-``b`` (flat coordinates)."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length_squared = dx * dx + dy * dy
+    if length_squared == 0:
+        return math.hypot(*a)
+    # Position of the origin's projection along the segment, clamped to it.
+    t = max(0.0, min(1.0, -(a[0] * dx + a[1] * dy) / length_squared))
+    return math.hypot(a[0] + t * dx, a[1] + t * dy)
+
+
+def crossings_near_route(
+    crossings: Sequence[Crossing],
+    lines: Sequence[Sequence[Sequence[float]]],
+    radius_m: float = ROUTE_RADIUS_M,
+) -> tuple[Crossing, ...]:
+    """Keep the crossings within ``radius_m`` of any of the route's lines.
+
+    Args:
+        crossings: From ``find_crossings``.
+        lines: The route's shapes as ``[lon, lat]`` lists (all of them,
+            both directions: where a detour starts doesn't depend on which
+            way the bus is going, and this works when the direction is
+            unknown).
+        radius_m: See ``ROUTE_RADIUS_M``.
+
+    Returns:
+        The kept crossings, in input order. Empty if ``lines`` is. Deciding
+        what zero or several mean is the caller's job.
+
+    Raises:
+        ValueError: A line is empty (see ``distance_to_line_m``).
+    """
+    return tuple(
+        crossing
+        for crossing in crossings
+        if any(
+            distance_to_line_m(crossing.lon, crossing.lat, line) <= radius_m
+            for line in lines
+        )
+    )
