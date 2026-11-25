@@ -38,13 +38,14 @@ model changes, flag it, since every stage depends on it.
 ## Repo layout
 
 ```
-data/raw/        untouched downloads (gitignored)
+data/raw/        untouched downloads (gitignored); alerts/ holds API snapshots
 data/gtfs/       SEPTA static GTFS (gitignored)
 data/processed/  normalized detours (sample files may be committed)
 src/septa_detours/{ingest,parse,match,export}/
 src/septa_detours/gtfs/   shared GTFS reference data (not a stage): load.py
                           reads tables, shapes.py builds coordinate lists,
                           routes.py finds a route's shapes
+src/septa_detours/io.py   shared helper (not a stage): write_bytes_atomic
 src/septa_detours/model.py
 web/             map frontend
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones
@@ -62,8 +63,10 @@ notebooks/       exploration only, not production code
   must be `.venv/bin/python`
 - GTFS tables: polars (added). Shapely/geometry stays out of polars; build
   it from plain coordinate lists in `match/`
-- Candidate libraries (ask before adding each): httpx (ingest),
-  shapely + pyproj (match; project to EPSG:2272 before measuring distances)
+- HTTP: httpx (added, ingest only). Tests use `httpx.MockTransport`; no
+  test touches the network
+- Candidate libraries (ask before adding each): shapely + pyproj (match;
+  project to EPSG:2272 before measuring distances)
 
 ## Commands
 
@@ -71,7 +74,10 @@ notebooks/       exploration only, not production code
 - Lint/format: `uv run ruff check . && uv run ruff format .`
 - Export a route's GeoJSON (from the repo root):
   `uv run python -m septa_detours.export bus 21` -> `web/data/bus-21.geojson`
-- Fetch data: `uv run septa-detours fetch` (planned, not built yet)
+- Fetch an alerts snapshot (from the repo root):
+  `uv run python -m septa_detours.ingest` ->
+  `data/raw/alerts/<UTC stamp>.json`. A `septa-detours fetch` CLI is
+  planned but not built
 - Serve the map: `python -m http.server -d web`, then open
   http://localhost:8000 (export the route first; it reads `web/data/`)
 
@@ -259,7 +265,62 @@ Decisions:
   no error. Headless can't capture the WebGL canvas, so check the drawn
   lines by eye in a real browser.
 
-Next: collect raw alerts into `data/raw/`. The `Detour` model in
-`model.py` is still deferred. Later, `match/` must map detour text like
-"Route 21" / "the L" to `route_id` via `route_short_name` (not always
-equal to `route_id`; check rail).
+Done: `io.py::write_bytes_atomic(content, path)` (written by Claude at my
+request). The atomic temp-file-then-`replace` write moved out of
+`export/write.py` so every stage can share it. It works on bytes: ingest
+saves response bytes untouched, and `write_geojson` encodes its own UTF-8.
+`<name>.tmp` is a fixed name (known limit: two concurrent writers to the
+same path would collide; use `NamedTemporaryFile(dir=...)` if that ever
+happens). `tests/test_io.py`; `test_write.py`'s atomicity test now
+patches `Path.write_bytes`, and it still proves `write_geojson` goes
+through the helper.
+
+Done: alerts ingest (written by Claude at my request; awaiting my
+review). Source: SEPTA JSON API `https://www3.septa.org/api/Alerts/index.php`
+only (the old `get_alert_data.php` doesn't respond; GTFS-RT
+`rtServiceAlerts.pb` exists but is deferred, since it needs protobuf).
+`ingest/alerts.py`:
+- `fetch_alerts(client) -> bytes`: checks only the HTTP envelope. Non-2xx
+  -> `httpx.HTTPStatusError`. Media type not exactly `application/json`
+  (params stripped, case-insensitive) or an empty body -> `ValueError`.
+  Malformed JSON is still saved (parse/'s job). The body is never decoded.
+- `snapshot_path(fetched_at, root=data/raw/alerts)`: pure,
+  `%Y-%m-%dT%H%M%SZ.json` in UTC (local time is ambiguous at DST
+  fall-back); a naive datetime -> `ValueError`. Same-second fetches
+  overwrite (accepted).
+- `save_alerts_snapshot(client, root, clock)`: the clock is read *after*
+  the fetch; a failed fetch writes nothing (not even the directory).
+- `make_client()`: UA `septa-detours/0.1` (no personal details), 30 s
+  timeout, follows redirects.
+- `ingest/__main__.py`: same pattern as the export command. `main(argv)`
+  catches `httpx.HTTPError` and `ValueError` (exit 1, `error:` on stderr);
+  anything else keeps its traceback; argparse errors exit 2.
+Tests: `tests/test_ingest_alerts.py` (all via `MockTransport`; CLI tests
+monkeypatch `__main__.make_client` and `chdir` to `tmp_path`). 21
+mutations, all caught; the decode/re-encode mutation needed a test with
+non-round-trippable bytes (invalid UTF-8, Latin-1). 150 tests total.
+Verified on real data: a ~200 KB snapshot, byte-identical to `curl`.
+
+Alerts API shape (observed 2026-11-24): a JSON list of ~185 per-route
+entries with keys `route`, `route_id`, `route_name`, `mode`, flags
+(`isdetour` "Y"/"N", `isadvisory` "Yes"/"No", ...), `last_updated`,
+`advisory` (HTML), and `detour`: a list of `{location_start,
+location_end, start, end, message, reason}`. That day: 57 routes, 147
+detours. Quirks that matter for parse/match:
+- API `route_id` is `bus_route_21` / `trolley_route_15`, not the GTFS
+  `route_id` `21`. Trolley 15 has `mode: "Bus"`.
+- `last_updated` is stale (2023) on every route; useless for change
+  detection.
+- `start`/`end` look like `"11/25/2026   3:00 PM"` (irregular spaces,
+  local time, no zone).
+- `message` is turn-by-turn shorthand with typos and abbreviations:
+  `"3pn on 11/25/26 thru 2am ..., SB via 17th St, Left on Spring Garden
+  St, Right on Broad St, ... Reg Rt"` (SB = southbound, Reg Rt = back on
+  the regular route, "btwn"). `location_end` can be `""`.
+
+Next: design the `Detour` model in `model.py` (clean session), based on
+the snapshot fields above. Keep collecting snapshots over several days
+and copy ugly real detours into `tests/fixtures/`. Later, `match/` must
+map API route IDs and detour text ("Route 21", "the L") to GTFS
+`route_id` via `route_short_name` (not always equal to `route_id`;
+check rail).
