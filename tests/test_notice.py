@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import datetime
 
 import pytest
+from pydantic import ValidationError
 
 from septa_detours.model import DetourNotice, SourceText
 from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
@@ -11,6 +12,7 @@ from septa_detours.parse.notice import (
     SOURCE_KEY_LENGTH,
     make_source_key,
     parse_detour,
+    parse_snapshot,
 )
 from septa_detours.parse.times import SEPTA_ZONE
 
@@ -447,3 +449,72 @@ def test_parse_detour_fixture_summary_is_pinned(
         if notice.status != "complete"
     }
     assert not_complete == NOT_COMPLETE
+
+
+# --- parse_snapshot --------------------------------------------------------
+
+# Not sorted by route_id, with detour-less entries in between.
+MINI_ROUTES = (
+    "bus_route_55",
+    "APP",
+    "bus_route_64",
+    "trolley_route_15",
+    "bus_route_24",
+)
+
+
+def mini_snapshot(
+    read_alert_fixture: Callable[[str], bytes], route_ids: tuple[str, ...]
+) -> bytes:
+    """Several fixtures from the earlier snapshot, joined into one API list."""
+    entries = [read_alert_fixture(f"{OLD}__{route_id}.json") for route_id in route_ids]
+    return b"[" + b",".join(entries) + b"]"
+
+
+def test_parse_snapshot_api_order(
+    read_alert_fixture: Callable[[str], bytes],
+) -> None:
+    """Route order, then list order; detour-less routes contribute nothing."""
+    content = mini_snapshot(read_alert_fixture, MINI_ROUTES)
+    notices = parse_snapshot(content, f"{OLD}.json")
+    expected = [
+        parse_detour(route, detour, f"{OLD}.json")
+        for route_id in MINI_ROUTES
+        for route in [load_route(read_alert_fixture, OLD, route_id)]
+        for detour in route.detour
+    ]
+    assert notices == expected
+    # 55 has 1 item, 64 has 6, 24 has 4 (guards the expected list itself).
+    assert [n.source.route_id for n in notices] == (
+        ["bus_route_55"] + ["bus_route_64"] * 6 + ["bus_route_24"] * 4
+    )
+    # Within a route, list order: route 64's items in index order.
+    route_64 = load_route(read_alert_fixture, OLD, "bus_route_64")
+    assert [n.source.message for n in notices[1:7]] == [
+        d.message for d in route_64.detour
+    ]
+
+
+def test_parse_snapshot_stores_snapshot_name(
+    read_alert_fixture: Callable[[str], bytes],
+) -> None:
+    content = mini_snapshot(read_alert_fixture, MINI_ROUTES)
+    notices = parse_snapshot(content, "other.json")
+    assert {n.source.snapshot for n in notices} == {"other.json"}
+
+
+def test_parse_snapshot_no_detours_anywhere(
+    read_alert_fixture: Callable[[str], bytes],
+) -> None:
+    content = mini_snapshot(read_alert_fixture, ("APP", "trolley_route_15"))
+    assert parse_snapshot(content, f"{OLD}.json") == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"[]", b"not json", b'[{"route_id": "bus_route_1", "mode": "Bus"}]'],
+)
+def test_parse_snapshot_structural_error_raises(content: bytes) -> None:
+    """The whole snapshot fails; nothing is partially returned."""
+    with pytest.raises(ValidationError):
+        parse_snapshot(content, f"{OLD}.json")

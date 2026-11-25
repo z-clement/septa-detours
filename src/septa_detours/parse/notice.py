@@ -10,7 +10,7 @@ import json
 from datetime import UTC, datetime
 
 from septa_detours.model import DetourNotice, Direction, SourceText
-from septa_detours.parse._api import ApiDetour, ApiRoute
+from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
 from septa_detours.parse.direction import find_directions
 from septa_detours.parse.text import clean_text
 from septa_detours.parse.times import local_time_issue, parse_api_datetime
@@ -172,7 +172,11 @@ def parse_snapshot(content: bytes, snapshot: str) -> list[DetourNotice]:
 
     Raises:
         pydantic.ValidationError: If the snapshot's structure is wrong
-            (see ``_api.read_snapshot``).
+            (see ``_api.read_snapshot``). Messy text never raises: it
+            becomes issues on the notice (see ``parse_detour``).
     """
-    # TODO
-    raise NotImplementedError
+    return [
+        parse_detour(route, detour, snapshot)
+        for route in read_snapshot(content)
+        for detour in route.detour
+    ]
