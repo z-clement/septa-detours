@@ -258,7 +258,9 @@ def export_site(
 
     starts = starts_collection(catalog, detours, now)
     files: dict[str, object] = {
-        "status.json": status(detours, detours_file.name, _feed_versions(), now),
+        "status.json": status(
+            detours, _snapshot_name(detours, detours_file), _feed_versions(), now
+        ),
         "routes.json": catalog,
         "network.geojson": network_collection(catalog, shapes, coordinates),
         "starts.geojson": starts,
@@ -277,6 +279,24 @@ def export_site(
         f"{len(starts['features'])} start points from {len(detours)} detours "
         f"in {detours_file.name})"
     )
+
+
+def _snapshot_name(detours: Sequence[Detour], detours_file: Path) -> str:
+    """The alerts snapshot the detours came from, e.g. ``2026-11-25T121123Z.json``.
+
+    Taken from the detours themselves (each notice records its snapshot),
+    not from the detours file's name. With no detours to ask, the file
+    name with ``match``'s ``detours-`` prefix removed.
+
+    Raises:
+        ValueError: The detours come from more than one snapshot.
+    """
+    names = sorted({detour.notice.source.snapshot for detour in detours})
+    if len(names) > 1:
+        raise ValueError(f"detours from more than one snapshot: {names}")
+    if names:
+        return names[0]
+    return detours_file.name.removeprefix("detours-")
 
 
 def _feed_versions() -> dict[Feed, str | None]:

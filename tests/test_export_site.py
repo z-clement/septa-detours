@@ -161,8 +161,8 @@ def test_export_site_status(detours) -> None:
     assert {key: value for key, value in result.items() if key != "unmatched"} == {
         "schema_version": 1,
         "generated_at": "2026-11-25T14:00:00Z",
-        "snapshot": f"detours-{STAMP}.json",
-        "snapshot_fetched_at": None,
+        "snapshot": f"{STAMP}.json",
+        "snapshot_fetched_at": "2026-11-25T02:53:44Z",
         "gtfs": {"bus": "v202611220", "rail": None},
         "detours": {"total": 3, "matched": 2, "placed": 1},
     }
@@ -256,6 +256,51 @@ def test_export_site_missing_gtfs_raises_and_writes_nothing(
     write_detours(detours)
     (site_gtfs / "data" / "gtfs" / "rail" / "directions.txt").unlink()
     with pytest.raises(FileNotFoundError):
+        export_site(DETOURS_FILE, now=NOW)
+    assert not WEB_DATA.exists()
+
+
+@pytest.mark.usefixtures("site_gtfs")
+def test_export_site_snapshot_comes_from_the_detours(detours) -> None:
+    # The detours file's own name doesn't matter: each notice records its
+    # snapshot.
+    path = Path("anything.json")
+    write_detours(detours, path)
+    export_site(path, now=NOW)
+    result = read("status.json")
+    assert (result["snapshot"], result["snapshot_fetched_at"]) == (
+        f"{STAMP}.json",
+        "2026-11-25T02:53:44Z",
+    )
+
+
+@pytest.mark.usefixtures("site_gtfs")
+@pytest.mark.parametrize(
+    ("file_name", "snapshot", "fetched_at"),
+    [
+        (f"detours-{STAMP}.json", f"{STAMP}.json", "2026-11-25T02:53:44Z"),
+        ("detours-mine.json", "mine.json", None),
+        ("mine.json", "mine.json", None),
+    ],
+)
+def test_export_site_no_detours_takes_the_snapshot_from_the_file_name(
+    file_name: str, snapshot: str, fetched_at: str | None
+) -> None:
+    path = DEFAULT_DETOURS_DIR / file_name
+    write_detours([], path)
+    export_site(path, now=NOW)
+    result = read("status.json")
+    assert (result["snapshot"], result["snapshot_fetched_at"]) == (snapshot, fetched_at)
+
+
+@pytest.mark.usefixtures("site_gtfs")
+def test_export_site_rejects_detours_from_two_snapshots(
+    detours, read_alert_fixture
+) -> None:
+    content = read_alert_fixture(f"{STAMP}__bus_route_2.json")
+    later = parse_snapshot(b"[" + content + b"]", "2026-11-26T000000Z.json")[0]
+    write_detours([*detours, Detour(notice=later, match=None)])
+    with pytest.raises(ValueError, match="more than one snapshot"):
         export_site(DETOURS_FILE, now=NOW)
     assert not WEB_DATA.exists()
 

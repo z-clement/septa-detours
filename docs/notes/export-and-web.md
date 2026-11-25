@@ -331,3 +331,12 @@ check: a scratch Node script ran the old `map.js` and the new `main.js`
 with a fake `maplibregl`/`document`/`fetch` on the real
 `detours.geojson`; the recorded calls, status and error text were
 identical.
+
+Fixed (2026-11-25): `export site` wrote the *detours file's* name
+(`detours-2026-11-25T121123Z.json`) as `status.json`'s `snapshot`, so
+`snapshot_fetched_at` was null; a test had pinned the wrong values. Found
+by writing the page's status line against the real file. Now
+`_snapshot_name` takes it from the detours (`notice.source.snapshot`;
+several snapshots in one file raise), or, with no detours, from the file
+name minus `match`'s `detours-` prefix. Lesson: check exported values
+against what they *mean*, not just what the code produced.
