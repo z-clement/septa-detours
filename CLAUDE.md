@@ -5,20 +5,24 @@ into structured data, matches them to the transit network, and shows them on a m
 
 ## How I want to work (read this first)
 
-This is a learning project. I want to write most of the implementation myself.
+This is a learning project. Claude may write the implementation, but
+slowly and methodically, so I can follow and review every step.
 
-- Default to **explaining, reviewing, and scaffolding**, not implementing.
-- When I ask for a new module, give me a skeleton: file layout, function
-  signatures, docstrings, and `TODO` markers. Do not fill in the bodies unless I say so.
-- When I show you code, review it: point out bugs, edge cases, and design
-  problems, and explain *why*. Suggest fixes in words or short snippets, not full rewrites.
-- If I'm stuck, ask me a guiding question or give a hint before giving the answer.
-- Only write full implementations when I explicitly say "write it" or "implement this".
-- Don't make changes outside the file or function I'm working on. If you think
-  something elsewhere should change, tell me instead.
+- Work in small increments: one function (or one small group of tests) at
+  a time. Don't write a whole module in one go.
+- Before writing, say briefly what you're about to write and why, including
+  any design decision it settles. If a decision is genuinely mine to make,
+  ask first.
+- After each increment: run the tests and lint, show me what changed,
+  explain the reasoning and edge cases, then **stop for me to check before
+  moving on**.
+- Write tests alongside the code, driven by real fixtures, and
+  mutation-check them (break the code, see the test fail).
+- When I show you code I wrote, review it: point out bugs, edge cases, and
+  design problems, and explain *why*.
+- Don't make changes outside the file or function we're working on. If you
+  think something elsewhere should change, tell me instead.
 - Ask before adding a new dependency.
-- Go slowly, one task at a time. Explain the reasoning behind each step,
-  and stop for me to check before moving to the next one.
 
 ## Architecture
 
@@ -384,8 +388,7 @@ Findings from reading all 140 detours:
   NB On"), spelled out at the end ("..., Eastbound"), or after the time
   ("Until 12/31/26 11:59pm SB,"). LS and LE can both be blank (64 #1, #2).
 
-Done: `parse/` skeleton (scaffolded by Claude at my request; **bodies
-are mine to write**). Every function raises `NotImplementedError`; ruff,
+Done: `parse/` skeleton (scaffolded by Claude at my request). Every function raises `NotImplementedError`; ruff,
 ty and imports pass. Layout:
 - `_api.py`: private raw models `ApiRoute` (`route_id`, `mode`,
   `detour`) / `ApiDetour` (the six strings), `extra="ignore"` (outside
@@ -429,8 +432,8 @@ Open (TODOs in the docstrings; decide while implementing):
 - A `kind` field (reroute / stop closure / relocation) would change
   `model.py`: flag it before changing.
 
-Next (clean session): implement `parse/` myself, one function at a time,
-with tests from the fixture index, and ask Claude for review after each.
+Next (clean session): Claude implements `parse/`, one function at a
+time, with tests from the fixture index, stopping for my review after each.
 Order: `clean_text` -> `parse_api_datetime` -> `normalize_direction` ->
 `find_directions` -> `make_source_key` -> `_api.read_snapshot` ->
 `parse_detour` -> `parse_snapshot`. Fixture-driven tests need a small
