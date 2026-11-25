@@ -4,11 +4,16 @@ Pure functions: no file I/O (that's ``write.py``).
 """
 
 import re
-from collections.abc import Iterable, Sequence
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Final
 
-from septa_detours.export.contract import Bounds, Mode
+import polars as pl
+
+from septa_detours.export.contract import Bounds, Mode, RouteEntry
+from septa_detours.export.geojson import _css_color  # private; same stage
 from septa_detours.gtfs.load import Feed
+from septa_detours.model import Detour
 
 MODE_ORDER: Final[tuple[Mode, ...]] = ("metro", "trolley", "trackless", "bus", "rail")
 """The sidebar's mode order (decided: the user's), fewest routes first."""
@@ -86,3 +91,88 @@ def lines_bounds(lines: Iterable[Sequence[Sequence[float]]]) -> Bounds:
     if not lons:
         raise ValueError("no points to bound")
     return ([min(lons), min(lats)], [max(lons), max(lats)])
+
+
+def route_catalog(
+    routes: pl.DataFrame, bounds: Mapping[str, Bounds], detours: Sequence[Detour]
+) -> list[RouteEntry]:
+    """Build ``routes.json``: every route, in display order.
+
+    Args:
+        routes: Output of ``load.load_routes`` (both feeds: rail routes are
+            listed even with no detours).
+        bounds: Route ``key`` -> bounds of its shapes (``lines_bounds``),
+            only for routes that have shapes.
+        detours: The snapshot's detours. Unmatched ones (``match`` is
+            ``None``) aren't counted here; they go in ``status.json``.
+
+    Returns:
+        One ``RouteEntry`` per route, sorted by ``route_sort_key`` (then
+        ``key``, so equal names still have a fixed order). ``short_name``
+        falls back to ``route_id`` when GTFS has none (blank counts as
+        none); a blank ``long_name`` is ``None``. Routes without bounds
+        get ``has_shapes: False`` and ``bounds: None``.
+
+    Raises:
+        ValueError: A ``(feed, route_id)`` appears twice in ``routes``
+            (broken GTFS); a ``route_type`` is unknown (``route_mode``);
+            or a ``bounds`` key or a matched detour's route isn't in
+            ``routes`` (detours/shapes and GTFS disagree: loud, not
+            silently dropped).
+    """
+    entries: dict[str, RouteEntry] = {}
+    for row in routes.iter_rows(named=True):
+        key = route_key(row["feed"], row["route_id"])
+        if key in entries:
+            raise ValueError(f"route {key!r} appears more than once in routes")
+        route_bounds = bounds.get(key)
+        entries[key] = {
+            "key": key,
+            "feed": row["feed"],
+            "route_id": row["route_id"],
+            "short_name": _blank_to_none(row["route_short_name"]) or row["route_id"],
+            "long_name": _blank_to_none(row["route_long_name"]),
+            "mode": route_mode(row["route_type"]),
+            "color": _css_color(row["route_color"]),
+            "text_color": _css_color(row["route_text_color"]),
+            "has_shapes": route_bounds is not None,
+            "bounds": None
+            if route_bounds is None
+            else (list(route_bounds[0]), list(route_bounds[1])),
+            "detours": {"total": 0, "placed": 0},
+        }
+
+    unknown = sorted(set(bounds) - set(entries))
+    if unknown:
+        raise ValueError(f"bounds for routes not in routes: {unknown}")
+
+    totals: Counter[str] = Counter()
+    placed: Counter[str] = Counter()
+    for detour in detours:
+        if detour.match is None:
+            continue
+        key = route_key(detour.match.feed, detour.match.route_id)
+        if key not in entries:
+            raise ValueError(
+                f"detour {detour.notice.source_key} is on unknown route {key!r}"
+            )
+        totals[key] += 1
+        if detour.match.start_point is not None:
+            placed[key] += 1
+    for key, entry in entries.items():
+        entry["detours"] = {"total": totals[key], "placed": placed[key]}
+
+    return sorted(
+        entries.values(),
+        key=lambda entry: (
+            route_sort_key(entry["mode"], entry["short_name"]),
+            entry["key"],
+        ),
+    )
+
+
+def _blank_to_none(text: str | None) -> str | None:
+    """Strip ``text``; empty or missing -> ``None``."""
+    if text is None:
+        return None
+    return text.strip() or None
