@@ -82,7 +82,9 @@ notebooks/       exploration only, not production code
 - OSM: pyosmium (`osmium`, added; reads `.osm.pbf` and `.osm` XML). It
   pulls in `requests`/`urllib3` (unused by us)
 - Candidate libraries (ask before adding each): shapely + pyproj (match;
-  project to EPSG:2272 before measuring distances), networkx (tier C)
+  project to EPSG:2272 before measuring distances), networkx (tier C).
+  Decided: **not for tier A**; tier A's geometry is hand-written
+  (`match/crossings.py`, equirectangular metres). Save them for tiers B/C.
 
 ## Commands
 
@@ -155,11 +157,16 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Reached: **tier A inputs are ready**: alert street names normalize to
-OSM's (`match/streets.py`), and notices carry their locations split into
-street names (`DetourNotice.start_place`/`end_place`, from
-`parse/location.py`). Next is the intersection lookup itself. Before
-that: **OSM street data**: Geofabrik extracts
+Reached: **tier A lookup works end to end, but isn't wired in yet**:
+notice `start_place` -> OSM ways per name (`match/streets.py`) -> shared
+nodes grouped into crossings -> the one crossing within 500 m of the route
+(`match/crossings.py`). In a scratch run it places 110 of 140 and 134 of
+166 real notices, with **no ambiguous ones**. Nothing stores the point
+yet: the next step is a `model.py` change (see "Next"). Before that:
+alert street names normalize to OSM's, and notices carry their
+locations split into street names (`DetourNotice.start_place`/
+`end_place`, from `parse/location.py`). Before that: **OSM street
+data**: Geofabrik extracts
 fetched by `ingest osm`, read and clipped by `streets/`, cached in
 `data/processed/streets.parquet` (146,871 named road ways). Before that:
 `match/` routes + directions (parsed notices -> `list[Detour]` via
@@ -875,7 +882,75 @@ issue (end text can be inferred by walking the detour).
 - Not updated yet: the fixture README's "Expected" column for the
   location-related items.
 
-Geography plan (agreed; tier A in progress: street data done). 170 distinct real messages: 126
+Done: intersection lookup (tier A step 2), all pure, written by Claude in
+reviewed increments. How the pieces chain (this is what step 3 wires up):
+```
+keys = street_key_table(ways)                   # once per run (0.07 s)
+first, second = split_shared_ways(
+    street_matches(keys, a), street_matches(keys, b))  # a, b = start_place.streets
+crossings = find_crossings(ways, first, second)  # 2-12 ms per pair
+near = crossings_near_route(crossings, lines)    # lines = all route shapes
+```
+`ways` = `read_street_cache()`; `lines` = `shape_coordinates(...)`
+`coordinates` for every `route_shape_ids` row of the route (both
+directions), as `list[list[float]]`.
+- `match/streets.py::street_key_table(ways)`: one row per
+  `(way_id, base, street_type, prefix_dropped)` (`STREET_KEYS_SCHEMA`),
+  way order, full key first. `osm_street_keys` runs once per distinct
+  name (40,003, not 146,871). A blank-normalizing name raises naming the
+  first way. Real cache: 168,983 rows, 3.5 MB.
+- `street_matches(keys, name)` -> `(way_id, specificity)`
+  (`STREET_MATCH_SCHEMA`). The matching rule: same base; a type in the
+  alert must equal the way's. Specificity 0..3 = 2 if the way's **full**
+  name matched (not its prefix-less key) + 1 if the alert gave a type.
+- `split_shared_ways(first, second)`: decided (mine): a way matching
+  **both** names goes to the side with higher specificity (full name
+  beats prefix-less, then typed beats untyped); a tie goes to the
+  **first-listed** name (both names are then the same street, so the
+  second side is left without it and no self-crossing is found). No real
+  pair hits this (0 of 171); it's a guard.
+- `match/crossings.py::find_crossings(ways, first, second, radius_m=100)`:
+  semi-joins the cache to each side's ways *before* exploding nodes;
+  shared nodes grouped by single linkage within `CROSSING_RADIUS_M = 100`
+  (evidence: real shared nodes are <= 62 m apart for one crossing, or
+  > 1 km for different places; nothing between). One `Crossing(node_ids,
+  node_id, lon, lat)` per group, ordered by smallest node ID. Decided
+  (mine): the representative `node_id` is the group's **real node nearest
+  the group's average** (tie: smaller ID), so tier C can walk from it.
+  `()` if nothing is shared.
+- `distance_to_line_m(lon, lat, line)`: point to polyline, nearest point
+  on any segment; local equirectangular metres, mean Earth radius
+  (`EARTH_RADIUS_M`); empty line -> `ValueError`. Private
+  `_metres_between` (grouping) uses the same approximation.
+- `crossings_near_route(crossings, lines, radius_m=500)`: keeps crossings
+  within `ROUTE_RADIUS_M = 500` of **any** line, input order. Decided
+  (mine) from data: right crossings are 0-998 m off the route (110/132
+  within 7 m; one-way pairs ~113 m; parade closure points up to ~1 km),
+  wrong ones (other towns; Camden's Market St) >= 1,496 m. 500 m places
+  127/132 and stays 3x inside the nearest wrong one. All shapes, both
+  directions: the start point doesn't depend on direction, and it works
+  when direction is unknown.
+- Tests: `test_match_streets.py` (key table, matches, split; a
+  `make_ways` helper and a `BROAD_WAYS` set), `test_match_crossings.py`
+  (34; hand-built ways near 17th & Washington; distances checked against
+  hand-worked values: at that latitude 0.001 deg = 85.27 m east, 111.20 m
+  north). Mutation survivors are all documented equivalents
+  (`maintain_order` on joins polars happens to keep; a redundant Int8
+  cast; the node sort before grouping, since groups are connected
+  components). Test lesson: a "tie" must be binary-exact
+  (multiples of 2**-12 deg) or float error hides the tie-break; a radius
+  test needs a diagonal case or Manhattan distance survives.
+  1034 tests total.
+- Real end-to-end (scratch script, not committed), per snapshot
+  `025344Z` / `121123Z`: placed 110 / 134; start not an intersection
+  (segment, unrecognized, blank) 16 / 17; API route not in GTFS 5 / 5;
+  no OSM crossing at all 4 / 4 (`Garney & Lehigh`, `Malvern Ave &
+  Wynnewood Ave` (OSM may say Wynnewood Road), `Huntingdon Pk & Station
+  Dr`, `Easton Rd & Old York Rd`: not investigated); crossings exist but
+  none within 500 m 5 / 6 (the parade points); **ambiguous (2+ within
+  500 m) 0 / 0**.
+
+Geography plan (agreed; tier A in progress: lookup done, not yet stored). 170 distinct real messages: 126
 turn-by-turn with a rejoin ("SB via 17th St, Left on Spring Garden St,
 ..., Reg Rt"), 12 turns without a rejoin (layovers), 32 stop-related
 (points; `stops.txt`). GTFS shapes can't supply detour streets, so build
@@ -900,16 +975,34 @@ Next: **tier A matching in `match/`** (agreed). Steps, each my decision
 where noted; ask before each:
 1. ~~Street-name normalization~~ (done) and ~~location splitting~~
    (done).
-2. **Intersection lookup** (next): index the street cache by
-   `osm_street_keys`, then find OSM nodes shared by ways matching each
-   name of `start_place` (rule: same base; alert type None or equal, as
-   in the `alert_matches_osm` test helper). Start with the part that
-   needs no new library. Several matches (same names in different towns)
-   -> keep only those near the matched route's shapes (needs shapely +
-   pyproj: ask before adding), else `unknown`. A `Segment` gives two
-   intersections (street & each bound).
-3. **Where the point lives**: tier A adds a location to `RouteMatch` or
-   `Detour` -> `model.py` change, flag first.
+2. ~~Intersection lookup~~ (done, see "Done: intersection lookup").
+3. **Wire tier A into `Detour`** (next; a `model.py` change, flag it
+   first). Open questions, each mine to decide; ask before writing:
+   - Where the point goes: on `RouteMatch` (it needs the route's shapes,
+     so it only exists when the route matched) or on `Detour`.
+   - What it holds: probably the representative `node_id` plus `lon`/
+     `lat` (a new frozen model; `Crossing` is a match-internal
+     `NamedTuple`, so it can't go in `model.py` as is). Maybe `node_ids`
+     too, for tier C.
+   - Rule for the result of `crossings_near_route`: exactly one -> the
+     point; none or several -> no point + a `Detour.issues` entry. Agree
+     the issue wording (e.g. `"start: no crossing of 'A' and 'B' in OSM"`,
+     `"start: no crossing within 500 m of the route"`, `"start: N
+     crossings within 500 m of the route"`).
+   - Segments (`A btwn B & C`, ~23 notices): a point now (e.g. the
+     `A & B` end), or wait for tier B.
+   - Plumbing: `match_notice(notice, routes, trips, directions)` must
+     gain the street cache + key table + shape coordinates. Build the key
+     table and coordinates **once per run**, not per notice; load only
+     the bus feed's shapes (the rail feed has no detours).
+   - Probably a new `match/place.py` (or similar) for the one function
+     that runs the chain above, keeping `match/notice.py` as glue.
+   Then: every existing `Detour`/`RouteMatch` builder in tests needs the
+   new field; `test_match_notice.py`'s pins (`FIXTURE_EXPECTED`,
+   `NO_SHAPES`, the sweep count 65) may need a place pin alongside. The
+   `gtfs` test fixture there is built from real rows; it will need
+   hand-built street ways (see `make_ways` in `test_match_crossings.py`)
+   and shapes.
 4. Stop-closure notices: point at the stop (`load_stops`; maybe needs
    `location_type` from the bus feed only, which breaks "shared columns
    only": ask).
