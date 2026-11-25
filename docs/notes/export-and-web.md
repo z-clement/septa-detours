@@ -285,3 +285,30 @@ Claude in reviewed increments). Decisions mine unless noted.
   (`rr_route_mfo` #1 has trailing spaces). Survivors judged equivalent:
   `colors.get` after a membership check, `match` vs `fullmatch` before
   `strptime`. 1422 tests total.
+
+Done (2026-11-25): **writing the contract** (web plan P6). D3 decided
+(mine): **plain overwrite**, no history; `contract.py` lost
+`CurrentPointer` and the `builds/` layout.
+- `export/write.py::write_site(files, root)`: checks every path first
+  (only `SITE_FILES` and `routes/<bus|rail>-<id>.json`, so nothing lands
+  outside `web/data/`), encodes everything in memory (a NaN anywhere
+  writes nothing), writes each atomically with route files first and
+  `status.json` last, then deletes stale route files (regular files with
+  a route-file name not written now; nothing else). A failure part-way
+  leaves a mix of old and new (accepted) and deletes nothing. The JSON
+  encoding moved into `_encode_json`, shared with `write_geojson`.
+- `export/__main__.py`: `export site [detours.json]` ->
+  `export_site(detours_file, root, now=None)`: detours read first (a bad
+  file fails before GTFS), both feeds loaded, every builder run, all
+  files written. **Every catalog route gets a detail file** (mine: the
+  page never asks for a missing one). `_feed_versions`: `null` for a
+  feed without `feed_info.txt`.
+- Real run (`121123Z`, GTFS `v202611220`): ~9 s, ~350 MB RAM; 185 files,
+  3.6 MB: `network.geojson` 970 KB, `routes.json` 48 KB, `starts.geojson`
+  25 KB, `status.json` 3 KB, `routes/` 181 files, 2.5 MB (largest bus-14
+  109 KB, bus-93 81 KB, bus-130 76 KB). The page will load ~1.05 MB up
+  front.
+- Tests: `tests/test_write.py` (+21; the path check's gaps found by
+  mutation: an unescaped `.`, `match` vs `fullmatch`, the folder check),
+  `tests/test_export_site.py` (13; a fake two-feed GTFS with no rail
+  `feed_info.txt`, real route 2 notices on fake route 21). 1456 tests.

@@ -1,6 +1,6 @@
 # Web plan: data contract and map app
 
-Status: **P1-P5 done** (`export/simplify.py`, `contract.py`, `site.py`); P6 next. Written
+Status: **P1-P6 done** (the data contract: `export site`); W1 next. Written
 2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
@@ -187,8 +187,9 @@ selects that detour; the details come from the route's detail file.
 
 ### `routes/<key>.json`
 
-Fetched when a route is focused. Every route with shapes or detours gets
-one.
+Fetched when a route is focused. Every catalog route gets one (decided
+in P6: even shapeless routes without detours, so the page never asks for
+a missing file; the shuttles' files carry their directions).
 
 ```json
 {
@@ -382,13 +383,13 @@ Python (the contract):
    survives above tolerance and goes below it; 2-point lines unchanged).
 2. **P2** (done) `covering_shapes`. Hand-built short-turn, branch,
    stitched and reversed cases; real data: 593 of 1,006 at 20 m.
-3. **P3** `export/contract.py` types + `route_mode`, `route_sort_key`,
+3. **P3** (done) `export/contract.py` types + `route_mode`, `route_sort_key`,
    `route_catalog`. Real names from the Facts list for the sort.
-4. **P4** `detour_object` + `route_detail` (directions, all shapes at
+4. **P4** (done) `detour_object` + `route_detail` (directions, all shapes at
    2 m, detours).
-5. **P5** `network_collection`, `starts_collection`, `status`.
-6. **P6** `write_site` (overwrite, delete stale route files) + the
-   `export site` subcommand. Real run: report file sizes.
+5. **P5** (done) `network_collection`, `starts_collection`, `status`.
+6. **P6** (done) `write_site` (overwrite, delete stale route files) +
+   the `export site` subcommand. Real run: 185 files, 3.6 MB, ~9 s.
 
 Web (plain JS):
 7. **W1** Split `map.js` into the modules above with **no visible

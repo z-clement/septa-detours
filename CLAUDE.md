@@ -62,7 +62,9 @@ src/septa_detours/geo.py  shared helper (not a stage): EARTH_RADIUS_M,
                           distance_to_line_m (equirectangular metres)
 src/septa_detours/model.py
 web/             map frontend: index.html + map.js (the detours map);
-                 web/data/ holds exported GeoJSON (gitignored)
+                 web/data/ holds exported data (gitignored): the data
+                 contract (`export site`) + the current page's
+                 detours.geojson
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
                  alerts/ holds API route entries + an annotated README
 notebooks/       exploration only, not production code
@@ -98,7 +100,8 @@ docs/            plans (web-plan.md = current, geography-plan.md,
 - Run tests: `uv run pytest`
 - Lint/format: `uv run ruff check . && uv run ruff format .`
 - Run everything from the repo root (default paths are relative to it).
-  The map pipeline: `ingest` -> `match` -> `export detours` -> serve.
+  The map pipeline: `ingest` -> `match` -> `export site` (the new
+  contract) / `export detours` (the current page) -> serve.
 - Fetch an alerts snapshot (from the repo root):
   `uv run python -m septa_detours.ingest` ->
   `data/raw/alerts/<UTC stamp>.json`. A `septa-detours fetch` CLI is
@@ -113,8 +116,14 @@ docs/            plans (web-plan.md = current, geography-plan.md,
   `uv run python -m septa_detours.match [snapshot]` (default: newest in
   `data/raw/alerts/`) -> `data/processed/detours-<stamp>.json`; prints
   `(N detours: M matched to a route, K placed)`
-- Export the map data: `uv run python -m septa_detours.export detours
-  [detours.json]` (default: newest `detours-<stamp>.json`) ->
+- Export the data contract (~9 s, ~350 MB RAM; needs both GTFS feeds):
+  `uv run python -m septa_detours.export site [detours.json]` (default:
+  newest `detours-<stamp>.json`) -> `web/data/{status,routes}.json`,
+  `{network,starts}.geojson`, `routes/<feed>-<route_id>.json` (one per
+  route, 181); overwrites in place, deletes route files of routes gone
+  from GTFS. Types: `export/contract.py`
+- Export the current page's data (until web step W2): `uv run python -m
+  septa_detours.export detours [detours.json]` ->
   `web/data/detours.geojson`
 - Export one route's shapes (debugging tool, not used by the page):
   `uv run python -m septa_detours.export route bus 21` ->
@@ -179,14 +188,21 @@ detours` (`web/data/detours.geojson`: detoured route lines + start points)
 -> `web/` (the detours map, replacing the single-route page). Real
 snapshot `121123Z`: 166 detours, 161 matched to a route, 134 placed;
 292 lines on 52 routes, ~3.3 MB. Details: `docs/notes/export-and-web.md`.
-Next up: the data contract and the web app (see "Next").
+
+Then: **the data contract** (web plan P1-P6, done): `export site` writes
+every file the new page will read (`export/contract.py` types;
+builders in `export/site.py`, geometry in `export/simplify.py`). Real
+run: 185 files, 3.6 MB; the page loads ~1.05 MB up front (network
+0.97 MB) plus one route file (<= 109 KB) on focus. The page doesn't read
+it yet. Next up: the web app (see "Next").
 
 ## Next
 
-**The data contract, then the web app**: `docs/web-plan.md` holds the
-whole plan (decisions made, facts measured, the contract's files, the JS
-module layout, the order of work, and **decisions still to confirm:
-ask before building those**). Start at its "Order of work", step P1.
+**The web app**: `docs/web-plan.md` holds the whole plan (decisions
+made, facts measured, the contract's files, the JS module layout, the
+order of work, and **decisions still to confirm: ask before building
+those**). The Python half (P1-P6) is done; start at its "Order of
+work", step W1.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
 collection, small follow-ups) and `docs/geography-plan.md` (tier A step
