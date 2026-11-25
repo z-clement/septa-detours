@@ -8,8 +8,10 @@ import pytest
 from polars.exceptions import ComputeError
 
 from septa_detours.export.geojson import (
+    Properties,
     join_route_lines,
     line_feature,
+    point_feature,
     route_feature_collection,
     route_properties,
 )
@@ -343,6 +345,53 @@ def test_line_feature_does_not_share_coordinate_list():
     output = line_feature(coordinates, {})
     coordinates.append([-75.0, 40.0])
     assert output["geometry"]["coordinates"] == LINE_A
+
+
+# --- point_feature ------------------------------------------------------------
+
+# Near 17th & Washington; lon ~ -75 so a lat/lon swap would show.
+POINT = [-75.1716, 39.9385]
+
+
+def test_point_feature_structure():
+    """The whole Feature, so any wrong key or ``type`` value fails."""
+    output = point_feature(POINT, {"source_key": "661b7024a25d2bbd", "node_id": 11})
+    expected = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [-75.1716, 39.9385]},
+        "properties": {"source_key": "661b7024a25d2bbd", "node_id": 11},
+    }
+    assert expected == output
+
+
+def test_point_feature_serializes_as_geojson():
+    """Round-trips through JSON unchanged: plain dicts, lists and floats."""
+    output = point_feature(POINT, {"status": None})
+    assert json.loads(json.dumps(output)) == output
+
+
+@pytest.mark.parametrize(
+    "position",
+    [[], [-75.1716], [-75.1716, 39.9385, 12.0]],
+    ids=["empty", "one", "three"],
+)
+def test_point_feature_wrong_length_raises_with_properties(position):
+    with pytest.raises(ValueError, match="661b7024a25d2bbd"):
+        point_feature(position, {"source_key": "661b7024a25d2bbd"})
+
+
+def test_point_feature_does_not_share_properties():
+    properties: Properties = {"source_key": "661b7024a25d2bbd"}
+    output = point_feature(POINT, properties)
+    properties["source_key"] = "changed"
+    assert output["properties"] == {"source_key": "661b7024a25d2bbd"}
+
+
+def test_point_feature_does_not_share_position():
+    position = list(POINT)
+    output = point_feature(position, {})
+    position[0] = 0.0
+    assert output["geometry"]["coordinates"] == POINT
 
 
 # --- route_feature_collection -------------------------------------------------

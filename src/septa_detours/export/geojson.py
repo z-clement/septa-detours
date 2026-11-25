@@ -1,4 +1,4 @@
-"""Build GeoJSON for a route's shapes.
+"""Build GeoJSON: the shared types, and features for a route's shapes.
 
 Pure functions (no file I/O) so they can be tested with small hand-built
 frames. Writing to disk lives in ``write.py``.
@@ -37,11 +37,18 @@ class LineString(TypedDict):
     coordinates: list[Position]
 
 
+class Point(TypedDict):
+    """GeoJSON Point geometry."""
+
+    type: Literal["Point"]
+    coordinates: Position
+
+
 class Feature(TypedDict):
-    """GeoJSON Feature with a LineString geometry."""
+    """GeoJSON Feature with a LineString or Point geometry."""
 
     type: Literal["Feature"]
-    geometry: LineString
+    geometry: LineString | Point
     properties: Properties
 
 
@@ -173,6 +180,25 @@ def line_feature(coordinates: list[Position], properties: Properties) -> Feature
     if len(coordinates) < 2:
         raise ValueError(f"Received {len(coordinates)} pairs for feature: {properties}")
     geometry = LineString(type="LineString", coordinates=coordinates.copy())
+    return Feature(type="Feature", geometry=geometry, properties=properties.copy())
+
+
+def point_feature(position: Position, properties: Properties) -> Feature:
+    """Wrap one ``[lon, lat]`` position as a Point Feature.
+
+    Args:
+        position: ``[lon, lat]``, copied. Bounds aren't checked here (the
+            caller's model already validates them).
+        properties: Shallow-copied onto the feature, as in ``line_feature``.
+
+    Raises:
+        ValueError: If ``position`` doesn't have exactly two numbers. GeoJSON
+            allows a third (altitude), but nothing here produces one, so it
+            would mean a bug. The message includes ``properties``.
+    """
+    if len(position) != 2:
+        raise ValueError(f"Received {len(position)} numbers for point: {properties}")
+    geometry = Point(type="Point", coordinates=position.copy())
     return Feature(type="Feature", geometry=geometry, properties=properties.copy())
 
 
