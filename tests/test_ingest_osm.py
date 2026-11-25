@@ -8,7 +8,9 @@ from collections.abc import Callable, Iterator
 import httpx
 import pytest
 
+from septa_detours.ingest import __main__ as ingest_main
 from septa_detours.ingest.osm import (
+    DEFAULT_OSM_DIR,
     GEOFABRIK_REGIONS,
     dated_extract_name,
     extract_url,
@@ -527,3 +529,186 @@ def test_fetch_extract_invalid_region_makes_no_request(tmp_path):
         fetch_extract(client, "../delaware", root)
     assert log == []
     _assert_nothing_written(root, log)
+
+
+# --- python -m septa_detours.ingest osm --------------------------------------
+
+
+def region_body(region: str) -> bytes:
+    return f"fake {region} extract \xff".encode("latin-1")
+
+
+def all_regions_client(
+    log: list[str], broken: dict[str, Callable[[], httpx.Response]] | None = None
+) -> httpx.Client:
+    """Serve every configured region's redirect chain, .md5 and body.
+
+    ``broken`` maps a region to a replacement response for its dated file.
+    """
+    broken = broken or {}
+    routes: Routes = {}
+    for region in GEOFABRIK_REGIONS:
+        nested = f"{US}/{region}/{region}-latest.osm.pbf"
+        dated = f"{US}/{region}/{region}-261124.osm.pbf"
+        body = region_body(region)
+        digest = hashlib.md5(body, usedforsecurity=False).hexdigest()
+        md5_body = md5_line(digest, f"{region}-261124.osm.pbf")
+        routes[f"{US}/{region}-latest.osm.pbf"] = lambda nested=nested: httpx.Response(
+            301, headers={"location": nested}
+        )
+        routes[nested] = lambda dated=dated: httpx.Response(
+            307, headers={"location": dated}
+        )
+        routes[dated] = broken.get(region) or (
+            lambda body=body: httpx.Response(200, content=body)
+        )
+        routes[f"{dated}.md5"] = lambda md5_body=md5_body: httpx.Response(
+            200, content=md5_body
+        )
+    return geofabrik_client(routes, log)
+
+
+@pytest.fixture
+def in_tmp_repo(tmp_path, monkeypatch):
+    """Run from an empty fake repo root, so default relative paths land here."""
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def patch_client(monkeypatch, client: httpx.Client) -> None:
+    monkeypatch.setattr(ingest_main, "make_client", lambda: client)
+
+
+def fetching_line(region: str) -> str:
+    return f"fetching {region} ({US}/{region}-latest.osm.pbf)\n"
+
+
+def wrote_line(region: str) -> str:
+    return f"wrote {DEFAULT_OSM_DIR / f'{region}-261124.osm.pbf'}\n"
+
+
+def test_main_osm_writes_every_region(in_tmp_repo, monkeypatch, capsys):
+    log: list[str] = []
+    patch_client(monkeypatch, all_regions_client(log))
+    assert ingest_main.main(["osm"]) == 0
+
+    out, err = capsys.readouterr()
+    assert out == "".join(wrote_line(r) for r in GEOFABRIK_REGIONS)
+    assert err == "".join(fetching_line(r) for r in GEOFABRIK_REGIONS)
+    root = in_tmp_repo / DEFAULT_OSM_DIR
+    assert sorted(p.name for p in root.iterdir()) == sorted(
+        f"{r}-261124.osm.pbf" for r in GEOFABRIK_REGIONS
+    )
+    for region in GEOFABRIK_REGIONS:
+        assert (root / f"{region}-261124.osm.pbf").read_bytes() == region_body(region)
+
+
+@pytest.mark.parametrize(
+    "broken_response",
+    [
+        lambda: httpx.Response(503, content=b"busy"),
+        lambda: httpx.Response(200, content=b"not the real extract"),
+    ],
+    ids=["http-503", "md5-mismatch"],
+)
+def test_main_osm_failed_region_does_not_stop_the_others(
+    in_tmp_repo, monkeypatch, capsys, broken_response
+):
+    """New Jersey (the middle region) fails; Pennsylvania and Delaware still land."""
+    assert GEOFABRIK_REGIONS == ("pennsylvania", "new-jersey", "delaware")
+    log: list[str] = []
+    patch_client(
+        monkeypatch, all_regions_client(log, broken={"new-jersey": broken_response})
+    )
+    assert ingest_main.main(["osm"]) == 1
+
+    out, err = capsys.readouterr()
+    assert out == wrote_line("pennsylvania") + wrote_line("delaware")
+    # httpx's status errors span two lines, so check order, not line numbers.
+    assert err.startswith(fetching_line("pennsylvania") + fetching_line("new-jersey"))
+    error_at = err.index("error: new-jersey: ")
+    assert err.index(fetching_line("delaware")) > error_at
+    assert err.endswith(
+        fetching_line("delaware") + "error: 1 of 3 regions failed: new-jersey\n"
+    )
+
+    root = in_tmp_repo / DEFAULT_OSM_DIR
+    assert sorted(p.name for p in root.iterdir()) == [
+        "delaware-261124.osm.pbf",
+        "pennsylvania-261124.osm.pbf",
+    ]
+
+
+def test_main_osm_all_regions_fail(in_tmp_repo, monkeypatch, capsys):
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route to host", request=request)
+
+    patch_client(monkeypatch, httpx.Client(transport=httpx.MockTransport(unreachable)))
+    assert ingest_main.main(["osm"]) == 1
+
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err.count("no route to host") == len(GEOFABRIK_REGIONS)
+    assert err.endswith(
+        "error: 3 of 3 regions failed: pennsylvania, new-jersey, delaware\n"
+    )
+    assert not (in_tmp_repo / "data").exists()
+
+
+def test_main_osm_unexpected_errors_propagate(in_tmp_repo, monkeypatch):
+    """A bug (not a fetch failure) keeps its traceback and stops the run."""
+    calls: list[str] = []
+
+    def buggy(client, region):
+        calls.append(region)
+        raise RuntimeError("bug")
+
+    patch_client(monkeypatch, httpx.Client())
+    monkeypatch.setattr(ingest_main, "fetch_extract", buggy)
+    with pytest.raises(RuntimeError, match="bug"):
+        ingest_main.main(["osm"])
+    assert calls == ["pennsylvania"]
+
+
+def test_main_osm_ctrl_c_stops_every_region(in_tmp_repo, monkeypatch):
+    calls: list[str] = []
+
+    def interrupted(client, region):
+        calls.append(region)
+        raise KeyboardInterrupt
+
+    patch_client(monkeypatch, httpx.Client())
+    monkeypatch.setattr(ingest_main, "fetch_extract", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        ingest_main.main(["osm"])
+    assert calls == ["pennsylvania"]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [([], "alerts"), (["alerts"], "alerts"), (["osm"], "osm")],
+    ids=["default", "alerts", "osm"],
+)
+def test_main_source_picks_the_fetcher(in_tmp_repo, monkeypatch, argv, expected):
+    called: list[str] = []
+
+    def fake_alerts(client):
+        called.append("alerts")
+        return DEFAULT_OSM_DIR / "unused"
+
+    def fake_osm(client, region):
+        called.append("osm")
+        return DEFAULT_OSM_DIR / "unused"
+
+    patch_client(monkeypatch, httpx.Client())
+    monkeypatch.setattr(ingest_main, "save_alerts_snapshot", fake_alerts)
+    monkeypatch.setattr(ingest_main, "fetch_extract", fake_osm)
+    assert ingest_main.main(argv) == 0
+    assert set(called) == {expected}
+
+
+@pytest.mark.parametrize("argv", [["rail"], ["OSM"], ["osm", "alerts"]])
+def test_main_rejects_unknown_source(argv):
+    with pytest.raises(SystemExit) as excinfo:
+        ingest_main.main(argv)
+    assert excinfo.value.code == 2
