@@ -83,43 +83,23 @@ All under `web/data/` (gitignored):
 
 ```
 web/data/
-  current.json                  pointer to the newest build (written last)
-  builds/<build id>/
-    status.json                 provenance + totals + unmatched detours
-    routes.json                 the route catalog (sidebar), display order
-    network.geojson             overview lines, all routes, simplified
-    starts.geojson              start points of all placed detours
-    routes/<feed>-<route_id>.json   detail for one route (on focus)
+  status.json                   provenance + totals + unmatched detours
+  routes.json                   the route catalog (sidebar), display order
+  network.geojson               overview lines, all routes, simplified
+  starts.geojson                start points of all placed detours
+  routes/<feed>-<route_id>.json detail for one route (on focus)
 ```
 
-**Decided** (D3, the user's): **plain overwrite** of the files in
-`web/data/` (no history needed); the build directories and
-`current.json` below are dropped in P6. The rejected option: builds in
-their own directory + a pointer file. Each
-file is written atomically already (`write_bytes_atomic`), but a *set* of
-files isn't: a page loading mid-export could mix old `routes.json` with
-new `network.geojson`. Writing a whole build to `builds/<id>/` and then
-replacing `current.json` (atomically, last) makes a build appear all at
-once. It also suits static hosting later (build files never change, so
-they cache forever; only `current.json` must not be cached). Keep the
-newest 3 builds, delete older ones after the pointer moves. The simpler
-alternative is plain overwrite of `web/data/*.json` (accepting a rare
-mixed read).
-
-`<build id>` = the snapshot stamp plus a short content hash, e.g.
-`2026-11-25T121123Z-3f9a1c2e`, so re-exporting the same snapshot with new
-GTFS or code gives a new directory.
-
-### `current.json`
-
-```json
-{"schema_version": 1, "build": "builds/2026-11-25T121123Z-3f9a1c2e/"}
-```
-
-- `schema_version`: an integer, bumped on any breaking change to any
-  file. The page refuses a version it doesn't know, with an error naming
-  the export command (a stale page or stale data, not a silent half-map).
-- `build`: path relative to `web/data/`, ends with `/`.
+**Decided** (D3, the user's): **plain overwrite** of these files on each
+export (no history needed). Each file is replaced atomically
+(`write_bytes_atomic`), but the set isn't: a page loading mid-export may
+rarely mix old and new files (accepted). Route files for routes that no
+longer exist are deleted after the new ones are written. The page reads
+`status.json` first and refuses a `schema_version` it doesn't know, with
+an error naming the export command (a stale page or stale data, not a
+silent half-map). Rejected: each export in its own `builds/<id>/`
+directory plus a `current.json` pointer written last (all-at-once
+builds, cache-friendly for hosting; revisit if mixed reads ever matter).
 
 ### `status.json`
 
@@ -295,10 +275,10 @@ nothing reaches into parse/match).
   `route_catalog(...)`, `network_collection(...)`, `starts_collection(...)`,
   `route_detail(...)`, `detour_object(detour, key)`, `status(...)`.
   Reuse `route_properties`/`_css_color` logic where it fits.
-- `export/write.py` (I/O): `write_build(files: dict[relative path,
-  bytes], root=web/data) -> build dir` (writes the directory, then
-  `current.json`, then prunes old builds), JSON encoding as
-  `write_geojson` does (`allow_nan=False`, UTF-8, compact).
+- `export/write.py` (I/O): `write_site(files: dict[relative path,
+  JSON value], root=web/data)` (each file atomically, then deletes stale
+  `routes/<key>.json`), JSON encoding as `write_geojson` does
+  (`allow_nan=False`, UTF-8, compact).
 - `export/__main__.py`: a new subcommand `export site [detours.json]`
   (newest by default, like `export detours`). Needs `load_directions` and
   both feeds' routes (rail routes appear in the catalog even without
@@ -315,7 +295,7 @@ web/
   index.html          layout only: #sidebar, #map, #status, #error
   css/app.css         styles moved out of index.html
   js/main.js          bootstrap: load data, build map + sidebar, wire state
-  js/data.js          fetch current.json -> build files; schema check;
+  js/data.js          fetch status.json (schema check) + the others;
                       route detail cache (Map key -> Promise)
   js/state.js         one state object + subscribe(); URL hash sync
   js/mapview.js       MapLibre sources/layers/events (the only module
@@ -388,8 +368,8 @@ that then notify subscribers (sidebar and map re-render from state):
   sections fed by new contract files (bump `schema_version` or add
   optional files). Live vehicles need data refreshed every ~15-30 s,
   which static builds can't do: a live endpoint (or a proxy, if SEPTA's
-  API lacks CORS headers: **check** before planning it) outside the
-  build directory.
+  API lacks CORS headers: **check** before planning it) outside
+  `web/data/`'s static files.
 
 ## Order of work
 
@@ -407,14 +387,14 @@ Python (the contract):
 4. **P4** `detour_object` + `route_detail` (directions, all shapes at
    2 m, detours).
 5. **P5** `network_collection`, `starts_collection`, `status`.
-6. **P6** `write_build` (directory, pointer, pruning; atomic pointer
-   last) + the `export site` subcommand. Real run: report file sizes.
+6. **P6** `write_site` (overwrite, delete stale route files) + the
+   `export site` subcommand. Real run: report file sizes.
 
 Web (plain JS):
 7. **W1** Split `map.js` into the modules above with **no visible
    change** (still reads `detours.geojson`); `node --test` for
    `format.js`. Fix the "1 lines" plural while here.
-8. **W2** `data.js` reads `current.json` -> `status`, `routes`,
+8. **W2** `data.js` reads `status` (schema check), `routes`,
    `network`, `starts`; overview map + status line. Then remove `export
    detours` (if D7 confirmed).
 9. **W3** Sidebar: grouped list, search, mode chips, "Detoured now",
@@ -464,5 +444,5 @@ first: (1) static hosting + a scheduled job (every 5-10 min) running
 `ingest -> match -> export site` and publishing `web/` (GTFS and the
 24 MB street cache cached between runs, rebuilt rarely); (2) the same
 plus a small proxy for live vehicles, if needed; (3) a real backend only
-if those fall short. `current.json` must be served uncached; build
-directories can be cached forever.
+if those fall short. With plain overwrite, `web/data/` must be served
+with short cache lifetimes (or revisit D3's build directories).

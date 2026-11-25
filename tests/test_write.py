@@ -10,10 +10,13 @@ from pathlib import Path
 
 import pytest
 
+from septa_detours.export import write
 from septa_detours.export.write import (
     DEFAULT_WEB_DATA_DIR,
+    SITE_FILES,
     route_geojson_path,
     write_geojson,
+    write_site,
 )
 
 # Hand-built rather than made with ``geojson.py``, so these tests only
@@ -237,3 +240,146 @@ def test_interrupted_write_leaves_existing_file_unchanged(tmp_path, monkeypatch)
 
     assert path.read_bytes() == before
     assert [p.name for p in tmp_path.iterdir()] == ["bus-21.geojson"]
+
+
+# --- write_site ------------------------------------------------------------------
+
+# Small stand-ins: write_site only encodes, so any JSON value will do.
+SITE = {
+    "status.json": {"schema_version": 1, "snapshot": "2026-11-25T121123Z.json"},
+    "routes/bus-21.json": {"key": "bus-21", "long_name": "Chestnut\u2013Walnut"},
+    "routes.json": [{"key": "bus-21"}, {"key": "rail-AIR"}],
+    "network.geojson": {"type": "FeatureCollection", "features": []},
+    "routes/rail-AIR.json": {"key": "rail-AIR"},
+    "starts.geojson": {"type": "FeatureCollection", "features": []},
+}
+
+
+def files_under(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def test_site_files_are_the_contract_ones() -> None:
+    assert {
+        "status.json",
+        "routes.json",
+        "network.geojson",
+        "starts.geojson",
+    } == SITE_FILES
+
+
+def test_write_site_writes_every_file(tmp_path: Path) -> None:
+    write_site(SITE, tmp_path)
+    assert files_under(tmp_path) == {
+        name: (
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode()
+        for name, value in SITE.items()
+    }
+
+
+def test_write_site_keeps_non_ascii_text(tmp_path: Path) -> None:
+    write_site(SITE, tmp_path)
+    text = (tmp_path / "routes" / "bus-21.json").read_text(encoding="utf-8")
+    assert text == '{"key":"bus-21","long_name":"Chestnut\u2013Walnut"}\n'
+
+
+def test_write_site_writes_routes_first_and_status_last(tmp_path: Path) -> None:
+    written = write_site(SITE, tmp_path)
+    assert [path.relative_to(tmp_path).as_posix() for path in written] == [
+        "routes/bus-21.json",
+        "routes/rail-AIR.json",
+        "routes.json",
+        "network.geojson",
+        "starts.geojson",
+        "status.json",
+    ]
+
+
+def test_write_site_replaces_old_files(tmp_path: Path) -> None:
+    (tmp_path / "status.json").write_text("old")
+    write_site({"status.json": {"schema_version": 1}}, tmp_path)
+    assert (tmp_path / "status.json").read_text() == '{"schema_version":1}\n'
+
+
+def test_write_site_deletes_stale_route_files_only(tmp_path: Path) -> None:
+    routes = tmp_path / "routes"
+    routes.mkdir()
+    for name in (
+        "bus-9.json",
+        "rail-CHW.json",
+        "notes.txt",
+        "README.json",
+        "bus-9.json.bak",
+    ):
+        (routes / name).write_text("old")
+    (routes / "bus-1.json").mkdir()  # a directory with a route-file name
+    write_site(SITE, tmp_path)
+    assert sorted(path.name for path in routes.iterdir()) == [
+        "README.json",
+        "bus-1.json",
+        "bus-21.json",
+        "bus-9.json.bak",
+        "notes.txt",
+        "rail-AIR.json",
+    ]
+
+
+def test_write_site_without_route_files(tmp_path: Path) -> None:
+    write_site({"status.json": {}, "routes.json": []}, tmp_path)
+    assert sorted(files_under(tmp_path)) == ["routes.json", "status.json"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "../status.json",
+        "/tmp/status.json",
+        "other.json",
+        "routes/../status.json",
+        "routes/sub/bus-1.json",
+        "routes/bus 21.json",
+        "routes/tram-1.json",
+        "routes/bus-21.geojson",
+        "routes/",
+        "routes/bus-21xjson",
+        "routes/bus-21.json.bak",
+        "stops/bus-21.json",
+    ],
+)
+def test_write_site_rejects_other_paths_and_writes_nothing(
+    tmp_path: Path, name: str
+) -> None:
+    with pytest.raises(ValueError, match="not data contract files"):
+        write_site({**SITE, name: {}}, tmp_path)
+    assert files_under(tmp_path) == {}
+
+
+def test_write_site_nan_anywhere_writes_nothing(tmp_path: Path) -> None:
+    (tmp_path / "status.json").write_text("old")
+    files = {**SITE, "starts.geojson": {"x": math.nan}}
+    with pytest.raises(ValueError, match="Out of range float"):
+        write_site(files, tmp_path)
+    assert files_under(tmp_path) == {"status.json": b"old"}
+
+
+def test_write_site_failed_write_keeps_stale_files(tmp_path: Path, monkeypatch) -> None:
+    routes = tmp_path / "routes"
+    routes.mkdir()
+    (routes / "bus-9.json").write_text("old")
+    real_write = write.write_bytes_atomic
+
+    def fail_on_network(content: bytes, path: Path) -> None:
+        if path.name == "network.geojson":
+            raise OSError("disk full")
+        real_write(content, path)
+
+    monkeypatch.setattr(write, "write_bytes_atomic", fail_on_network)
+    with pytest.raises(OSError, match="disk full"):
+        write_site(SITE, tmp_path)
+    assert (routes / "bus-9.json").read_text() == "old"
+    assert not (tmp_path / "status.json").exists()

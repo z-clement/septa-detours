@@ -15,6 +15,7 @@ Output format decisions (see ``write_geojson``):
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 from septa_detours.export.geojson import FeatureCollection
@@ -28,6 +29,15 @@ DEFAULT_WEB_DATA_DIR = Path("web/data")
 # SEPTA route_id matches today ("21", "L1", "AIR", ...), so this is a guard
 # against future data, not a filter for current data.
 _SAFE_ROUTE_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+SITE_FILES = frozenset(
+    {"status.json", "routes.json", "network.geojson", "starts.geojson"}
+)
+"""The contract's fixed files (``export/contract.py``); route details go in
+``routes/<key>.json``."""
+
+_ROUTE_FILE = re.compile(r"(?:bus|rail)-[A-Za-z0-9_-]+\.json")
+"""A route detail file's name: ``<feed>-<route_id>.json``."""
 
 
 def route_geojson_path(
@@ -106,7 +116,72 @@ def write_geojson(collection: FeatureCollection, path: Path) -> None:
             serialize (e.g. a stray polars object).
         OSError: If the directory or file can't be written.
     """
-    text = json.dumps(
-        collection, allow_nan=False, ensure_ascii=False, separators=(",", ":")
+    write_bytes_atomic(_encode_json(collection), path)
+
+
+def write_site(
+    files: Mapping[str, object], root: Path = DEFAULT_WEB_DATA_DIR
+) -> list[Path]:
+    """Write the data contract's files under ``root``, replacing old ones.
+
+    Steps:
+
+    1. Check every path: only ``SITE_FILES`` and ``routes/<key>.json``
+       (so nothing can land outside ``root``). Nothing is written if any
+       is wrong.
+    2. Encode every file in memory (as ``write_geojson`` does), so a NaN
+       anywhere fails before any file changes.
+    3. Write each atomically: route files, then the rest, ``status.json``
+       last (the page reads it first, so it should describe a finished
+       export). A failure part-way leaves some files new and some old:
+       accepted (plain overwrite, decided), and the next export fixes it.
+    4. Delete stale route files: ``routes/*.json`` with a route-file name
+       that wasn't written now (a route gone from GTFS). Other files are
+       left alone.
+
+    Args:
+        files: Relative path (``"routes/bus-21.json"``) -> JSON value.
+        root: The page's data directory.
+
+    Returns:
+        The paths written, in writing order.
+
+    Raises:
+        ValueError: A path isn't part of the contract, or a value has NaN
+            or Infinity.
+        TypeError: A value ``json`` can't serialize.
+        OSError: A file can't be written or deleted.
+    """
+    bad = sorted(name for name in files if not _is_site_file(name))
+    if bad:
+        raise ValueError(f"not data contract files: {bad}")
+    encoded = {name: _encode_json(value) for name, value in files.items()}
+    order = sorted(
+        encoded, key=lambda name: (name == "status.json", name in SITE_FILES)
     )
-    write_bytes_atomic((text + "\n").encode("utf-8"), path)
+    written = []
+    for name in order:
+        path = root / name
+        write_bytes_atomic(encoded[name], path)
+        written.append(path)
+    routes_dir = root / "routes"
+    if routes_dir.is_dir():
+        for path in routes_dir.iterdir():
+            stale = f"routes/{path.name}" not in encoded
+            if stale and path.is_file() and _ROUTE_FILE.fullmatch(path.name):
+                path.unlink()
+    return written
+
+
+def _is_site_file(name: str) -> bool:
+    """Whether ``name`` is a contract file's path relative to the data dir."""
+    if name in SITE_FILES:
+        return True
+    folder, _, file_name = name.partition("/")
+    return folder == "routes" and _ROUTE_FILE.fullmatch(file_name) is not None
+
+
+def _encode_json(value: object) -> bytes:
+    """Compact UTF-8 JSON plus a newline (see ``write_geojson``'s steps 1-5)."""
+    text = json.dumps(value, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
+    return (text + "\n").encode("utf-8")

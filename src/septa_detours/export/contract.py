@@ -4,13 +4,14 @@ The page reads only these files, all under ``web/data/``; nothing else.
 ``docs/web-plan.md`` ("Part 1: the data contract") explains each one.
 Layout::
 
-    current.json                    CurrentPointer: where the newest build is
-    builds/<build id>/
-      status.json                   Status
-      routes.json                   list[RouteEntry], in display order
-      network.geojson               FeatureCollection (NETWORK_PROPERTIES)
-      starts.geojson                FeatureCollection (START_PROPERTIES)
-      routes/<key>.json             RouteDetail
+    status.json             Status (read first: its schema_version)
+    routes.json             list[RouteEntry], in display order
+    network.geojson         FeatureCollection (NETWORK_PROPERTIES)
+    starts.geojson          FeatureCollection (START_PROPERTIES)
+    routes/<key>.json       RouteDetail
+
+Each export overwrites these in place (decided: no history), one file at
+a time; a page loading mid-export may rarely mix old and new files.
 
 Plain JSON files (not GeoJSON) keep lists as lists and missing values as
 explicit ``null``. In GeoJSON files, MapLibre drops null properties and
@@ -38,14 +39,6 @@ type Timing = Literal["active", "upcoming", "ended", "unknown"]
 
 type Bounds = tuple[Position, Position]
 """``([west, south], [east, north])``, as MapLibre's ``fitBounds`` takes."""
-
-
-class CurrentPointer(TypedDict):
-    """``current.json``: the only file whose content changes in place."""
-
-    schema_version: int
-    build: str
-    """Path relative to ``web/data/``, ending in ``/``."""
 
 
 class StartPointObject(TypedDict):
