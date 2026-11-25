@@ -10,9 +10,12 @@ import pytest
 from septa_detours.streets.cache import (
     BUILD_COMMAND,
     DEFAULT_MARGIN_M,
+    DEFAULT_OSM_DIR,
     DEFAULT_STREET_CACHE,
+    FETCH_COMMAND,
     StreetCacheInfo,
     combine_street_ways,
+    find_latest_extract,
     read_street_cache,
     read_street_cache_info,
     service_bbox,
@@ -452,3 +455,84 @@ def test_info_malformed_metadata(tmp_path, overrides):
     write_raw_parquet(path, ways(BROAD), good_metadata(**overrides))
     with pytest.raises(ValueError, match="malformed provenance"):
         read_street_cache_info(path)
+
+
+# --- find_latest_extract -------------------------------------------------------
+
+
+def touch_all(root: Path, *names: str) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (root / name).write_bytes(b"")
+
+
+def test_find_latest_picks_newest_date(tmp_path):
+    touch_all(
+        tmp_path,
+        "delaware-261101.osm.pbf",
+        "delaware-261124.osm.pbf",
+        "delaware-260930.osm.pbf",
+    )
+    assert (
+        find_latest_extract("delaware", tmp_path)
+        == tmp_path / "delaware-261124.osm.pbf"
+    )
+
+
+def test_find_latest_compares_whole_dates_across_years(tmp_path):
+    """270102 (2 Jan 2027) is newer than 261231 (31 Dec 2026)."""
+    touch_all(tmp_path, "delaware-261231.osm.pbf", "delaware-270102.osm.pbf")
+    assert find_latest_extract("delaware", tmp_path).name == "delaware-270102.osm.pbf"
+
+
+def test_find_latest_ignores_everything_else(tmp_path):
+    touch_all(
+        tmp_path,
+        "delaware-261101.osm.pbf",
+        "delaware-261231.osm.pbf.tmp",  # an interrupted download
+        "delaware-latest.osm.pbf",
+        "delaware-2612311.osm.pbf",
+        "delaware-26123.osm.pbf",
+        "delaware-261231.osm.bz2",
+        "delaware-261231.osm.pbf.md5",
+        "xdelaware-261231.osm.pbf",
+        "new-jersey-261231.osm.pbf",
+    )
+    assert find_latest_extract("delaware", tmp_path).name == "delaware-261101.osm.pbf"
+
+
+def test_find_latest_region_prefix_does_not_match_longer_region(tmp_path):
+    """A region "new" must not pick up New Jersey's file."""
+    touch_all(tmp_path, "new-jersey-261124.osm.pbf")
+    with pytest.raises(FileNotFoundError, match="no new extract"):
+        find_latest_extract("new", tmp_path)
+    assert (
+        find_latest_extract("new-jersey", tmp_path).name == "new-jersey-261124.osm.pbf"
+    )
+
+
+def test_find_latest_region_is_not_a_regex(tmp_path):
+    """Region text is escaped: "." in a region name matches only a dot."""
+    touch_all(tmp_path, "newxjersey-261124.osm.pbf")
+    with pytest.raises(FileNotFoundError):
+        find_latest_extract("new.jersey", tmp_path)
+
+
+@pytest.mark.parametrize("make_dir", [False, True], ids=["no-directory", "empty"])
+def test_find_latest_missing_names_the_fetch_command(tmp_path, make_dir):
+    root = tmp_path / "osm"
+    if make_dir:
+        root.mkdir()
+    with pytest.raises(FileNotFoundError, match="no delaware extract in") as excinfo:
+        find_latest_extract("delaware", root)
+    assert FETCH_COMMAND in str(excinfo.value)
+    assert FETCH_COMMAND == "uv run python -m septa_detours.ingest osm"
+
+
+def test_find_latest_default_root(tmp_path, monkeypatch):
+    assert Path("data/raw/osm") == DEFAULT_OSM_DIR
+    monkeypatch.chdir(tmp_path)
+    touch_all(tmp_path / DEFAULT_OSM_DIR, "delaware-261124.osm.pbf")
+    assert (
+        find_latest_extract("delaware") == DEFAULT_OSM_DIR / "delaware-261124.osm.pbf"
+    )

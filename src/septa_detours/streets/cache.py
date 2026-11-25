@@ -8,6 +8,7 @@ cache is rebuilt by hand when the extracts are refreshed, not on every run.
 import io
 import json
 import math
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,11 @@ DEFAULT_STREET_CACHE = Path("data/processed/streets.parquet")
 
 # Named in error messages when the cache is missing or out of date.
 BUILD_COMMAND = "uv run python -m septa_detours.streets"
+
+# Where ingest saves the raw Geofabrik extracts (relative to the repo root),
+# and the command that fetches them (named when one is missing).
+DEFAULT_OSM_DIR = Path("data/raw/osm")
+FETCH_COMMAND = "uv run python -m septa_detours.ingest osm"
 
 # Parquet key-value metadata keys (values are JSON strings).
 _SOURCES_KEY = "septa_detours:sources"
@@ -248,3 +254,34 @@ def read_street_cache_info(path: Path = DEFAULT_STREET_CACHE) -> StreetCacheInfo
 
     west, south, east, north = (float(v) for v in bbox)
     return StreetCacheInfo(sources=tuple(sources), bbox=(west, south, east, north))
+
+
+def find_latest_extract(region: str, root: Path = DEFAULT_OSM_DIR) -> Path:
+    """Return the newest saved extract for ``region``, by the date in its name.
+
+    Extracts are saved as ``<region>-<YYMMDD>.osm.pbf`` (Geofabrik's dated
+    name). Names are matched exactly, so ``"new"`` would not pick up
+    ``new-jersey-261124.osm.pbf``, and leftovers like ``*.osm.pbf.tmp`` or
+    ``*-latest.osm.pbf`` are ignored. ``YYMMDD`` strings sort in date order
+    (within one century).
+
+    Only lists ``root``; doesn't open any file.
+
+    Args:
+        region: Geofabrik's region name, e.g. ``"new-jersey"``.
+        root: Directory holding the extracts. Defaults to ``data/raw/osm``.
+
+    Raises:
+        FileNotFoundError: If ``root`` doesn't exist or has no extract for
+            ``region``; the message names the fetch command.
+    """
+    pattern = re.compile(re.escape(region) + r"-(\d{6})\.osm\.pbf")
+    candidates = (
+        [path for path in root.iterdir() if pattern.fullmatch(path.name)]
+        if root.is_dir()
+        else []
+    )
+    if not candidates:
+        msg = f"no {region} extract in {root}; fetch it with: {FETCH_COMMAND}"
+        raise FileNotFoundError(msg)
+    return max(candidates, key=lambda path: path.name)
