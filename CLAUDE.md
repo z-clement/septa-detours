@@ -22,8 +22,9 @@ This is a learning project. I want to write most of the implementation myself.
 
 ## Architecture
 
-Three stages. Each stage only talks to the next through the `Detour` model.
-Never let one stage reach into another's internals.
+Three stages. Each stage only talks to the next through the shared models
+in `model.py`: parse -> match through `DetourNotice`, stage 2 -> export
+through `Detour`. Never let one stage reach into another's internals.
 
 1. **Ingest** (`src/septa_detours/ingest/`): fetch only. Save raw responses
    untouched to `data/raw/`. No parsing or interpretation here.
@@ -32,8 +33,8 @@ Never let one stage reach into another's internals.
 3. **Export + present** (`export/`, `web/`): write GeoJSON for the frontend and
    render it on a map.
 
-The shared data type lives in `src/septa_detours/model.py`. If the `Detour`
-model changes, flag it, since every stage depends on it.
+The shared data types live in `src/septa_detours/model.py`. If any model
+there changes, flag it, since every stage depends on them.
 
 ## Repo layout
 
@@ -63,6 +64,8 @@ notebooks/       exploration only, not production code
   must be `.venv/bin/python`
 - GTFS tables: polars (added). Shapely/geometry stays out of polars; build
   it from plain coordinate lists in `match/`
+- Models: pydantic v2 (added). Validates structure only; messy-text
+  interpretation lives in pure functions in `parse/`, never in validators
 - HTTP: httpx (added, ingest only). Tests use `httpx.MockTransport`; no
   test touches the network
 - Candidate libraries (ask before adding each): shapely + pyproj (match;
@@ -318,9 +321,44 @@ detours. Quirks that matter for parse/match:
   St, Right on Broad St, ... Reg Rt"` (SB = southbound, Reg Rt = back on
   the regular route, "btwn"). `location_end` can be `""`.
 
-Next: design the `Detour` model in `model.py` (clean session), based on
-the snapshot fields above. Keep collecting snapshots over several days
-and copy ugly real detours into `tests/fixtures/`. Later, `match/` must
+Done: `model.py` (written by Claude at my request). All models share a
+`_Frozen` base: `frozen=True, extra="forbid", strict=True`.
+- `SourceText`: the nine raw API strings verbatim + snapshot file name
+  (a name, not a path).
+- `DetourNotice` (parse output): `source`, `source_key` (hash of
+  normalized `(route_id, location_start, start)`; not an identity),
+  `start`/`end: AwareDatetime | None`, cleaned `location_start`,
+  `location_end`, `reason`, `direction`, `issues`. `None` = couldn't
+  determine; the why goes in `issues`.
+- `Detour` = `notice` + `match: RouteMatch | None` (None = match failed;
+  no "not attempted" state) + its own match `issues`. `RouteMatch` has
+  `feed`, GTFS `route_id`, `shapes: tuple[AffectedShape, ...]`
+  (`shape_id`, `direction_id`). No detour path geometry yet.
+Decisions:
+- One API `detour` list entry = one `DetourNotice` (45 of 57 routes had
+  several). The raw API shape is parse's private model, not in `model.py`.
+- `status` is a plain `@property`, not `computed_field`: a computed field
+  is dumped to JSON and `extra="forbid"` then rejects it on reload.
+  `unknown` = no `location_start`, or neither `start` nor `end`;
+  `complete` = start, end, location_start, direction all known and no
+  issues (`location_end`/`reason` optional); else `partial`.
+- `CleanText` (pattern `^\S(?:.*\S)?$`): parsed text must be stripped and
+  non-empty; blank -> `None`. Inner whitespace is allowed.
+- `Direction` = NB/SB/EB/WB only. Real messages also say "Eastbound",
+  "W/B"; parse normalizes. No inbound/both seen.
+- `direction_id` is strict `int` with `ge=0, le=1`, not `Literal[0, 1]`
+  (Literal accepts `True` and `1.0` even in strict mode).
+- `start`/`end` only need *a* zone; choosing America/New_York is parse's
+  job, and so is flagging `end < start` as an issue.
+Tests: `tests/test_model.py` (35; `make_notice(**overrides)` over a real
+route 2 entry). 15 mutations, all caught. 185 tests total.
+
+Open: ~13 entries are discontinued stops ("Discontinued Transit Stop, at
+Ogontz and Roselyn"), not reroutes, and have no direction or turns. The
+model has no `kind` field; decide when building parse.
+
+Next: start `tests/fixtures/` from the ugliest real entries, then
+`parse/`. Keep collecting snapshots over several days. Later, `match/` must
 map API route IDs and detour text ("Route 21", "the L") to GTFS
 `route_id` via `route_short_name` (not always equal to `route_id`;
 check rail).

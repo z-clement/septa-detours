@@ -1,0 +1,182 @@
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
+
+import pytest
+from pydantic import ValidationError
+
+from septa_detours.model import (
+    AffectedShape,
+    Detour,
+    DetourNotice,
+    RouteMatch,
+    SourceText,
+)
+
+PHILLY = ZoneInfo("America/New_York")
+
+# Real entry from the 2026-11-25T025344Z snapshot (route 2), verbatim.
+SOURCE_FIELDS = {
+    "snapshot": "2026-11-25T025344Z.json",
+    "route_id": "bus_route_2",
+    "mode": "Bus",
+    "location_start": "17th & Washington",
+    "location_end": "17th &  Mifflin",
+    "start": "11/11/2026   6:30 AM",
+    "end": "11/27/2026   4:00 PM",
+    "message": "7am - 4pm Mon thru Fri, 11/27/26, SB via 17th, Left on "
+    "Washington, Right on Broad, Right on Passyunk, Left on 17th, Reg Rt",
+    "reason": "Contractor",
+}
+
+
+def make_source(**overrides) -> SourceText:
+    return SourceText(**(SOURCE_FIELDS | overrides))
+
+
+def make_notice(**overrides) -> DetourNotice:
+    fields = {
+        "source": make_source(),
+        "source_key": "abc123",
+        "start": datetime(2026, 11, 11, 6, 30, tzinfo=PHILLY),
+        "end": datetime(2026, 11, 27, 16, 0, tzinfo=PHILLY),
+        "location_start": "17th & Washington",
+        "location_end": "17th & Mifflin",
+        "reason": "Contractor",
+        "direction": "SB",
+        "issues": (),
+    }
+    return DetourNotice(**(fields | overrides))
+
+
+def make_detour() -> Detour:
+    match = RouteMatch(
+        feed="bus",
+        route_id="2",
+        shapes=(AffectedShape(shape_id="001005", direction_id=1),),
+    )
+    return Detour(notice=make_notice(), match=match, issues=("one issue",))
+
+
+# --- status -----------------------------------------------------------------
+
+
+def test_status_complete_when_all_required_fields_known():
+    assert make_notice().status == "complete"
+
+
+@pytest.mark.parametrize("field", ["location_end", "reason"])
+def test_status_complete_without_optional_fields(field):
+    assert make_notice(**{field: None}).status == "complete"
+
+
+@pytest.mark.parametrize("field", ["start", "end", "direction"])
+def test_status_partial_when_a_required_field_is_missing(field):
+    assert make_notice(**{field: None}).status == "partial"
+
+
+def test_status_partial_when_any_issue_is_recorded():
+    assert make_notice(issues=("reason: odd",)).status == "partial"
+
+
+def test_status_unknown_without_location_start():
+    assert make_notice(location_start=None).status == "unknown"
+
+
+def test_status_unknown_without_start_and_end():
+    assert make_notice(start=None, end=None).status == "unknown"
+
+
+def test_status_is_not_serialized():
+    assert "status" not in make_notice().model_dump()
+
+
+# --- round trip ---------------------------------------------------------------
+
+
+def test_detour_round_trips_through_json():
+    detour = make_detour()
+    assert Detour.model_validate_json(detour.model_dump_json()) == detour
+
+
+def test_round_trip_keeps_shape_id_leading_zeros():
+    detour = Detour.model_validate_json(make_detour().model_dump_json())
+    assert detour.match is not None
+    assert detour.match.shapes[0].shape_id == "001005"
+
+
+def test_failed_match_round_trips_as_null():
+    detour = Detour(notice=make_notice(), match=None)
+    assert '"match":null' in detour.model_dump_json()
+    assert Detour.model_validate_json(detour.model_dump_json()) == detour
+
+
+# --- strictness ---------------------------------------------------------------
+
+
+def test_models_are_frozen():
+    notice = make_notice()
+    with pytest.raises(ValidationError):
+        notice.reason = "Other"  # ty: ignore[invalid-assignment]
+
+
+def test_unknown_field_is_rejected():
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        make_notice(colour="red")
+
+
+def test_naive_datetime_is_rejected():
+    with pytest.raises(ValidationError, match="timezone"):
+        make_notice(start=datetime(2026, 11, 11, 6, 30))  # noqa: DTZ001
+
+
+def test_aware_non_philly_datetime_is_accepted():
+    # The model only requires *a* zone; choosing America/New_York is parse's job.
+    assert make_notice(start=datetime(2026, 11, 11, tzinfo=UTC)).status == "complete"
+
+
+def test_raw_string_is_not_coerced_to_datetime():
+    with pytest.raises(ValidationError):
+        make_notice(start="2026-11-11T06:30:00-05:00")
+
+
+def test_unknown_direction_is_rejected():
+    with pytest.raises(ValidationError):
+        make_notice(direction="Eastbound")
+
+
+@pytest.mark.parametrize("value", ["", " ", "Construction ", " Construction"])
+def test_unclean_text_is_rejected(value):
+    with pytest.raises(ValidationError, match="string_pattern_mismatch"):
+        make_notice(reason=value)
+
+
+def test_inner_whitespace_is_allowed_in_clean_text():
+    assert make_notice(location_start="17th &  Mifflin").location_start == (
+        "17th &  Mifflin"
+    )
+
+
+def test_unclean_issue_is_rejected():
+    with pytest.raises(ValidationError):
+        make_notice(issues=("",))
+
+
+def test_source_text_keeps_whitespace_verbatim():
+    source = make_source(reason="Construction  ", location_end="")
+    assert (source.reason, source.location_end) == ("Construction  ", "")
+
+
+@pytest.mark.parametrize("value", [0, 1, None])
+def test_direction_id_accepts_gtfs_values(value):
+    assert AffectedShape(shape_id="1", direction_id=value).direction_id == value
+
+
+@pytest.mark.parametrize("value", [2, -1, True, 1.0, "1"])
+def test_direction_id_rejects_other_values(value):
+    with pytest.raises(ValidationError):
+        AffectedShape(shape_id="1", direction_id=value)
+
+
+def test_unknown_feed_is_rejected():
+    with pytest.raises(ValidationError):
+        RouteMatch(feed="trolley", route_id="15")
