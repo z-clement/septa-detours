@@ -8,7 +8,9 @@ functions in this package, never of validators here (see CLAUDE.md).
 Not part of ``model.py`` on purpose: no other stage may depend on this shape.
 """
 
-from pydantic import BaseModel, ConfigDict
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 
 class _ApiModel(BaseModel):
@@ -45,6 +47,10 @@ class ApiRoute(_ApiModel):
     detour: tuple[ApiDetour, ...]
 
 
+_SNAPSHOT = TypeAdapter(Annotated[list[ApiRoute], Field(min_length=1)])
+"""Validator for a whole snapshot, built once at import."""
+
+
 def read_snapshot(content: bytes) -> list[ApiRoute]:
     """Validate a raw snapshot's bytes into route entries, in API order.
 
@@ -55,11 +61,16 @@ def read_snapshot(content: bytes) -> list[ApiRoute]:
         One ``ApiRoute`` per entry in the API list, in the same order.
 
     Raises:
-        pydantic.ValidationError: If the bytes aren't JSON, the top level
-            isn't a list, or any entry lacks a declared field. The whole
-            snapshot fails, not just the bad entry: a structural change
-            means the API changed, and that should be loud.
+        pydantic.ValidationError: If the bytes aren't valid UTF-8 JSON
+            (a BOM counts as invalid), the top level isn't a list, the list
+            is empty, or any entry lacks a declared field or has one of the
+            wrong type (e.g. ``null``). The whole snapshot fails, not just
+            the bad entry: a structural change means the API changed, and
+            that should be loud. An empty list is rejected because real
+            snapshots list every route, even those without detours; ``[]``
+            would otherwise read as "no detours anywhere".
+
+    Duplicate ``route_id`` values are not checked (none seen; not a shape
+    problem).
     """
-    # TODO: validate the whole list in one step (hint: pydantic's
-    #   TypeAdapter can validate JSON bytes directly into list[ApiRoute]).
-    raise NotImplementedError
+    return _SNAPSHOT.validate_json(content)
