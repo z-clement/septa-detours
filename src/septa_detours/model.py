@@ -18,14 +18,17 @@ Conventions:
   small, pure functions in ``parse/``, not in Pydantic validators.
 - Every model round-trips through JSON (``model_dump_json`` ->
   ``model_validate_json``), so ``data/processed/`` can be read back.
+  ``dump_detours`` / ``read_detours`` are the file format for a list of
+  ``Detour``s.
 
 The raw API JSON shape is *not* defined here: it is ``parse/``'s private
 input format.
 """
 
+from collections.abc import Sequence
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter
 
 from septa_detours.gtfs.load import Feed
 
@@ -255,3 +258,32 @@ class Detour(_Frozen):
     notice: DetourNotice
     match: RouteMatch | None
     issues: tuple[CleanText, ...] = ()
+
+
+# The file format between ``match/`` (writer) and ``export/`` (reader): a JSON
+# list of ``Detour`` objects. Use the two functions below, not this adapter.
+_DETOURS = TypeAdapter(list[Detour])
+
+
+def dump_detours(detours: Sequence[Detour]) -> bytes:
+    """Serialize detours as compact UTF-8 JSON with a trailing newline.
+
+    Input order is kept. An empty sequence gives ``[]`` + newline: a snapshot
+    with no detours is a real state, not an error. ``read_detours`` reads
+    the output back to equal ``Detour``s.
+    """
+    return _DETOURS.dump_json(list(detours)) + b"\n"
+
+
+def read_detours(content: bytes) -> list[Detour]:
+    """Read a JSON list of ``Detour``s, as written by ``dump_detours``.
+
+    ``[]`` is valid. Validation is the models' own (strict, unknown fields
+    rejected), so a file written by an older model version fails loudly
+    rather than loading with gaps.
+
+    Raises:
+        pydantic.ValidationError: On invalid JSON, a non-list top level, or
+            any entry that isn't a valid ``Detour``.
+    """
+    return _DETOURS.validate_json(content)

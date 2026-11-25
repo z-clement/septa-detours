@@ -15,6 +15,8 @@ from septa_detours.model import (
     Segment,
     SourceText,
     StartPoint,
+    dump_detours,
+    read_detours,
 )
 
 PHILLY = ZoneInfo("America/New_York")
@@ -349,3 +351,119 @@ def test_notice_places_round_trip_with_both_kinds():
     reloaded = DetourNotice.model_validate_json(notice.model_dump_json())
     assert reloaded == notice
     assert isinstance(reloaded.end_place, Segment)
+
+
+# --- dump_detours / read_detours ------------------------------------------------
+
+
+def make_detours() -> list[Detour]:
+    # Three different shapes of Detour, in a non-sorted order: matched and
+    # placed; matched but not placed, with a segment; route not matched.
+    placed = make_detour()
+    unplaced = Detour(
+        notice=make_notice(
+            source_key="zzz999",
+            start_place=Segment(street="Spruce", between=("34th", "36th")),
+        ),
+        match=RouteMatch(feed="bus", route_id="40", start_point=None),
+        issues=("start: segments are not placed yet",),
+    )
+    unmatched = Detour(
+        notice=make_notice(source_key="000aaa", direction=None),
+        match=None,
+        issues=("route: no GTFS route for 'bus_route_H'",),
+    )
+    return [placed, unplaced, unmatched]
+
+
+def test_detours_round_trip_in_order():
+    detours = make_detours()
+    assert read_detours(dump_detours(detours)) == detours
+
+
+def test_dump_accepts_any_sequence():
+    detours = make_detours()
+    assert dump_detours(tuple(detours)) == dump_detours(detours)
+
+
+def test_empty_detours_round_trip():
+    assert dump_detours([]) == b"[]\n"
+    assert read_detours(b"[]\n") == []
+
+
+def test_dump_is_compact_json_with_trailing_newline():
+    content = dump_detours(make_detours())
+    assert content.endswith(b"]\n")
+    assert content.count(b"\n") == 1
+    assert content.startswith(b'[{"notice":{"source":{"snapshot":')  # no spaces
+    assert json.loads(content)[0]["match"]["route_id"] == "2"
+
+
+def test_dump_writes_utf8_not_escapes():
+    # The en dash must survive as UTF-8 bytes, and read back equal.
+    detour = Detour(
+        notice=make_notice(reason="Parade \u2013 Thanksgiving"),
+        match=None,
+    )
+    content = dump_detours([detour])
+    assert "Parade \u2013 Thanksgiving".encode() in content
+    assert read_detours(content) == [detour]
+
+
+def test_dump_omits_status():
+    # ``status`` is a plain property; a dumped copy would be rejected on
+    # reload by extra="forbid".
+    assert b"status" not in dump_detours(make_detours())
+
+
+def test_read_accepts_no_trailing_newline():
+    content = dump_detours(make_detours()).rstrip(b"\n")
+    assert read_detours(content) == make_detours()
+
+
+def broken_detours(edit) -> bytes:
+    data = json.loads(dump_detours(make_detours()))
+    edit(data)
+    return json.dumps(data).encode()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(b"", id="empty-bytes"),
+        pytest.param(b"[", id="truncated"),
+        pytest.param(b"{}", id="object-top-level"),
+        pytest.param(b"null", id="null"),
+        pytest.param(b"[null]", id="null-entry"),
+        pytest.param(b"[{}]", id="empty-entry"),
+        pytest.param(
+            broken_detours(lambda d: d[1].update(extra=1)), id="unknown-field"
+        ),
+        pytest.param(
+            broken_detours(lambda d: d[0]["notice"].update(status="complete")),
+            id="status-field",
+        ),
+        pytest.param(
+            broken_detours(lambda d: d[0]["match"].pop("start_point")),
+            id="missing-start-point",
+        ),
+        pytest.param(
+            broken_detours(lambda d: d[2]["notice"].update(start="2026-11-11T06:30")),
+            id="naive-datetime",
+        ),
+        pytest.param(
+            broken_detours(lambda d: d[0]["match"].update(route_id=2)),
+            id="int-route-id",
+        ),
+        pytest.param(
+            # Lax mode would coerce "1" to 1; strict must not.
+            broken_detours(
+                lambda d: d[0]["match"]["shapes"][0].update(direction_id="1")
+            ),
+            id="string-direction-id",
+        ),
+    ],
+)
+def test_read_rejects_invalid_content(content):
+    with pytest.raises(ValidationError):
+        read_detours(content)
