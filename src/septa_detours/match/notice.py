@@ -1,4 +1,6 @@
-"""Turn one ``DetourNotice`` into a ``Detour`` by matching it to GTFS."""
+"""Turn ``DetourNotice`` objects into ``Detour`` objects by matching to GTFS."""
+
+from collections.abc import Iterable
 
 import polars as pl
 
@@ -45,3 +47,20 @@ def match_notice(notice: DetourNotice, routes: pl.DataFrame) -> Detour:
         match=RouteMatch(feed=feed, route_id=route_id),
         issues=(shapes_issue,),
     )
+
+
+def match_notices(
+    notices: Iterable[DetourNotice], routes: pl.DataFrame
+) -> list[Detour]:
+    """Match every notice: one ``Detour`` per notice, in input order.
+
+    Unmatched notices are kept (``match=None`` plus an issue), never
+    dropped, so the output always has as many items as the input. Catches
+    nothing itself: like ``match_notice``, only a failed route lookup
+    becomes an issue, and anything else propagates.
+
+    Args:
+        notices: E.g. the output of ``parse.notice.parse_snapshot``.
+        routes: Output of ``load.load_routes``.
+    """
+    return [match_notice(notice, routes) for notice in notices]

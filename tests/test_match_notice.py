@@ -1,4 +1,4 @@
-"""Tests for ``match.notice.match_notice``.
+"""Tests for ``match.notice.match_notice`` and ``match_notices``.
 
 Notices come from the real alert fixtures via ``parse_snapshot``; ``routes``
 is hand-built from real GTFS route IDs with ``routes_from_ids`` (conftest;
@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 from polars.exceptions import ColumnNotFoundError
 
-from septa_detours.match.notice import match_notice
+from septa_detours.match.notice import match_notice, match_notices
 from septa_detours.model import Detour, DetourNotice, RouteMatch
 from septa_detours.parse.notice import parse_snapshot
 
@@ -154,3 +154,76 @@ def test_every_fixture_notice_matches_and_round_trips(
     assert all(detour.match.shapes == () for detour in detours if detour.match)
     for detour in detours:
         assert detour == Detour.model_validate_json(detour.model_dump_json())
+
+
+# --- match_notices ----------------------------------------------------------
+
+# Deliberately unsorted (by name and by route), and APP has no items.
+MINI_SNAPSHOT_FIXTURES = (
+    "2026-11-25T025344Z__bus_route_55.json",  # 1 item
+    "2026-11-25T025344Z__APP.json",  # 0 items
+    "2026-11-25T025344Z__rr_route_mfo.json",  # 6 items
+    "2026-11-25T025344Z__bus_route_24.json",  # 4 items
+)
+
+
+@pytest.fixture
+def mini_notices(read_alert_fixture: Callable[[str], bytes]) -> list[DetourNotice]:
+    """Notices from several fixture entries parsed as one snapshot."""
+    entries = b",".join(read_alert_fixture(name) for name in MINI_SNAPSHOT_FIXTURES)
+    return parse_snapshot(b"[" + entries + b"]", SNAPSHOT)
+
+
+def test_batch_keeps_input_order(mini_notices, routes: pl.DataFrame):
+    """One ``Detour`` per notice, in the same order (not sorted by route)."""
+    detours = match_notices(mini_notices, routes)
+    assert [detour.notice for detour in detours] == mini_notices
+    route_ids = [detour.match.route_id for detour in detours if detour.match]
+    assert route_ids == ["55", *["L1_OWL"] * 6, *["24"] * 4]
+
+
+def test_batch_equals_one_by_one(mini_notices, routes: pl.DataFrame):
+    """The batch adds nothing and drops nothing beyond ``match_notice``."""
+    expected = [match_notice(notice, routes) for notice in mini_notices]
+    assert match_notices(mini_notices, routes) == expected
+
+
+def test_batch_keeps_unmatched_in_place(mini_notices, routes: pl.DataFrame):
+    """An unmatched notice stays at its index with ``match=None``."""
+    notices = list(mini_notices)
+    notices[3] = with_api_route_id(notices[3], "bus_route_H")
+    detours = match_notices(notices, routes)
+    assert len(detours) == len(notices)
+    assert detours[3].notice == notices[3]
+    assert detours[3].match is None
+    assert all(d.match is not None for i, d in enumerate(detours) if i != 3)
+
+
+def test_batch_keeps_equal_notices(fixture_notices, routes: pl.DataFrame):
+    """Equal notices each get their own ``Detour``; nothing is deduplicated.
+
+    Route 31 items 0-4 are byte-identical in both snapshots, so parsing
+    both fixtures under one snapshot name gives equal notices.
+    """
+    notices = fixture_notices("2026-11-25T025344Z__bus_route_31.json")
+    notices += fixture_notices("2026-11-25T121123Z__bus_route_31.json")
+    assert notices[0] in notices[1:]  # the premise: duplicates exist
+    detours = match_notices(notices, routes)
+    assert [detour.notice for detour in detours] == notices
+
+
+def test_batch_accepts_any_iterable(mini_notices, routes: pl.DataFrame):
+    """A one-shot generator works (consumed once) and gives a list."""
+    detours = match_notices((notice for notice in mini_notices), routes)
+    assert type(detours) is list
+    assert len(detours) == 11
+
+
+def test_batch_of_nothing_is_empty(routes: pl.DataFrame):
+    assert match_notices([], routes) == []
+
+
+def test_batch_propagates_non_value_errors(mini_notices, routes: pl.DataFrame):
+    """A bug in one lookup fails the whole batch; nothing is skipped."""
+    with pytest.raises(ColumnNotFoundError):
+        match_notices(mini_notices, routes.drop("feed"))
