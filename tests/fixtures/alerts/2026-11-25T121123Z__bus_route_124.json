@@ -1,0 +1,58 @@
+{
+  "route": "124",
+  "route_id": "bus_route_124",
+  "route_name": "124",
+  "sequence": "1124",
+  "mode": "Bus",
+  "isadvisory": "Yes",
+  "isdetour": "Y",
+  "isalert": "N",
+  "issuppend": "N",
+  "iselevator": "N",
+  "issuspended": "N",
+  "isstrike": "N",
+  "ismodifiedservice": "N",
+  "isdelays": "N",
+  "isdiversion": "N",
+  "isdetouralert": "N",
+  "last_updated": "May 16 2023 12:28AM",
+  "isSnow": "N",
+  "description": "Chesterbrook and King of Prussia to 13th-Market",
+  "alert": "",
+  "advisory": "<h3 class=\"separated\">Notice of Long-term Rerouting</h3><p>Due to the Market Street Bridge Rehabilitation project, this bus has been rerouted until August 2027. The route you see in the digital tools has been updated to reflect this information. For more information, visit <a href=\"https://wwww.septa.org/news/market-st-bridge-rehab/\">septa.org/news/market-street-detours</a>.</p>  <h3 class=\"separated\">Sunday Schedule in Effect for Thanksgiving Day</h3><p>Bus, Metro and Regional Rail routes operate on a Sunday schedule on <a href=\"https://wwww.septa.org/news/thanksgiving/\">Thanksgiving Day</a>. Routes that do not have Sunday schedules do not operate. All modes resume regular weekday schedule at the start of service day, Friday, November 27.</p>",
+  "detour": [
+    {
+      "location_start": "30th & Chestnut Sts",
+      "location_end": "Market St btwn 23rd & 19th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, EB via 30th St, Left on Chestnut Sts, Reg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    },
+    {
+      "location_start": "Arch & 15th Sts",
+      "location_end": "Market St btwn 23rd & 19th Sts",
+      "start": "11/25/2026   3:00 PM",
+      "end": "11/26/2026   2:00 AM",
+      "message": "3pm on 11/25/26 to 2am on, 11/26/26, WB via Arch St, Left on 15th St, Left on S Penn Sq, Right on Broad St, Right on Walnut St, Right on Schuylkill, Reg Rt",
+      "reason": "Thanksgiving Day Parade Phase 2"
+    },
+    {
+      "location_start": "Arch & 15th",
+      "location_end": "JFK btwn 20th & 15th/ Art Museum 16th",
+      "start": "11/26/2026   2:00 AM",
+      "end": "11/26/2026  10:00 PM",
+      "message": "2am - 10pm on 11-26--26, WB via Arch, Left on 15th, Left on S PEnn Sq, Right on Broad, Right on Walnut, Right on Schuylkill, Reg Rt",
+      "reason": "6 ABC Dunkin Donuts Thanksgiving Parade"
+    },
+    {
+      "location_start": "30th & Chestnut",
+      "location_end": "JFK btwn 20th & 15th/ Art Museum 16th",
+      "start": "11/26/2026   2:00 AM",
+      "end": "11/26/2026  10:00 PM",
+      "message": "2am - 10pm on 11-26--26, EB via 30th, Left on Chestnut, Reg Rt",
+      "reason": "6 ABC Dunkin Donuts Thanksgiving Parade"
+    }
+  ],
+  "elevator": []
+}

@@ -27,7 +27,9 @@ jq --arg r "$ROUTE" '.[] | select(.route_id == $r)' \
 One row per detour item worth testing (`#` = index in the `detour` list;
 `-` = the route entry itself). "Expected" is a guess written before the
 parser exists; parse tests are built from it. LS/LE = `location_start` /
-`location_end`. All files are from snapshot `2026-11-25T025344Z`.
+`location_end`. One table per source snapshot.
+
+### Snapshot `2026-11-25T025344Z`
 
 | Route | # | What makes it ugly | Expected |
 | ----- | - | ------------------ | -------- |
@@ -70,3 +72,16 @@ parser exists; parse tests are built from it. LS/LE = `location_start` /
 | `bus_route_55` | 0 | Baseline: single clean reroute; only quirks are the dash date "12-31-2026" and a trailing space in `reason` | complete, SB |
 | `trolley_route_15` | - | No detours; a trolley whose `mode` is "Bus" | zero notices |
 | `APP` | - | System entry ("Mobile APP"), not a route; no detours | zero notices, no error |
+
+### Snapshot `2026-11-25T121123Z`
+
+About 9 hours after the first. Most new detours are Thanksgiving Day
+parade reroutes (11/26), posted ~14 hours before they start.
+
+| Route | # | What makes it ugly | Expected |
+| ----- | - | ------------------ | -------- |
+| `bus_route_31` | 2 | Identical to `bus_route_31` #2 in the earlier snapshot; items 0-4 keep their indices (new items are appended) | same `source_key` as the earlier copy |
+| `bus_route_31` | 3, 5 | Parade set-up then parade day: #3 ends 11/26 2:00 AM exactly when #5 starts; both short-turn ("Take recovery at Broad &, Walnut", comma inside the intersection) | two notices, both EB |
+| `bus_route_31` | 4, 6 | #6 LS is `"Broad &"` (cross street missing); LE "JFK btwn 20th & 15th/ Art Museum 16th" is an area, not an endpoint | WB; LS kept as `"Broad &"` (incomplete, but not blank) |
+| `bus_route_124` | 0, 1 | Date split by a comma ("2am on, 11/26/26"); LS "30th & Chestnut Sts" vs "30th & Chestnut" in #3 (same place, different spelling) | EB / WB |
+| `bus_route_124` | 2, 3 | Doubled-dash date "11-26--26" (pasted onto 7 routes); "S PEnn Sq" | WB / EB; times from API fields |
