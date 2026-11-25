@@ -20,6 +20,7 @@ from septa_detours.export.contract import (
     RouteEntry,
 )
 from septa_detours.export.geojson import (
+    FeatureCollection,
     Position,
     _css_color,  # private; same stage
     line_feature,
@@ -52,6 +53,9 @@ COVERING_TOLERANCE_M: Final = 20.0
 
 COORDINATE_DECIMALS: Final = 5
 """``round_line`` places for every exported line: ~1 m (D2)."""
+
+OVERVIEW_TOLERANCE_M: Final = 5.0
+"""``simplify_line`` tolerance for ``network.geojson``'s lines (D2)."""
 
 
 def route_mode(route_type: int) -> Mode:
@@ -422,6 +426,57 @@ def route_directions(
                     "destination": None,
                 }
     return {key: [route[d] for d in sorted(route)] for key, route in by_route.items()}
+
+
+def network_collection(
+    catalog: Sequence[RouteEntry],
+    shapes: Mapping[str, Sequence[RouteShape]],
+    coordinates: pl.DataFrame,
+) -> FeatureCollection:
+    """Build ``network.geojson``: the overview's lines for every route.
+
+    Args:
+        catalog: Output of ``route_catalog`` (order, ``mode``, ``color``).
+        shapes: Output of ``route_shapes``; only ``covering`` shapes are drawn.
+        coordinates: Output of ``shapes.shape_coordinates`` (raw lines).
+
+    Returns:
+        One LineString per covering shape and direction, properties
+        ``NETWORK_PROPERTIES``. Lines are simplified from the *raw* shape
+        at ``OVERVIEW_TOLERANCE_M`` (not from the 2 m lines, so errors
+        don't add up) and rounded to ``COORDINATE_DECIMALS``. Order:
+        ``catalog`` order, then each route's ``route_shapes`` order.
+
+    Raises:
+        ValueError: ``shapes`` has a route that isn't in ``catalog``, or a
+            covering shape has no coordinates.
+    """
+    unknown = sorted(set(shapes) - {entry["key"] for entry in catalog})
+    if unknown:
+        raise ValueError(f"shapes for routes not in the catalog: {unknown}")
+    raw = {(feed, shape_id): line for feed, shape_id, line in coordinates.rows()}
+    simplified: dict[tuple[str, str], list[Position]] = {}
+    features = []
+    for entry in catalog:
+        for shape in shapes.get(entry["key"], ()):
+            if not shape.covering:
+                continue
+            source = (entry["feed"], shape.shape_id)
+            if source not in simplified:
+                if source not in raw:
+                    raise ValueError(f"shape {source} has no coordinates")
+                simplified[source] = round_line(
+                    simplify_line(raw[source], OVERVIEW_TOLERANCE_M),
+                    COORDINATE_DECIMALS,
+                )
+            properties = {
+                "key": entry["key"],
+                "direction_id": shape.direction_id,
+                "mode": entry["mode"],
+                "color": entry["color"],
+            }
+            features.append(line_feature(simplified[source], properties))
+    return {"type": "FeatureCollection", "features": features}
 
 
 def _blank_to_none(text: str | None) -> str | None:

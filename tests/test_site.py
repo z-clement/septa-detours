@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 
 from septa_detours.export.contract import (
+    NETWORK_PROPERTIES,
     SHAPE_PROPERTIES,
     DirectionEntry,
     Mode,
@@ -15,6 +16,7 @@ from septa_detours.export.site import (
     RouteShape,
     detour_object,
     lines_bounds,
+    network_collection,
     route_catalog,
     route_detail,
     route_directions,
@@ -891,3 +893,114 @@ def test_route_directions_rejects_a_missing_direction_id() -> None:
     directions = make_directions([("2", None, "Southbound", None, "bus")])
     with pytest.raises(ValueError, match="'bus-2' has no direction_id"):
         route_directions(directions, {})
+
+
+# --- network_collection ------------------------------------------------------------
+
+AIR: RouteEntry = {
+    "key": "rail-AIR",
+    "feed": "rail",
+    "route_id": "AIR",
+    "short_name": "AIR",
+    "long_name": "Airport Line",
+    "mode": "rail",
+    "color": "#5A6F7B",
+    "text_color": "#FFFFFF",
+    "has_shapes": True,
+    "bounds": ([-75.25, 39.87], [-75.16, 39.96]),
+    "detours": {"total": 0, "placed": 0},
+}
+# Raw lines. 317312's midpoint is 3.4 m off its line: kept at 2 m, dropped
+# at 5 m. "001005" is in both feeds with different lines.
+NETWORK_RAW = make_coordinates(
+    {
+        ("bus", "317310"): [[-75.171612, 39.940512], [-75.171612, 39.936512]],
+        ("bus", "317312"): [
+            [-75.170612, 39.936512],
+            [-75.170652, 39.938512],
+            [-75.170612, 39.940512],
+        ],
+        ("bus", "001005"): [[-75.0, 40.1], [-75.0, 40.2]],
+        ("rail", "001005"): [[-75.241234, 39.876543], [-75.201234, 39.906543]],
+    }
+)
+# ``line`` isn't used by network_collection (it reads the raw lines).
+UNUSED_LINE = [[0.0, 0.0], [1.0, 1.0]]
+
+
+def overview(
+    entry: RouteEntry, direction_id: int | None, coordinates: list[list[float]]
+):
+    return {
+        "type": "Feature",
+        "geometry": {"type": "LineString", "coordinates": coordinates},
+        "properties": {
+            "key": entry["key"],
+            "direction_id": direction_id,
+            "mode": entry["mode"],
+            "color": entry["color"],
+        },
+    }
+
+
+def test_network_whole_output() -> None:
+    shapes = {
+        "rail-AIR": [RouteShape("001005", 1, 4, True, UNUSED_LINE)],
+        "bus-2": [
+            RouteShape("317310", 0, 3, True, UNUSED_LINE),
+            RouteShape("317315", 0, 5, False, UNUSED_LINE),  # not drawn
+            RouteShape("317312", 1, 2, True, UNUSED_LINE),
+        ],
+    }
+    assert network_collection([ROUTE_2, AIR], shapes, NETWORK_RAW) == {
+        "type": "FeatureCollection",
+        "features": [
+            overview(ROUTE_2, 0, [[-75.17161, 39.94051], [-75.17161, 39.93651]]),
+            overview(ROUTE_2, 1, [[-75.17061, 39.93651], [-75.17061, 39.94051]]),
+            overview(AIR, 1, [[-75.24123, 39.87654], [-75.20123, 39.90654]]),
+        ],
+    }
+
+
+def test_network_properties_are_the_contract_ones() -> None:
+    shapes = {"bus-2": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
+    [feature] = network_collection([ROUTE_2], shapes, NETWORK_RAW)["features"]
+    assert tuple(feature["properties"]) == NETWORK_PROPERTIES
+
+
+def test_network_shape_covering_both_directions_is_two_lines() -> None:
+    shapes = {
+        "bus-2": [
+            RouteShape("317310", 0, 3, True, UNUSED_LINE),
+            RouteShape("317310", 1, 1, True, UNUSED_LINE),
+        ]
+    }
+    line = [[-75.17161, 39.94051], [-75.17161, 39.93651]]
+    assert network_collection([ROUTE_2], shapes, NETWORK_RAW)["features"] == [
+        overview(ROUTE_2, 0, line),
+        overview(ROUTE_2, 1, line),
+    ]
+
+
+def test_network_route_without_shapes_draws_nothing() -> None:
+    entry: RouteEntry = {**ROUTE_2, "has_shapes": False, "bounds": None}
+    assert network_collection([entry], {}, NETWORK_RAW)["features"] == []
+
+
+def test_network_color_may_be_null() -> None:
+    entry: RouteEntry = {**ROUTE_2, "color": None}
+    shapes = {"bus-2": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
+    [feature] = network_collection([entry], shapes, NETWORK_RAW)["features"]
+    assert feature["properties"]["color"] is None
+
+
+def test_network_rejects_shapes_for_a_route_not_in_the_catalog() -> None:
+    shapes = {"bus-9": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
+    with pytest.raises(ValueError, match=r"not in the catalog: \['bus-9'\]"):
+        network_collection([ROUTE_2], shapes, NETWORK_RAW)
+
+
+def test_network_rejects_a_covering_shape_without_coordinates() -> None:
+    shapes = {"rail-AIR": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
+    with pytest.raises(ValueError, match=r"\('rail', '317310'\) has no coordinates"):
+        network_collection([AIR], shapes, NETWORK_RAW)

@@ -192,7 +192,8 @@ route-direction (D1 decided, see Facts), simplified at **5 m**
 Properties, kept minimal (this file is loaded once, up front):
 `key`, `direction_id`, `mode`, `color`. Everything else comes from
 `routes.json` by `key`. Order: `routes.json` order, then `direction_id`,
-then longest shape first.
+then most trips first (`route_shapes` order). Real: 593 lines, 42k
+points, 0.97 MB, simplified from the raw shapes (not the 2 m lines).
 
 ### `starts.geojson`
 
