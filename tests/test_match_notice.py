@@ -4,8 +4,13 @@ Notices come from the real alert fixtures via ``parse_snapshot``. GTFS is
 not committed, so ``routes``/``trips``/``directions`` are hand-built
 (conftest builders) from real 2026-11-25 rows: every fixture route's real
 direction names, and real shape IDs (all of them for routes 55, 24 and
-L1_OWL; the first per direction for the rest). No shape points and no
-streets yet: nothing reads them.
+L1_OWL; the first per direction for the rest).
+
+Streets and shape points are invented, and only for two crossings:
+17th & Washington (route 2 runs along 17th) and Broad & Chestnut (route 31
+runs along Chestnut). Every other route's shapes are a short placeholder
+line ~10 km away, so its Broad & Chestnut items are "not within 500 m",
+and every other intersection is "no crossing in OSM".
 """
 
 from collections.abc import Callable
@@ -21,7 +26,14 @@ from septa_detours.match.notice import (
     match_notice,
     match_notices,
 )
-from septa_detours.model import AffectedShape, Detour, DetourNotice, RouteMatch
+from septa_detours.model import (
+    AffectedShape,
+    Detour,
+    DetourNotice,
+    RouteMatch,
+    Segment,
+    StartPoint,
+)
 from septa_detours.parse.notice import parse_snapshot
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
@@ -85,10 +97,64 @@ SHAPE_POINTS_SCHEMA = {
     "feed": pl.String,
 }
 
+# Approximate real crossings. 0.001 deg is ~111 m north-south, ~85 m east-west.
+WASHINGTON_17TH = (-75.1716, 39.9385)
+BROAD_CHESTNUT = (-75.1636, 39.9508)
+
+STREET_WAYS = [
+    (1, "South 17th Street", [(10, 0, -1), (11, 0, 0), (12, 0, 1)], WASHINGTON_17TH),
+    (2, "Washington Avenue", [(20, -1, 0), (11, 0, 0), (21, 1, 0)], WASHINGTON_17TH),
+    (3, "South Broad Street", [(30, 0, -1), (31, 0, 0), (32, 0, 1)], BROAD_CHESTNUT),
+    (4, "Chestnut Street", [(40, -1, 0), (31, 0, 0), (41, 1, 0)], BROAD_CHESTNUT),
+]
+"""``(way_id, name, [(node_id, east, north)], origin)``; offsets in 0.001 deg."""
+
+# Two-point lines through the crossing; everything else is placeholder.
+ROUTE_LINES = {
+    "2": [(0, -2), (0, 2)],  # along 17th, around WASHINGTON_17TH
+    "31": [(-2, 0), (2, 0)],  # along Chestnut, around BROAD_CHESTNUT
+}
+PLACEHOLDER_LINE = [(-75.0, 40.1), (-75.0, 40.101)]
+
+
+def street_ways() -> pl.DataFrame:
+    rows = []
+    for way_id, name, nodes, (lon, lat) in STREET_WAYS:
+        points = [(n, lon + e / 1000, lat + d / 1000) for n, e, d in nodes]
+        rows.append(
+            (
+                way_id,
+                name,
+                "residential",
+                [n for n, _, _ in points],
+                [[x, y] for _, x, y in points],
+            )
+        )
+    return pl.DataFrame(rows, schema=STREET_WAYS_SCHEMA, orient="row")
+
+
+def line_points(route_id: str) -> list[tuple[float, float]]:
+    """``(lon, lat)`` points of every shape of ``route_id``."""
+    if route_id not in ROUTE_LINES:
+        return PLACEHOLDER_LINE
+    lon, lat = WASHINGTON_17TH if route_id == "2" else BROAD_CHESTNUT
+    return [(lon + e / 1000, lat + d / 1000) for e, d in ROUTE_LINES[route_id]]
+
+
+def shape_points() -> pl.DataFrame:
+    rows = [
+        (shape_id, lat, lon, seq, "bus")
+        for route_id, by_direction in SHAPES.items()
+        for shape_ids in by_direction
+        for shape_id in shape_ids
+        for seq, (lon, lat) in enumerate(line_points(route_id), start=1)
+    ]
+    return pl.DataFrame(rows, schema=SHAPE_POINTS_SCHEMA, orient="row")
+
 
 @pytest.fixture
 def reference(routes_from_ids, trips_from_rows, directions_from_rows) -> MatchReference:
-    """GTFS for every fixture route, plus rail AIR; no shape points or streets.
+    """GTFS for every fixture route, plus rail AIR; streets for two crossings.
 
     Trips interleave the two directions shape by shape, so filtering by
     direction must actually filter.
@@ -112,8 +178,8 @@ def reference(routes_from_ids, trips_from_rows, directions_from_rows) -> MatchRe
         routes=routes,
         trips=trips,
         directions=directions,
-        shapes=pl.DataFrame(schema=SHAPE_POINTS_SCHEMA),
-        ways=pl.DataFrame(schema=STREET_WAYS_SCHEMA),
+        shapes=shape_points(),
+        ways=street_ways(),
     )
 
 
@@ -143,13 +209,21 @@ def affected(
     )
 
 
+def shape_issues(detour: Detour) -> tuple[str, ...]:
+    """The ``shapes:`` issues only (tests about shapes ignore start issues)."""
+    return tuple(i for i in detour.issues if i.startswith("shapes: "))
+
+
 # --- Matched, with shapes ---------------------------------------------------
 
 
 def test_complete_notice_gets_its_direction_shapes(
     fixture_notices, reference: MatchReference
 ):
-    """Route 55 #0 is SB = direction_id 1: all six SB shapes, no issues."""
+    """Route 55 #0 is SB = direction_id 1: all six SB shapes, no shapes issue.
+
+    Its start (65th Ave & Broad St) isn't among the test streets.
+    """
     notice = fixture_notices("2026-11-25T025344Z__bus_route_55.json")[0]
     expected = Detour(
         notice=notice,
@@ -166,7 +240,7 @@ def test_complete_notice_gets_its_direction_shapes(
             ),
             start_point=None,
         ),
-        issues=(),
+        issues=("start: no crossing of '65th Ave' and 'Broad St' in OSM",),
     )
     assert expected == match_notice(notice, reference)
 
@@ -182,7 +256,7 @@ def test_alias_route_gets_shapes(fixture_notices, reference: MatchReference):
         start_point=None,
     )
     assert expected == detour.match
-    assert detour.issues == ()
+    assert shape_issues(detour) == ()
 
 
 @pytest.mark.parametrize(
@@ -209,7 +283,7 @@ def test_direction_id_is_per_route(
     assert detour.match is not None
     expected = affected(SHAPES[route_id][direction_id], direction_id)
     assert expected == detour.match.shapes
-    assert detour.issues == ()
+    assert shape_issues(detour) == ()
 
 
 def test_unknown_notice_still_gets_shapes(fixture_notices, reference: MatchReference):
@@ -253,7 +327,10 @@ def test_direction_not_on_route(fixture_notices, reference: MatchReference):
 
 
 def test_direction_with_no_shapes(fixture_notices, reference: MatchReference):
-    """SB is direction_id 1, but (hypothetically) no trip runs it."""
+    """SB is direction_id 1, but (hypothetically) no trip runs it.
+
+    Also pins the issue order: the shapes issue, then the start issue.
+    """
     trips = reference.trips.filter(
         ~((pl.col("route_id") == "55") & (pl.col("direction_id") == 1))
     )
@@ -265,6 +342,7 @@ def test_direction_with_no_shapes(fixture_notices, reference: MatchReference):
     )
     assert detour.issues == (
         "shapes: bus route '55' has no shapes with direction_id 1",
+        "start: no crossing of '65th Ave' and 'Broad St' in OSM",
     )
 
 
@@ -278,6 +356,79 @@ def test_parse_issues_stay_on_notice(fixture_notices, reference: MatchReference)
         "direction: none found in message",
     )
     assert not set(detour.notice.issues) & set(detour.issues)
+
+
+# --- Start point ------------------------------------------------------------
+
+ROUTE_2 = "2026-11-25T025344Z__bus_route_2.json"
+
+
+def test_start_point_is_placed(fixture_notices, reference: MatchReference):
+    """Route 2 #0 (SB) starts at 17th & Washington, on route 2's line."""
+    notice = fixture_notices(ROUTE_2)[0]
+    lon, lat = WASHINGTON_17TH
+    expected = Detour(
+        notice=notice,
+        match=RouteMatch(
+            feed="bus",
+            route_id="2",
+            shapes=affected(SHAPES["2"][0], 0),
+            start_point=StartPoint(node_id=11, lon=lon, lat=lat),
+        ),
+        issues=(),
+    )
+    assert expected == match_notice(notice, reference)
+
+
+def test_start_point_uses_shapes_of_both_directions(
+    fixture_notices, reference: MatchReference
+):
+    """SB (direction_id 0) is placed even if only the NB shape is nearby."""
+    (sb_shape,) = SHAPES["2"][0]
+    shape_lines = dict(reference.shape_lines)
+    shape_lines[("bus", sb_shape)] = [list(point) for point in PLACEHOLDER_LINE]
+    detour = match_notice(
+        fixture_notices(ROUTE_2)[0], replace(reference, shape_lines=shape_lines)
+    )
+    assert detour.match is not None
+    assert detour.match.start_point is not None
+    assert detour.match.start_point.node_id == 11
+
+
+def test_start_point_is_placed_without_a_direction(
+    fixture_notices, reference: MatchReference
+):
+    notice = fixture_notices(ROUTE_2)[0].model_copy(update={"direction": None})
+    detour = match_notice(notice, reference)
+    assert detour.match is not None
+    assert detour.match.start_point is not None
+    assert detour.match.start_point.node_id == 11
+    assert detour.issues == ("shapes: no direction in notice",)
+
+
+def test_same_crossing_is_checked_per_route(fixture_notices, reference: MatchReference):
+    """Broad & Chestnut: placed for route 31 (on Chestnut), not route 32."""
+    on_31 = match_notice(
+        fixture_notices("2026-11-25T025344Z__bus_route_31.json")[3], reference
+    )
+    on_32 = match_notice(
+        fixture_notices("2026-11-25T025344Z__bus_route_32.json")[0], reference
+    )
+    lon, lat = BROAD_CHESTNUT
+    assert on_31.match is not None
+    assert on_31.match.start_point == StartPoint(node_id=31, lon=lon, lat=lat)
+    assert on_32.match is not None
+    assert on_32.match.start_point is None
+    assert on_32.issues == (
+        "start: no crossing of 'Broad St' and 'Chestnut St' within 500 m of the route",
+    )
+
+
+def test_missing_shape_points_are_a_bug(fixture_notices, reference: MatchReference):
+    """A trip's shape absent from ``shape_lines`` means the wrong feed loaded."""
+    notice = fixture_notices(ROUTE_2)[0]
+    with pytest.raises(KeyError):
+        match_notice(notice, replace(reference, shape_lines={}))
 
 
 # --- Unmatched --------------------------------------------------------------
@@ -300,7 +451,7 @@ def test_unknown_route_gives_no_match(fixture_notices, reference: MatchReference
 
 
 def test_unmatched_route_skips_shape_lookup(fixture_notices, reference: MatchReference):
-    """No route -> trips/directions are never read, and no shapes issue.
+    """No route -> trips/directions/streets/shapes are never read, no issues.
 
     Proven with frames that would crash if they were read.
     """
@@ -308,7 +459,15 @@ def test_unmatched_route_skips_shape_lookup(fixture_notices, reference: MatchRef
     notice = with_api_route_id(
         fixture_notices("2026-11-25T025344Z__bus_route_55.json")[0], "APP"
     )
-    detour = match_notice(notice, replace(reference, trips=broken, directions=broken))
+    unreadable = replace(
+        reference,
+        trips=broken,
+        directions=broken,
+        ways=broken,
+        street_keys=broken,
+        shape_lines={},
+    )
+    detour = match_notice(notice, unreadable)
     assert detour.match is None
     assert detour.issues == ("route: no GTFS route for API route 'APP'",)
 
@@ -413,27 +572,84 @@ NO_SHAPES = {
 
 COMPASS = {"NB": "Northbound", "SB": "Southbound", "EB": "Eastbound", "WB": "Westbound"}
 
+# Fixture items placed on the test streets: (file, index) -> node_id.
+PLACED = {
+    ("2026-11-25T025344Z__bus_route_2.json", 0): 11,  # 17th & Washington
+    ("2026-11-25T025344Z__bus_route_31.json", 3): 31,  # Broad & Chestnut
+    ("2026-11-25T121123Z__bus_route_31.json", 3): 31,
+}
+
+# Broad & Chestnut on routes whose (placeholder) line is far away.
+NOT_NEAR_ROUTE = {
+    ("2026-11-25T025344Z__bus_route_32.json", 0),
+    ("2026-11-25T025344Z__bus_route_44.json", 2),
+    ("2026-11-25T025344Z__bus_route_49.json", 4),
+    ("2026-11-25T025344Z__bus_route_49.json", 5),
+}
+
+# How many fixture items end each way. Adding a fixture breaks this on
+# purpose: review its items.
+START_OUTCOMES = {
+    "placed": 3,
+    "not near route": 4,
+    "not in OSM": 47,
+    "segment": 2,
+    "no start place": 9,
+}
+
+
+def expected_start(key: tuple[str, int], notice: DetourNotice) -> tuple[str, str]:
+    """``(outcome, expected start issue or "")`` for an unplaced item."""
+    place = notice.start_place
+    if place is None:
+        return "no start place", ""
+    if isinstance(place, Segment):
+        return "segment", "start: segments are not placed yet"
+    first, second = place.streets
+    if key in NOT_NEAR_ROUTE:
+        where, outcome = "within 500 m of the route", "not near route"
+    else:
+        where, outcome = "in OSM", "not in OSM"
+    return outcome, f"start: no crossing of '{first}' and '{second}' {where}"
+
 
 def test_fixture_sweep(
     alert_fixture_names: list[str], fixture_notices, reference: MatchReference
 ):
-    """All 65 fixture items: route matched; shapes or a pinned reason.
+    """All 65 fixture items: route matched; shapes or a pinned reason; the
+    start point placed, or the issue its pinned outcome predicts.
 
     Shapes must all carry the direction_id whose real name is the notice's
     direction. Every ``Detour`` round-trips through JSON.
     """
     no_shapes = {}
+    outcomes: dict[str, int] = {}
     count = 0
     for name in alert_fixture_names:
         for index, notice in enumerate(fixture_notices(name)):
             count += 1
+            key = (name, index)
             detour = match_notice(notice, reference)
             assert detour == Detour.model_validate_json(detour.model_dump_json())
             assert detour.match is not None
+            shapes_part = shape_issues(detour)
+            start_part = detour.issues[len(shapes_part) :]
+
+            if key in PLACED:
+                outcome = "placed"
+                assert detour.match.start_point is not None
+                assert detour.match.start_point.node_id == PLACED[key]
+                assert start_part == ()
+            else:
+                outcome, issue = expected_start(key, notice)
+                assert detour.match.start_point is None
+                assert start_part == ((issue,) if issue else ())
+            outcomes[outcome] = outcomes.get(outcome, 0) + 1
+
             if not detour.match.shapes:
-                (no_shapes[(name, index)],) = detour.issues
+                (no_shapes[key],) = shapes_part
                 continue
-            assert detour.issues == ()
+            assert shapes_part == ()
             assert notice.direction is not None
             names = DIRECTION_NAMES[detour.match.route_id]
             direction_id = names.index(COMPASS[notice.direction])
@@ -443,6 +659,7 @@ def test_fixture_sweep(
             assert expected == detour.match.shapes
     assert count == 65
     assert no_shapes == NO_SHAPES
+    assert outcomes == START_OUTCOMES
 
 
 # --- match_notices ----------------------------------------------------------

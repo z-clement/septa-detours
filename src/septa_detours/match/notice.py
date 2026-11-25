@@ -9,6 +9,7 @@ from septa_detours.gtfs.load import Feed
 from septa_detours.gtfs.routes import route_shape_ids
 from septa_detours.gtfs.shapes import shape_coordinates
 from septa_detours.match.directions import find_direction_id
+from septa_detours.match.place import find_start_point
 from septa_detours.match.routes import find_gtfs_route
 from septa_detours.match.streets import street_key_table
 from septa_detours.model import (
@@ -104,6 +105,10 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
           ``"shapes: ..."`` issue: no direction in the notice, the route
           has no such direction (``directions.find_direction_id``), or no
           shapes in it. Never falls back to both directions.
+          Its ``start_point`` comes from ``place.find_start_point`` with
+          the lines of all the route's shapes (both directions, so it
+          doesn't need the notice's direction); a ``"start: ..."`` issue
+          from it comes after any shapes issue.
 
     Only ``ValueError`` from the lookups becomes an issue; anything else
     (e.g. a malformed frame) is a bug and propagates.
@@ -113,14 +118,35 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
     except ValueError as err:
         return Detour(notice=notice, match=None, issues=(f"route: {err}",))
 
-    shapes, issues = _affected_shapes(
+    shapes, shape_issues = _affected_shapes(
         notice.direction, feed, route_id, reference.trips, reference.directions
+    )
+    start_point, start_issues = find_start_point(
+        notice.start_place,
+        reference.ways,
+        reference.street_keys,
+        _route_lines(feed, route_id, reference),
     )
     return Detour(
         notice=notice,
-        match=RouteMatch(feed=feed, route_id=route_id, shapes=shapes, start_point=None),
-        issues=issues,
+        match=RouteMatch(
+            feed=feed, route_id=route_id, shapes=shapes, start_point=start_point
+        ),
+        issues=shape_issues + start_issues,
     )
+
+
+def _route_lines(
+    feed: Feed, route_id: str, reference: MatchReference
+) -> list[list[list[float]]]:
+    """Every shape of the route, both directions, each once, in trip order.
+
+    Both directions: where a detour starts doesn't depend on which way the
+    bus goes, and this works when the notice has no direction. A shape
+    missing from ``shape_lines`` raises ``KeyError`` (wrong feed loaded).
+    """
+    shape_ids = route_shape_ids(reference.trips, feed, route_id)["shape_id"]
+    return [reference.shape_lines[(feed, s)] for s in dict.fromkeys(shape_ids)]
 
 
 def _affected_shapes(
