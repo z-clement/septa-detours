@@ -226,3 +226,62 @@ projection using `origin_lon` (a translation: equivalent) and two parts
 of the box margin (`+ lat_margin` in the latitude it's sized at, and
 `abs()`), which change the box by ~40 micrometres: correct, kept, too
 small to test. 1256 tests total.
+
+Done (2026-11-25): **the data contract** (web plan P3-P5; written by
+Claude in reviewed increments). Decisions mine unless noted.
+- `export/contract.py`: TypedDicts for every file the page reads
+  (`Status`, `RouteEntry`, `RouteDetail`, `DirectionEntry`,
+  `DetourObject`, ...), `SCHEMA_VERSION = 1`, `Mode`, `Timing`, `Bounds`.
+  GeoJSON files reuse `geojson.FeatureCollection`; their property names
+  are tuples (`NETWORK_PROPERTIES`, `START_PROPERTIES`,
+  `SHAPE_PROPERTIES`), not TypedDicts, because `Properties` is a plain
+  `dict` and ty can't match a TypedDict to it. `short_name` is always a
+  string (falls back to `route_id`); `Status.gtfs` is `feed_version` or
+  `None`.
+- `export/site.py` (pure builders):
+  - `MODE_ORDER` metro, trolley, trackless, bus, rail (D8); `route_mode`
+    (unknown `route_type` raises); `route_sort_key`: mode, then all-digit
+    names by value, then the rest ignoring case, then exact name.
+    `[0-9]`, not `\d` (which takes any Unicode digit, e.g. `٣`).
+  - `route_key` (`bus-21`; same safe-ID rule as `write.py`, a test checks
+    they agree), `lines_bounds`.
+  - `route_catalog` -> `routes.json`: shapeless routes listed with
+    `has_shapes: false`, `bounds: null` (D4); detour counts per route;
+    duplicates, unknown routes in bounds/detours raise. Colors via
+    `geojson._css_color` (private, same stage).
+  - `detour_object(detour)`: no `key` argument (it derives `route`: the
+    key when matched, the API route ID when not); `direction_id` only when
+    all matched shapes agree; `issues` a list.
+  - `route_shapes` (trip counts, 2 m lines rounded to 5 decimals,
+    `covering` per direction; order: direction, covering first, most
+    trips, `shape_id`; `group_by(maintain_order=True)` so it never
+    depends on polars' order), `route_directions` (`directions.txt` rows
+    plus any drawn direction the file lacks), `route_detail`.
+  - `network_collection`: covering shapes simplified at 5 m from the
+    **raw** lines (not the 2 m ones, so errors don't add up).
+  - `detour_timing(start, end, now)`: inclusive start/end; missing time
+    or end before start -> `unknown`; naive `now` raises. The page needs
+    the same rule in JS. `starts_collection`: exact start nodes (not
+    rounded), timing at export time.
+  - `status`: `generated_at` UTC with `Z`; `snapshot_fetched_at` from an
+    ingest-style name (pattern duplicated, checked against
+    `snapshot_path`; `strptime` alone would accept `2026-1-25...`).
+  - Constants (D2, "for now"): `DETAIL_TOLERANCE_M = 2`,
+    `OVERVIEW_TOLERANCE_M = 5`, `COVERING_TOLERANCE_M = 20`,
+    `COORDINATE_DECIMALS = 5`.
+- Real data (GTFS `v202611220`, snapshot `121123Z`): 181 routes (6
+  shapeless), `routes.json` ~49 KB; 1,006 route shapes, 593 covering
+  (~7 s to prepare); `network.geojson` 593 lines, 42k points, 0.97 MB;
+  route details: bus-2 10 KB, bus-14 109 KB (the largest); 134 start
+  dots, ~25 KB (84 active, 50 upcoming at snapshot time); `status.json`
+  3 KB. Unmatched: 5 (H x2, L x2, R); route 68's "EB" items are
+  matched with no shapes (the plan had this wrong).
+- Tests: `tests/test_site.py` (hand-built frames, real route 2/68/mfo
+  notices, real direction rows). Mutation lessons: test data that is
+  *exactly* on a line hides tolerance bugs (move points ~1 m off); an
+  unmatched detour last in a list hides `continue` -> `break`; a tie
+  in sort order can pass by luck of polars' ordering (test both input
+  orders); a message with no outer spaces can't show it's verbatim
+  (`rr_route_mfo` #1 has trailing spaces). Survivors judged equivalent:
+  `colors.get` after a membership check, `match` vs `fullmatch` before
+  `strptime`. 1422 tests total.

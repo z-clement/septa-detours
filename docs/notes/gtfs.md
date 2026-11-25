@@ -56,3 +56,12 @@ Missing file -> `FileNotFoundError` (loud if SEPTA drops the extension).
 Every trips `(route, direction_id)` is covered; no duplicates.
 `tests/test_load_directions.py` (10, the first direct loader tests; real
 rows under `tmp_path`, incl. a CRLF rail file).
+
+Done (2026-11-25): `gtfs/load.py::load_feed_info` (`FEED_INFO_COLUMNS`:
+`feed_version`, `feed_start_date`, `feed_end_date`, all strings; dates
+are `YYYYMMDD`). Both real files have CRLF endings and say `v202611220`,
+`20261122`-`20270220`. `feed_info.txt` is optional in GTFS: a missing
+file raises `FileNotFoundError` and the caller decides (the export
+records `null`). Used for `status.json`'s `gtfs` (decided: `feed_version`,
+not file mtimes, which change on every copy). `tests/test_load_feed_info.py`
+(7, real header and rows, CRLF).

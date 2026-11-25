@@ -58,6 +58,11 @@ SHAPE_COLUMNS = [
     "shape_pt_lon",
     "shape_pt_sequence",
 ]
+FEED_INFO_COLUMNS = [
+    "feed_version",
+    "feed_start_date",
+    "feed_end_date",
+]
 
 
 def feed_dir(feed: Feed, root: Path = DEFAULT_GTFS_ROOT) -> Path:
@@ -199,3 +204,20 @@ def load_shapes(
         pl.col("shape_pt_lon").cast(pl.Float64),
         pl.col("shape_pt_sequence").cast(pl.Int32),
     )
+
+
+def load_feed_info(
+    feeds: Sequence[Feed] = ALL_FEEDS,
+    root: Path = DEFAULT_GTFS_ROOT,
+) -> pl.DataFrame:
+    """Load ``feed_info`` for the given feeds: which GTFS release this is.
+
+    SEPTA publishes one row per feed, e.g. ``feed_version`` ``v202611220``,
+    valid ``20261122`` to ``20270220``. Everything stays a string (the
+    dates are ``YYYYMMDD``; nothing needs them as dates yet). Both real
+    files have CRLF line endings.
+
+    ``feed_info.txt`` is optional in GTFS: a feed without it raises
+    ``FileNotFoundError``, and the caller decides what that means.
+    """
+    return _concat_feeds(feeds, "feed_info", FEED_INFO_COLUMNS, root)

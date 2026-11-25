@@ -100,8 +100,9 @@ class Status(TypedDict):
     """The alerts snapshot's file name."""
     snapshot_fetched_at: str | None
     """From the snapshot's stamp name (UTC); ``None`` for a hand-named one."""
-    gtfs: dict[Feed, str]
-    """One provenance string per feed (what it holds: decided in P5)."""
+    gtfs: dict[Feed, str | None]
+    """Each feed's ``feed_version`` from ``feed_info.txt`` (``v202611220``);
+    ``None`` when a feed has no such file or value."""
     detours: StatusCounts
     unmatched: list[DetourObject]
     """Detours whose route isn't in GTFS, listed so none silently vanish."""

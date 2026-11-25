@@ -6,7 +6,7 @@ Pure functions: no file I/O (that's ``write.py``).
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Final, NamedTuple
 
 import polars as pl
@@ -19,6 +19,7 @@ from septa_detours.export.contract import (
     Mode,
     RouteDetail,
     RouteEntry,
+    Status,
     Timing,
 )
 from septa_detours.export.geojson import (
@@ -48,6 +49,10 @@ _NUMBER = re.compile(r"[0-9]+")
 
 _SAFE_ROUTE_ID = re.compile(r"[A-Za-z0-9_-]+")
 """Same rule as ``write.py``'s (a test checks they agree)."""
+
+_SNAPSHOT_NAME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{6}Z\.json")
+_SNAPSHOT_FORMAT = "%Y-%m-%dT%H%M%SZ.json"
+"""How ``ingest`` names snapshots (a test checks they agree)."""
 
 DETAIL_TOLERANCE_M: Final = 2.0
 """``simplify_line`` tolerance for a focused route's shapes (plan D2)."""
@@ -550,6 +555,65 @@ def starts_collection(
         position = [match.start_point.lon, match.start_point.lat]
         features.append(point_feature(position, properties))
     return {"type": "FeatureCollection", "features": features}
+
+
+def status(
+    detours: Sequence[Detour],
+    snapshot: str,
+    gtfs_versions: Mapping[Feed, str | None],
+    generated_at: datetime,
+) -> Status:
+    """Build ``status.json``: provenance, totals, and unmatched detours.
+
+    Unmatched detours are those whose route isn't in GTFS: the page lists
+    them so none silently disappear.
+
+    Args:
+        detours: The snapshot's detours.
+        snapshot: The alerts snapshot's file name, e.g.
+            ``2026-11-25T121123Z.json``.
+        gtfs_versions: Each feed's ``feed_version`` (``None`` if unknown).
+        generated_at: When the export ran.
+
+    Returns:
+        ``generated_at`` as ISO 8601 UTC with ``Z``. ``snapshot_fetched_at``
+        read from an ``ingest``-style name, else ``None`` (a hand-named
+        snapshot, or one that isn't a real date). ``detours`` counts all,
+        matched and placed; ``unmatched`` holds each unmatched detour's
+        ``detour_object``, in snapshot order.
+
+    Raises:
+        ValueError: ``generated_at`` has no time zone.
+    """
+    if generated_at.tzinfo is None:
+        raise ValueError("generated_at must have a time zone")
+    matches = [detour.match for detour in detours if detour.match is not None]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": generated_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "snapshot": snapshot,
+        "snapshot_fetched_at": _snapshot_fetched_at(snapshot),
+        "gtfs": dict(gtfs_versions),
+        "detours": {
+            "total": len(detours),
+            "matched": len(matches),
+            "placed": sum(match.start_point is not None for match in matches),
+        },
+        "unmatched": [
+            detour_object(detour) for detour in detours if detour.match is None
+        ],
+    }
+
+
+def _snapshot_fetched_at(snapshot: str) -> str | None:
+    """``2026-11-25T121123Z.json`` -> ``2026-11-25T12:11:23Z``; else ``None``."""
+    if not _SNAPSHOT_NAME.fullmatch(snapshot):
+        return None
+    try:
+        fetched_at = datetime.strptime(snapshot, _SNAPSHOT_FORMAT)  # noqa: DTZ007
+    except ValueError:
+        return None
+    return fetched_at.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _blank_to_none(text: str | None) -> str | None:

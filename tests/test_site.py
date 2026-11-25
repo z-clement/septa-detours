@@ -29,9 +29,11 @@ from septa_detours.export.site import (
     route_shapes,
     route_sort_key,
     starts_collection,
+    status,
 )
 from septa_detours.export.write import route_geojson_path
 from septa_detours.gtfs.load import Feed
+from septa_detours.ingest.alerts import snapshot_path
 from septa_detours.model import (
     AffectedShape,
     Detour,
@@ -1149,3 +1151,82 @@ def test_starts_rejects_a_naive_now(notices) -> None:
     detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
     with pytest.raises(ValueError, match="now must have a time zone"):
         starts_collection([ROUTE_2], detours, datetime(2026, 11, 25, 14, 0))  # noqa: DTZ001
+
+
+# --- status ----------------------------------------------------------------------
+
+SNAPSHOT = "2026-11-25T121123Z.json"
+VERSIONS: dict[Feed, str | None] = {"bus": "v202611220", "rail": None}
+GENERATED_AT = datetime(2026, 11, 25, 12, 2, 11, 987654, tzinfo=PHILLY)
+
+
+def test_status_whole_output(notices) -> None:
+    route_2 = notices("bus_route_2")
+    unmatched = [notices("bus_route_68")[0], route_2[3]]
+    detours = [
+        placed_at(route_2[0], -75.1716, 39.9385),
+        Detour(notice=unmatched[0], match=None, issues=("route: none",)),
+        with_shapes(route_2[1], [("317310", 0)]),  # matched, not placed
+        Detour(notice=unmatched[1], match=None),
+    ]
+    assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
+        "schema_version": 1,
+        "generated_at": "2026-11-25T17:02:11Z",
+        "snapshot": "2026-11-25T121123Z.json",
+        "snapshot_fetched_at": "2026-11-25T12:11:23Z",
+        "gtfs": {"bus": "v202611220", "rail": None},
+        "detours": {"total": 4, "matched": 2, "placed": 1},
+        "unmatched": [detour_object(detours[1]), detour_object(detours[3])],
+    }
+
+
+def test_status_no_detours() -> None:
+    result = status([], SNAPSHOT, VERSIONS, GENERATED_AT)
+    assert (result["detours"], result["unmatched"]) == (
+        {"total": 0, "matched": 0, "placed": 0},
+        [],
+    )
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        "mine.json",
+        "detours-2026-11-25T121123Z.json",
+        "2026-11-25T121123Z.json.bak",
+        "2026-11-25T121123Z",
+        "2026-13-25T121123Z.json",  # no month 13
+        "2026-11-25T251123Z.json",  # no hour 25
+        "2026-1-25T121123Z.json",  # strptime alone would accept this
+    ],
+)
+def test_status_hand_named_snapshot_has_no_fetch_time(snapshot: str) -> None:
+    result = status([], snapshot, VERSIONS, GENERATED_AT)
+    assert (result["snapshot"], result["snapshot_fetched_at"]) == (snapshot, None)
+
+
+@pytest.mark.parametrize(
+    "fetched_at",
+    [
+        datetime(2026, 11, 25, 12, 11, 23, tzinfo=UTC),
+        datetime(2026, 7, 4, 8, 5, 9, tzinfo=PHILLY),  # summer, not UTC
+    ],
+)
+def test_status_reads_names_that_ingest_writes(fetched_at: datetime) -> None:
+    # The name pattern is duplicated from ingest on purpose; they must agree.
+    name = snapshot_path(fetched_at).name
+    result = status([], name, VERSIONS, GENERATED_AT)
+    expected = fetched_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert result["snapshot_fetched_at"] == expected
+
+
+def test_status_does_not_share_versions() -> None:
+    versions: dict[Feed, str | None] = {"bus": "v1", "rail": "v2"}
+    result = status([], SNAPSHOT, versions, GENERATED_AT)
+    versions["bus"] = "v9"
+    assert result["gtfs"] == {"bus": "v1", "rail": "v2"}
+
+
+def test_status_rejects_a_naive_generated_at() -> None:
+    with pytest.raises(ValueError, match="generated_at must have a time zone"):
+        status([], SNAPSHOT, VERSIONS, datetime(2026, 11, 25, 17, 2, 11))  # noqa: DTZ001

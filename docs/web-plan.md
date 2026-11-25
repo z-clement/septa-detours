@@ -1,6 +1,6 @@
 # Web plan: data contract and map app
 
-Status: **P1-P2 done** (`export/simplify.py`); P3 next. Written
+Status: **P1-P5 done** (`export/simplify.py`, `contract.py`, `site.py`); P6 next. Written
 2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
@@ -92,7 +92,10 @@ web/data/
     routes/<feed>-<route_id>.json   detail for one route (on focus)
 ```
 
-**Confirm** (D3): builds in their own directory + a pointer file. Each
+**Decided** (D3, the user's): **plain overwrite** of the files in
+`web/data/` (no history needed); the build directories and
+`current.json` below are dropped in P6. The rejected option: builds in
+their own directory + a pointer file. Each
 file is written atomically already (`write_bytes_atomic`), but a *set* of
 files isn't: a page loading mid-export could mix old `routes.json` with
 new `network.geojson`. Writing a whole build to `builds/<id>/` and then
@@ -431,8 +434,8 @@ Web (plain JS):
 - **D2** (decided, for now) Simplification: overview 5 m, detail 2 m, 5 decimals
   (recommended). 10 m overview saves little more (0.40 vs 0.53 MB on
   single shapes).
-- **D3** Build directory + `current.json` pointer (recommended) vs.
-  plain overwrite.
+- **D3** (decided) Plain overwrite of `web/data/` (accepting a rare mixed
+  read mid-export). Rejected: build directory + `current.json` pointer.
 - **D4** Shapeless routes listed greyed (recommended) vs. omitted.
 - **D5** Unmatched detours in `status.json` + a "Not on the map" section
   (recommended).
