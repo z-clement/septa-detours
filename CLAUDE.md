@@ -58,6 +58,8 @@ src/septa_detours/streets/  shared OSM street reference data (not a stage):
                           Parquet cache; never imports from a stage
 src/septa_detours/io.py   shared helper (not a stage): write_bytes_atomic,
                           write_chunks_atomic
+src/septa_detours/geo.py  shared helper (not a stage): EARTH_RADIUS_M,
+                          distance_to_line_m (equirectangular metres)
 src/septa_detours/model.py
 web/             map frontend: index.html + map.js (the detours map);
                  web/data/ holds exported GeoJSON (gitignored)

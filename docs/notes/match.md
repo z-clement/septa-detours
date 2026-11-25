@@ -145,7 +145,10 @@ directions), as `list[list[float]]`.
 - `distance_to_line_m(lon, lat, line)`: point to polyline, nearest point
   on any segment; local equirectangular metres, mean Earth radius
   (`EARTH_RADIUS_M`); empty line -> `ValueError`. Private
-  `_metres_between` (grouping) uses the same approximation.
+  `_metres_between` (grouping) uses the same approximation. **Since
+  moved** (2026-11-25, my choice) to the shared `septa_detours/geo.py`
+  with `EARTH_RADIUS_M`, so `export/simplify.py` can use it without
+  importing a stage; its tests moved to `tests/test_geo.py`.
 - `crossings_near_route(crossings, lines, radius_m=500)`: keeps crossings
   within `ROUTE_RADIUS_M = 500` of **any** line, input order. Decided
   (mine) from data: right crossings are 0-998 m off the route (110/132

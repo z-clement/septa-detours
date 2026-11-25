@@ -266,15 +266,14 @@ Export stays the only stage involved (it reads `Detour` JSON + GTFS;
 nothing reaches into parse/match).
 
 - `export/simplify.py` (pure): `simplify_line(line, tolerance_m)`
-  (Douglas-Peucker in local equirectangular metres, like
-  `match/crossings.py`'s approximation; endpoints always kept; never
-  fewer than 2 points); `round_line(line, decimals)`; `covering_shapes(
-  lines: dict[shape_id, line], tolerance_m=20) -> list[shape_id]`
-  (longest first; keep unless every point is within `tolerance_m` of an
-  already-kept line). Don't import from `match/` (a stage); if the
-  point-to-line distance is needed, copy the small function, or move
-  `distance_to_line_m` to a shared non-stage module (**ask**: it would
-  touch `match/`).
+  (Douglas-Peucker in local equirectangular metres; endpoints always
+  kept; never fewer than 2 points); `round_line(line, decimals)` (decided:
+  drops consecutive duplicates that rounding creates, but always keeps at
+  least 2 points); `covering_shapes(lines: dict[shape_id, line],
+  tolerance_m=20) -> list[shape_id]` (longest first; keep unless every
+  point is within `tolerance_m` of an already-kept line). Geometry comes
+  from the shared `septa_detours/geo.py` (decided: `distance_to_line_m`
+  moved there from `match/crossings.py`), never from `match/`.
 - `export/contract.py` (pure): TypedDicts for every file above (the
   contract's Python source of truth, like `geojson.py`'s types) and
   `SCHEMA_VERSION = 1`.
