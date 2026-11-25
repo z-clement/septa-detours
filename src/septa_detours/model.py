@@ -132,7 +132,9 @@ class DetourNotice(_Frozen):
         start_place: ``location_start`` split into street names, or
             ``None`` if it is blank (no issue) or not in a recognized form
             (with an issue).
-        end_place: The same for ``location_end``.
+        end_place: ``location_end`` split into street names, or ``None``
+            if it is blank or not in a recognized form (no issue either
+            way: the end can be inferred from the detour's path).
         reason: Stripped reason, or ``None`` if blank.
         direction: Affected direction from the message, or ``None``.
         issues: Why fields are ``None`` or doubtful, one string each, e.g.

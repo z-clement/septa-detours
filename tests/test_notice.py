@@ -442,13 +442,27 @@ def test_parse_detour_unrecognized_location_start() -> None:
     assert notice.status == "partial"
 
 
-def test_parse_detour_unrecognized_location_end() -> None:
-    """An optional field, but unreadable text is still doubt: ``partial``."""
-    notice = parse_made(location_end="Broad &")
+@pytest.mark.parametrize("raw", ["Broad &", "Ridge Ave & Ridge Ave", "PNC Center"])
+def test_parse_detour_unrecognized_location_end_has_no_issue(raw: str) -> None:
+    """Decided: the end can be inferred by walking the detour, so unreadable
+    end text is ``None`` with no issue, and the notice can be ``complete``."""
+    notice = parse_made(location_end=raw)
+    assert notice.location_end == raw
     assert notice.end_place is None
     assert notice.start_place == Intersection(streets=("65th Ave", "Broad St"))
-    assert notice.issues == ("location_end: unrecognized location 'Broad &'",)
-    assert notice.status == "partial"
+    assert notice.issues == ()
+    assert notice.status == "complete"
+
+
+def test_parse_detour_real_unrecognized_location_end(
+    read_alert_fixture: Callable[[str], bytes],
+) -> None:
+    """Route 31 #5, a parade reroute: start parses, end doesn't, no issue."""
+    notice = parse_fixture_item(read_alert_fixture, NEW, ROUTE_31, 5)
+    assert notice.location_end == "JFK btwn 20th & 15th/ Art Museum 16th"
+    assert notice.end_place is None
+    assert notice.start_place is not None
+    assert notice.status == "complete"
 
 
 def test_parse_detour_same_street_twice_is_an_issue() -> None:
@@ -466,7 +480,8 @@ def test_parse_detour_location_issues_quote_raw_text() -> None:
 
 
 def test_parse_detour_issue_order_with_locations() -> None:
-    """start, end, the order check, location_start, location_end, direction."""
+    """start, end, the order check, location_start, direction. An
+    unrecognized location_end adds nothing, even alongside other issues."""
     notice = parse_made(
         start="",
         end="garbage",
@@ -478,7 +493,6 @@ def test_parse_detour_issue_order_with_locations() -> None:
         "start: blank datetime ''",
         "end: unrecognized datetime 'garbage'",
         "location_start: unrecognized location 'Dickinson'",
-        "location_end: unrecognized location 'PNC Center'",
         NONE_FOUND,
     )
 
@@ -522,51 +536,28 @@ def test_parse_detour_every_fixture_item_round_trips(
         assert reloaded == notice, key
 
 
-JFK_TO_MARKET = "unrecognized location 'JFK/17th to 30th & Market 23rd to 19th'"
-JFK_ART_MUSEUM = "unrecognized location 'JFK btwn 20th & 15th/ Art Museum 16th'"
-VA_HOSPITAL = "unrecognized location 'University Ave at The VA Hospital'"
-PNC_CENTER = "unrecognized location 'PNC Center'"
+PNC_CENTER = "location_start: unrecognized location 'PNC Center'"
 RIDGE_TWICE = "location_start: same street twice in location 'Ridge Ave & Ridge Ave'"
 
 NOT_COMPLETE = {
-    (f"{OLD}__bus_route_2.json", 3): ("partial", (f"location_end: {JFK_TO_MARKET}",)),
     (f"{OLD}__bus_route_24.json", 1): (
         "partial",
         ("location_start: unrecognized location 'Bethayres Station'", NONE_FOUND),
     ),
-    (f"{OLD}__bus_route_44.json", 4): ("partial", (f"location_end: {JFK_TO_MARKET}",)),
     (f"{OLD}__bus_route_49.json", 2): (
         "partial",
-        (f"location_start: {VA_HOSPITAL}", f"location_end: {VA_HOSPITAL}"),
+        ("location_start: unrecognized location 'University Ave at The VA Hospital'",),
     ),
     (f"{OLD}__bus_route_6.json", 0): ("partial", (NONE_FOUND,)),
     (f"{OLD}__bus_route_61.json", 0): ("partial", (RIDGE_TWICE,)),
     (f"{OLD}__bus_route_61.json", 1): ("partial", (RIDGE_TWICE,)),
     (f"{OLD}__bus_route_64.json", 1): ("unknown", ()),
     (f"{OLD}__bus_route_64.json", 2): ("unknown", ()),
-    (f"{OLD}__bus_route_68.json", 0): (
-        "partial",
-        (f"location_start: {PNC_CENTER}", f"location_end: {PNC_CENTER}"),
-    ),
-    (f"{OLD}__bus_route_68.json", 1): (
-        "partial",
-        (f"location_start: {PNC_CENTER}", f"location_end: {PNC_CENTER}"),
-    ),
-    (f"{NEW}__bus_route_124.json", 2): (
-        "partial",
-        (f"location_end: {JFK_ART_MUSEUM}",),
-    ),
-    (f"{NEW}__bus_route_124.json", 3): (
-        "partial",
-        (f"location_end: {JFK_ART_MUSEUM}",),
-    ),
-    (f"{NEW}__bus_route_31.json", 5): ("partial", (f"location_end: {JFK_ART_MUSEUM}",)),
+    (f"{OLD}__bus_route_68.json", 0): ("partial", (PNC_CENTER,)),
+    (f"{OLD}__bus_route_68.json", 1): ("partial", (PNC_CENTER,)),
     (f"{NEW}__bus_route_31.json", 6): (
         "partial",
-        (
-            "location_start: unrecognized location 'Broad &'",
-            f"location_end: {JFK_ART_MUSEUM}",
-        ),
+        ("location_start: unrecognized location 'Broad &'",),
     ),
 }
 """Every fixture item that isn't ``complete``, with its issues."""

@@ -68,15 +68,17 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         The notice, with ``source`` holding the raw strings verbatim.
 
     Issues come in field order: start, end, the end-before-start check,
-    location_start, location_end, then direction. Each is prefixed with
-    its field name.
+    location_start, then direction. Each is prefixed with its field name.
 
     Decisions this function owns (each needs a test):
         - Locations: ``parse_location`` result -> ``start_place`` /
-          ``end_place``. Blank text -> ``None`` with no issue (as for
-          ``location_start``); text in an unrecognized form -> ``None`` +
-          issue, e.g. ``"location_start: unrecognized location
-          'Dickinson'"``, so the notice is ``partial``.
+          ``end_place``. Blank text -> ``None`` with no issue. Start text
+          in an unrecognized form -> ``None`` + issue, e.g.
+          ``"location_start: unrecognized location 'Dickinson'"``, so the
+          notice is ``partial``. End text in an unrecognized form ->
+          ``None`` with no issue: the end can be inferred by walking the
+          detour, so it shouldn't cost ``complete`` (42 of 166 real
+          notices would otherwise be ``partial`` for this alone).
         - Directions: exactly one found -> it; none -> ``None`` + issue;
           two or more different -> ``None`` + issue (never pick one).
         - ``end`` earlier than ``start`` (as real instants) -> keep both,
@@ -113,8 +115,10 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
     start_place, start_place_issues = _parse_place(
         "location_start", detour.location_start
     )
-    end_place, end_place_issues = _parse_place("location_end", detour.location_end)
-    issues.extend([*start_place_issues, *end_place_issues])
+    issues.extend(start_place_issues)
+    # Unrecognized end text is not an issue (decided): the end can be
+    # inferred by walking the detour, so it shouldn't cost ``complete``.
+    end_place, _ = _parse_place("location_end", detour.location_end)
     direction, direction_issues = _pick_direction(detour.message)
     issues.extend(direction_issues)
     return DetourNotice(
@@ -152,7 +156,8 @@ def _parse_place(field: str, raw: str) -> tuple[Location | None, tuple[str, ...]
 
     Blank text -> ``None`` and no issue (a blank location is "not given",
     not a problem). Unrecognized text -> ``None`` and one issue, e.g.
-    ``"location_end: unrecognized location 'Broad &'"``.
+    ``"location_start: unrecognized location 'Broad &'"``; the caller
+    decides whether to keep it (``parse_detour`` drops it for the end).
     """
     if clean_text(raw) is None:
         return None, ()

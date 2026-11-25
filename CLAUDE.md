@@ -137,7 +137,8 @@ notebooks/       exploration only, not production code
   `JFK Blvd` is `John F. Kennedy Boulevard`. The same name repeats across
   towns (`North Broad Street` exists in NJ/DE too), so a name pair alone
   isn't a location: check it against the route. OSM's `tiger:name_base`
-  tag (bare name, e.g. `Broad`; on ~2/3 of PA ways) is not read yet.
+  tag (bare name, e.g. `Broad`) isn't read and isn't needed:
+  `osm_street_keys` drops the prefix itself.
 
 ## Conventions
 
@@ -154,7 +155,11 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Reached: **OSM street data is in place for tier A**: Geofabrik extracts
+Reached: **tier A inputs are ready**: alert street names normalize to
+OSM's (`match/streets.py`), and notices carry their locations split into
+street names (`DetourNotice.start_place`/`end_place`, from
+`parse/location.py`). Next is the intersection lookup itself. Before
+that: **OSM street data**: Geofabrik extracts
 fetched by `ingest osm`, read and clipped by `streets/`, cached in
 `data/processed/streets.parquet` (146,871 named road ways). Before that:
 `match/` routes + directions (parsed notices -> `list[Detour]` via
@@ -435,9 +440,9 @@ README now has one index table per snapshot. Findings:
   their indices; new items were appended (not guaranteed by SEPTA).
 - Back-to-back phases: route 31 #3 ends 11/26 2:00 AM exactly when #5
   starts.
-- Truncated LS `"Broad &"` (31 #6): not blank, so it's a known location
-  and the notice can be `complete`. Open: flag in parse/ or leave to
-  match/ (Claude leans match/).
+- Truncated LS `"Broad &"` (31 #6). Settled: parse/ flags it
+  (`parse_location` rejects it; an unrecognized start location is an
+  issue), so 31 #6 is `partial`.
 - Doubled-dash date `"11-26--26"` pasted onto 7 routes; `"S PEnn Sq"`,
   `"Sping Garden"`; same place spelled `"30th & Chestnut Sts"` and
   `"30th & Chestnut"` (124 #0 vs #3).
@@ -605,7 +610,8 @@ Claude in four increments, each reviewed). `parse_detour`:
 - Private `_pick_direction(message)`: one distinct -> it; none ->
   `"direction: none found in message"`; 2+ -> `"direction: conflicting
   SB, NB in message"` (message order). No real message conflicts yet.
-- Issue order (documented): start, end, order check, direction.
+- Issue order (documented): start, end, order check, location_start
+  (added later, see "Locations"), direction.
 `parse_snapshot` = `[parse_detour(route, d, snapshot) for route in
 read_snapshot(content) for d in route.detour]`; catches nothing (a
 structural `ValidationError` fails the whole snapshot).
@@ -616,17 +622,18 @@ used for bad times, DST, conflicts: no fixture has those), and
 `mini_snapshot` (fixtures joined into one API list, deliberately
 unsorted: 55, APP, 64, trolley 15, 24). Route 55 #0 is compared as one
 whole hand-written notice. Fixture sweep: all **65** fixture items parse
-and JSON round-trip; a pinned `NOT_COMPLETE` dict lists the 4
-non-complete items (24 #1, 6 #0: partial, no direction; 64 #1, #2:
-unknown, no issues); the other 61 are complete. **Adding a fixture
+and JSON round-trip; a pinned `NOT_COMPLETE` dict lists every
+non-complete item with its issues (now 10, see "Locations"; was 4: 24
+#1, 6 #0 no direction; 64 #1, #2 unknown, no issues). **Adding a fixture
 breaks the pin on purpose**: review its items, then update the count
 and `NOT_COMPLETE`. Mutations: 19 + 14 + 10 + 5 (sweep) + 6, all caught
 except equivalents (`directions[0]` vs `[-1]` when len is 1). Bad-time
 handling is covered only by hand-built tests (the sweep can't see it).
 428 tests total.
-Real snapshots, by hand: `025344Z` 140 notices (131 complete, 7 partial,
-2 unknown); `121123Z` 166 (157 / 7 / 2). Every partial is
-"direction: none found"; every unknown is route 64's blank-LS items.
+Real snapshots, by hand (before locations were parsed): `025344Z` 140
+notices (131 complete, 7 partial, 2 unknown); `121123Z` 166 (157 / 7 /
+2). Every partial was "direction: none found"; every unknown is route
+64's blank-LS items. Current numbers: see "Locations".
 README "Expected" guesses held, except the ones that hinge on open
 questions (recurrence / mismatch issues are not added, so route 2 #0,
 32 #2, 44 #3 are `complete`). Route 24 has 4 items, not 3.
@@ -784,6 +791,90 @@ against bus stop names ("A & B", case/dot/suffix-insensitive, either
 order) located 118 of 166 notices within ~300 m; misses were typos,
 intersections with no stop (JFK & Broad), and non-intersections.
 
+Done: street-name normalization, `match/streets.py` (written by Claude
+in reviewed increments; rules decided by me from a probe of the 170 real
+locations vs the 40,003 cache names).
+- `split_street_type(name) -> StreetName(base, street_type)`: delete dots,
+  casefold, collapse whitespace, replace whole words via `WORD_ALIASES`,
+  then split a known type off the **last** word only (`St Elizabeth
+  Drive`: the leading St is Saint). A name that is only a type word stays
+  the base (never an empty base); blank -> `ValueError`. Used for alert
+  text and OSM names alike.
+- `STREET_TYPES`: only what the data needs (Street, Avenue, Road,
+  Boulevard, Drive, Lane, Pike + `st ave av rd blvd dr ln pk`; `Pk` =
+  Pike). Park/Square/Ferry/Ridge left out on purpose: they're name words
+  (`Hunting Park`).
+- `osm_street_keys(osm_name)`: full key first, plus the key without a
+  leading North/South/East/West **if the base has more words** (`South
+  Street` keeps one key). Decided: prefixes dropped **on the OSM side
+  only** (alert `South & 33rd` is South Street); full words only (OSM
+  single letters are letter streets: `E Street`, `W Street`); trailing
+  directions (`Broad Street North`) not stripped. Extra candidates
+  (`West Chester Pike` -> `chester pike`, a different road) are left for
+  the route check. 4,135 names get a second key.
+- Decided: a type is **optional, but strict if given** (alert `JFK Blvd`
+  doesn't match OSM `JFK Drive`; bare `JFK` does). Consequence: `Midvale
+  Ave Btwn Fox St & Henry St` won't match (OSM has Henry Avenue).
+- `WORD_ALIASES` (decided: applied to **both sides**; 14 entries, each
+  from a real value): `jfk`, `mt`, `prk`, `graysferry`, `malvernave`, and
+  typos `batrum creshem farimount krestown lorretto riggold schuykill
+  graden sping` (OSM itself has `Schuykill Parkway`). One pass: no
+  replacement word is a key. Deliberately absent: `garney` (route 54;
+  probably Garnet St, unverified), `health science` (would need phrase
+  aliases).
+- Tests `tests/test_match_streets.py`: an `ALIAS_EVIDENCE` table of
+  (real alert piece, real OSM name) pairs, checked with a test helper
+  `alert_matches_osm` (same base; alert type None or equal; the real
+  matcher in step 2 should follow it); a test that every alias has
+  evidence. Probe after: of 198 alert name pieces, 10 find no OSM base
+  (Garney, Health Science, landmarks, and splitting artifacts), 0 type
+  mismatches.
+
+Done: locations, `parse/location.py` + `model.py` (written by Claude in
+reviewed increments). Decided (mine): splitting lives in **parse/** with
+a model field (not private to match/); recognize **intersection +
+segment** forms first; only an **unrecognized start location** is an
+issue (end text can be inferred by walking the detour).
+- `model.py`: `Intersection(streets: (A, B))`, `Segment(street,
+  between: (B, C))`, each with a fixed `kind` literal; `type Location`
+  is discriminated by `kind` (JSON without a valid `kind` is rejected).
+  Names are `CleanText`, kept as written (not normalized: that's
+  match/streets). `DetourNotice` gained **required** `start_place` /
+  `end_place: Location | None` (decided: no default). `status` unchanged.
+- `parse_location(raw) -> Location`, raises `ValueError` quoting `raw`:
+  `"A & B"` / `"A and B"` (any case, `&` spacing optional); `"A
+  btwn|btw|between B & C"` (whole word, any case). A final plural
+  `Sts`/`Aves`/`Streets` goes onto both names of the pair, singular
+  (`Arch & 15th Sts` -> `Arch St`, `15th St`; in a segment only onto B
+  and C). Unrecognized: blank, not exactly two names (`Broad &`,
+  `Dickinson`), two markers, `&` before the marker, any `/`, `to`, `at`.
+  **Same street twice** raises too (decided by Claude: `Ridge Ave & Ridge
+  Ave` would make every joint between two Ridge Avenue ways a candidate;
+  also a segment bounded by its own street). Bounds keep text order. Known
+  limit: `Arch St & 15th Sts` gives `Arch St St` (none seen; the match
+  just fails). Private `_split_pair` is shared by both forms.
+- `parse_detour`: private `_parse_place(field, raw)`; blank -> `None`,
+  no issue; start unrecognized -> `None` + `"location_start:
+  unrecognized location '...'"`; end unrecognized -> `None`, issue
+  dropped. Issue order: start, end, order check, location_start,
+  direction.
+- Real snapshots now: `025344Z` 140 (120 complete / 18 partial / 2
+  unknown); `121123Z` 166 (145 / 19 / 2). 160 of 172 location strings
+  parse (136 intersections, 23 segments); 21 and 50 notices have end text
+  that didn't parse (29 are the parade's `JFK btwn 20th & 15th/ Art
+  Museum 16th`). Start-location issues: `PNC Center` x6, `Ridge Ave &
+  Ridge Ave` x2, `Bethayres Station`, `Dickinson`, `University Ave at The
+  VA Hospital`, `Chester Pk/Morton Ave & 9th St`, `Broad &`.
+- Tests: `tests/test_location.py` (fixture sweep pins the 7 unparsed
+  fixture locations), location tests in `test_model.py`/`test_notice.py`.
+  The `NOT_COMPLETE` pin is now 10 (added: 49 #2, 61 #0/#1, 68 #0/#1,
+  31 #6, and 24 #1 gained a location issue). `test_match_notice.py`'s
+  parse-issues test now expects 24 #1's location issue too. Every
+  increment mutation-checked; the one survivor is equivalent. 969 tests
+  total.
+- Not updated yet: the fixture README's "Expected" column for the
+  location-related items.
+
 Geography plan (agreed; tier A in progress: street data done). 170 distinct real messages: 126
 turn-by-turn with a rejoin ("SB via 17th St, Left on Spring Garden St,
 ..., Reg Rt"), 12 turns without a rejoin (layovers), 32 stop-related
@@ -802,22 +893,21 @@ Decided: street data = OSM via Geofabrik + Parquet cache (see above).
 Still open: libraries for later tiers (shapely + pyproj, likely networkx;
 not osmnx, not a routing engine, which picks its own streets).
 Street-name matching: exact after normalizing plus a small alias table
-from fixtures, not fuzzy ("Sping Garden", "Graysferry", "Garney",
-"Broad &"). Each tier adds geometry to `RouteMatch` -> a `model.py`
-change, flag first.
+from fixtures, not fuzzy (done: `match/streets.py`). Each tier adds
+geometry to `RouteMatch` -> a `model.py` change, flag first.
 
-Next (clean session): **tier A matching in `match/`** (agreed). Steps,
-each my decision where noted; ask before each:
-1. **Street-name normalization rules** (mine): direction prefixes
-   (`North`/`N`), type suffixes (`Street`/`St`/`Av`/`Ave`), ordinals
-   (`17th`), dots/case, whether to read OSM's `tiger:name_base` (would
-   need a new cache column + rebuild), and the alias table (`JFK` ->
-   `John F Kennedy`, typos from fixtures). Drive it from the real alert
-   `location_start` values and the real cache names.
-2. **Intersection lookup**: OSM nodes shared by ways whose normalized
-   names match each side of `"A & B"`. Several matches (same names in
-   different towns) -> keep only those near the matched route's shapes
-   (needs shapely + pyproj: ask before adding), else `unknown`.
+Next: **tier A matching in `match/`** (agreed). Steps, each my decision
+where noted; ask before each:
+1. ~~Street-name normalization~~ (done) and ~~location splitting~~
+   (done).
+2. **Intersection lookup** (next): index the street cache by
+   `osm_street_keys`, then find OSM nodes shared by ways matching each
+   name of `start_place` (rule: same base; alert type None or equal, as
+   in the `alert_matches_osm` test helper). Start with the part that
+   needs no new library. Several matches (same names in different towns)
+   -> keep only those near the matched route's shapes (needs shapely +
+   pyproj: ask before adding), else `unknown`. A `Segment` gives two
+   intersections (street & each bound).
 3. **Where the point lives**: tier A adds a location to `RouteMatch` or
    `Detour` -> `model.py` change, flag first.
 4. Stop-closure notices: point at the stop (`load_stops`; maybe needs
