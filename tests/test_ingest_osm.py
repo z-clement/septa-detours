@@ -4,7 +4,12 @@ import re
 
 import pytest
 
-from septa_detours.ingest.osm import GEOFABRIK_REGIONS, extract_url, parse_md5_file
+from septa_detours.ingest.osm import (
+    GEOFABRIK_REGIONS,
+    dated_extract_name,
+    extract_url,
+    parse_md5_file,
+)
 
 # Real bodies of Geofabrik's .md5 files, fetched 2026-11-25. Same digest,
 # different names: the -latest file and the dated file it redirects to.
@@ -64,6 +69,105 @@ def test_extract_url_accepts_every_configured_region():
 def test_extract_url_rejects_invalid_region(region):
     with pytest.raises(ValueError, match="invalid Geofabrik region"):
         extract_url(region)
+
+
+# --- dated_extract_name ------------------------------------------------------
+
+US = "https://download.geofabrik.de/north-america/us"
+
+
+@pytest.mark.parametrize(
+    ("region", "final_url", "expected"),
+    [
+        # The real redirect targets seen on 2026-11-25.
+        (
+            "pennsylvania",
+            f"{US}/pennsylvania/pennsylvania-261124.osm.pbf",
+            "pennsylvania-261124.osm.pbf",
+        ),
+        (
+            "new-jersey",
+            f"{US}/new-jersey/new-jersey-261124.osm.pbf",
+            "new-jersey-261124.osm.pbf",
+        ),
+        ("delaware", f"{US}/delaware/delaware-261124.osm.pbf", DATED_NAME),
+        # Calendar edge cases that are real dates.
+        (
+            "delaware",
+            f"{US}/delaware/delaware-280229.osm.pbf",
+            "delaware-280229.osm.pbf",
+        ),
+        (
+            "delaware",
+            f"{US}/delaware/delaware-270101.osm.pbf",
+            "delaware-270101.osm.pbf",
+        ),
+        (
+            "delaware",
+            f"{US}/delaware/delaware-261231.osm.pbf",
+            "delaware-261231.osm.pbf",
+        ),
+    ],
+)
+def test_dated_extract_name(region, final_url, expected):
+    assert dated_extract_name(region, final_url) == expected
+
+
+@pytest.mark.parametrize(
+    "final_url",
+    [
+        # No redirect followed: the name would lose the data date.
+        f"{US}/delaware-latest.osm.pbf",
+        f"{US}/delaware/delaware-latest.osm.pbf",
+        # Wrong region (in the folder, the name, or both).
+        f"{US}/new-jersey/new-jersey-261124.osm.pbf",
+        f"{US}/delaware/new-jersey-261124.osm.pbf",
+        f"{US}/new-jersey/delaware-261124.osm.pbf",
+        # Wrong place.
+        "https://mirror.example.org/north-america/us/delaware/delaware-261124.osm.pbf",
+        "http://download.geofabrik.de/north-america/us/delaware/delaware-261124.osm.pbf",
+        f"{US}/delaware-261124.osm.pbf",
+        f"{US}/extra/delaware/delaware-261124.osm.pbf",
+        # Extras around a good URL.
+        f"{US}/delaware/delaware-261124.osm.pbf?token=1",
+        f"{US}/delaware/delaware-261124.osm.pbf#x",
+        f"{US}/delaware/delaware-261124.osm.pbf.md5",
+        f"{US}/delaware/delaware-261124.osm.pbf/",
+        f" {US}/delaware/delaware-261124.osm.pbf",
+        # Wrong date shape.
+        f"{US}/delaware/delaware-26112.osm.pbf",
+        f"{US}/delaware/delaware-2611240.osm.pbf",
+        f"{US}/delaware/delaware-20261124.osm.pbf",
+        f"{US}/delaware/delaware-26-11-24.osm.pbf",
+        # Regex-escape check: "." must be a literal dot.
+        f"{US}/delaware/delaware-261124xosmxpbf",
+        "https://downloadxgeofabrikxde/north-america/us/delaware/delaware-261124.osm.pbf",
+        # Wrong extension.
+        f"{US}/delaware/delaware-261124.osm.bz2",
+        f"{US}/delaware/delaware-261124.shp.zip",
+    ],
+)
+def test_dated_extract_name_rejects_unexpected_url(final_url):
+    with pytest.raises(ValueError, match="did not redirect to a dated extract"):
+        dated_extract_name("delaware", final_url)
+
+
+@pytest.mark.parametrize(
+    "stamp",
+    ["261340", "261100", "260230", "270229", "260431", "000000", "261132"],
+)
+def test_dated_extract_name_rejects_impossible_date(stamp):
+    final_url = f"{US}/delaware/delaware-{stamp}.osm.pbf"
+    with pytest.raises(ValueError, match=f"impossible date '{stamp}'"):
+        dated_extract_name("delaware", final_url)
+
+
+@pytest.mark.parametrize("region", ["", "Delaware", "../delaware", "us/delaware"])
+def test_dated_extract_name_rejects_invalid_region(region):
+    """Checked before the URL, with the same message as ``extract_url``."""
+    final_url = f"{US}/{region}/{region}-261124.osm.pbf"
+    with pytest.raises(ValueError, match="invalid Geofabrik region"):
+        dated_extract_name(region, final_url)
 
 
 # --- parse_md5_file ----------------------------------------------------------

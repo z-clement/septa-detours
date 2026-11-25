@@ -18,6 +18,7 @@ reject truncated or corrupted downloads before they replace a good file.
 """
 
 import re
+from datetime import datetime
 
 GEOFABRIK_US_URL = "https://download.geofabrik.de/north-america/us"
 
@@ -55,10 +56,67 @@ def extract_url(region: str) -> str:
     Raises:
         ValueError: If ``region`` isn't lowercase hyphenated words.
     """
+    _check_region(region)
+    return f"{GEOFABRIK_US_URL}/{region}-latest.osm.pbf"
+
+
+def dated_extract_name(region: str, final_url: str) -> str:
+    """Return the dated file name a "latest" download redirected to.
+
+    ``dated_extract_name("delaware",
+    "https://download.geofabrik.de/north-america/us/delaware/delaware-261124.osm.pbf")``
+    gives ``"delaware-261124.osm.pbf"``. Saving under this name records
+    which day's data the file holds (Geofabrik's date, ``YYMMDD``), not when
+    we fetched it.
+
+    Pure: inspects a string, touches no network.
+
+    Strict on purpose: the *whole* URL must be
+    ``<GEOFABRIK_US_URL>/<region>/<region>-<YYMMDD>.osm.pbf``. If the redirect
+    lands anywhere else (another host or folder, another region, a query
+    string, or no redirect at all, so the name is still ``-latest``), that's
+    a change on Geofabrik's side and it raises instead of guessing. The date
+    must be a real calendar date (``261340`` is rejected); ``%y`` reads
+    ``26`` as 2026.
+
+    Args:
+        region: The region that was requested, e.g. ``"new-jersey"``.
+        final_url: The URL after following redirects, as a string
+            (``str(response.url)``).
+
+    Raises:
+        ValueError: If ``region`` is invalid, the URL isn't the expected
+            dated-file URL for it, or the date doesn't exist.
+    """
+    _check_region(region)
+    pattern = (
+        re.escape(f"{GEOFABRIK_US_URL}/{region}/{region}-")
+        + r"(\d{6})"
+        + re.escape(".osm.pbf")
+    )
+    match = re.fullmatch(pattern, final_url)
+    if match is None:
+        msg = (
+            f"{region!r} download did not redirect to a dated extract: "
+            f"got {final_url!r}"
+        )
+        raise ValueError(msg)
+
+    stamp = match.group(1)
+    try:
+        # Only the calendar date is checked; no time or zone is involved.
+        datetime.strptime(stamp, "%y%m%d")  # noqa: DTZ007
+    except ValueError:
+        msg = f"{region!r} extract has an impossible date {stamp!r} in {final_url!r}"
+        raise ValueError(msg) from None
+    return f"{region}-{stamp}.osm.pbf"
+
+
+def _check_region(region: str) -> None:
+    """Raise ``ValueError`` unless ``region`` is lowercase hyphenated words."""
     if not _REGION_PATTERN.fullmatch(region):
         msg = f"invalid Geofabrik region {region!r}: expected e.g. 'new-jersey'"
         raise ValueError(msg)
-    return f"{GEOFABRIK_US_URL}/{region}-latest.osm.pbf"
 
 
 def parse_md5_file(content: bytes, expected_name: str) -> str:
