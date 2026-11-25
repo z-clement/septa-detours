@@ -312,3 +312,22 @@ Done (2026-11-25): **writing the contract** (web plan P6). D3 decided
   mutation: an unescaped `.`, `match` vs `fullmatch`, the folder check),
   `tests/test_export_site.py` (13; a fake two-feed GTFS with no rail
   `feed_info.txt`, real route 2 notices on fake route 21). 1456 tests.
+
+Done (2026-11-25): **W1, `map.js` split into modules** (no visible change
+except plurals). `web/js/`: `format.js` (pure: `formatTime`,
+`describeStart`, `describeLine`, `summarize`, new `plural`), `data.js`
+(`loadCollection`, `loadDetours`), `mapview.js` (the only `maplibregl`
+user: `createMap`, layers, popups, `collectionBounds`), `main.js`
+(bootstrap, status/error). `css/app.css` from `index.html`'s `<style>`.
+Modules with nothing to hold yet (`state`, `sidebar`, `routes`,
+`detours`) come with W3/W4. Fixed: "1 detour start points on 1 routes"
+and "detour(s)" -> `plural`, with the verb ("1 detour lists"). `formatTime`
+also treats `null` as unknown (plain JSON in W2 keeps nulls; `new
+Date(null)` is 1970). Tests: `web/test/format.test.js` (14, Node's
+built-in runner, no npm; a real route 2 start point). Mutation lesson:
+this machine is on New York time, so deleting `timeZone` passed until
+the test file set `process.env.TZ = "Asia/Tokyo"`. No-visible-change
+check: a scratch Node script ran the old `map.js` and the new `main.js`
+with a fake `maplibregl`/`document`/`fetch` on the real
+`detours.geojson`; the recorded calls, status and error text were
+identical.

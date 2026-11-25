@@ -61,7 +61,9 @@ src/septa_detours/io.py   shared helper (not a stage): write_bytes_atomic,
 src/septa_detours/geo.py  shared helper (not a stage): EARTH_RADIUS_M,
                           distance_to_line_m (equirectangular metres)
 src/septa_detours/model.py
-web/             map frontend: index.html + map.js (the detours map);
+web/             map frontend (the detours map): index.html, css/app.css,
+                 js/ (ES modules: main, data, mapview = the only
+                 maplibregl user, format = pure), test/ (node --test);
                  web/data/ holds exported data (gitignored): the data
                  contract (`export site`) + the current page's
                  detours.geojson
@@ -97,7 +99,8 @@ docs/            plans (web-plan.md = current, geography-plan.md,
 
 ## Commands
 
-- Run tests: `uv run pytest`
+- Run tests: `uv run pytest`; JS (pure modules only, no npm):
+  `node --test web/test/`
 - Lint/format: `uv run ruff check . && uv run ruff format .`
 - Run everything from the repo root (default paths are relative to it).
   The map pipeline: `ingest` -> `match` -> `export site` (the new
@@ -232,7 +235,9 @@ Details and their origins are in `docs/notes/`; the short version:
   's/\xc2\xa0/\\u00a0/g' <file>`).
 - ty: 45 pre-existing diagnostics (mostly `**dict` test helpers and
   `dict` invariance vs `Properties`); don't add more.
-- JS: no test runner yet (planned: `node --test`, see the web plan). The
+- JS: `node --test web/test/` for pure modules (no DOM, no
+  `maplibregl`). Tests set `process.env.TZ = "Asia/Tokyo"`: this machine
+  is on New York time, so a missing `timeZone` would otherwise pass. The
   drawn map can't be checked headless; check it by eye.
 
 ## Detailed notes

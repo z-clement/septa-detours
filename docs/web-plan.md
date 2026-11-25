@@ -1,6 +1,6 @@
 # Web plan: data contract and map app
 
-Status: **P1-P6 done** (the data contract: `export site`); W1 next. Written
+Status: **P1-P6 and W1 done** (the data contract: `export site`; `web/js/` modules); W2 next. Written
 2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
@@ -392,7 +392,7 @@ Python (the contract):
    the `export site` subcommand. Real run: 185 files, 3.6 MB, ~9 s.
 
 Web (plain JS):
-7. **W1** Split `map.js` into the modules above with **no visible
+7. **W1** (done) Split `map.js` into the modules above with **no visible
    change** (still reads `detours.geojson`); `node --test` for
    `format.js`. Fix the "1 lines" plural while here.
 8. **W2** `data.js` reads `status` (schema check), `routes`,

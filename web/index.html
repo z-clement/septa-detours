@@ -16,63 +16,7 @@
     />
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 
-    <style>
-      /* MapLibre needs its container to have a real height; a div with no
-         height renders as a 0px-tall (invisible) map. Making html/body full
-         height and positioning the map absolutely fills the window. */
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-      }
-
-      #map {
-        position: absolute;
-        inset: 0; /* top/right/bottom/left all 0 */
-      }
-
-      /* Error banner over the map. `:empty` hides it until showError()
-         puts text in it, so no JS is needed to toggle visibility. */
-      #error {
-        position: absolute;
-        top: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        max-width: calc(100% - 48px);
-        padding: 8px 12px;
-        border-radius: 4px;
-        background: #b00020;
-        color: #fff;
-        font: 14px/1.4 system-ui, sans-serif;
-        white-space: pre-line; /* keep the line break in error messages */
-      }
-      #error:empty {
-        display: none;
-      }
-
-      /* Status line (what's drawn), bottom-left so it stays clear of the
-         zoom buttons and popups. Hidden while empty, like #error. */
-      #status {
-        position: absolute;
-        bottom: 28px; /* above the basemap attribution */
-        left: 12px;
-        padding: 6px 10px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.9);
-        color: #222;
-        font: 13px/1.4 system-ui, sans-serif;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-      }
-      #status:empty {
-        display: none;
-      }
-
-      /* Popup text keeps its line breaks (describeStart joins with \n). */
-      .maplibregl-popup-content {
-        white-space: pre-line;
-        font: 13px/1.4 system-ui, sans-serif;
-      }
-    </style>
+    <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
     <div id="map"></div>
@@ -81,7 +25,8 @@
 
     <!-- type="module": strict mode, own scope (no accidental globals), and
          deferred until the HTML is parsed, so #map exists when it runs.
-         Loaded after maplibre-gl.js, so the global `maplibregl` exists. -->
-    <script type="module" src="map.js"></script>
+         Loaded after maplibre-gl.js, so the global `maplibregl` exists.
+         main.js imports the other modules in js/. -->
+    <script type="module" src="js/main.js"></script>
   </body>
 </html>

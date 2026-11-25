@@ -1,21 +1,10 @@
-// Map page: draw the detours GeoJSON (written by
-// `python -m septa_detours.export detours`) on a keyless OpenFreeMap basemap.
-//
-// The file is one FeatureCollection with two kinds of feature:
-//   - LineString: a detoured route's shape (one per route/shape/direction),
-//     with route properties, shape_id, direction_id and detour_count.
-//   - Point: where a detour starts, with route properties plus the
-//     detour's own fields (location_start, start, end, message, ...).
+// Everything that touches MapLibre: the map, its layers, popups, bounds.
+// The only module that uses the global `maplibregl` (from the UMD script
+// in index.html).
 
-import { describeLine, describeStart, summarize } from "./js/format.js";
+import { describeLine, describeStart } from "./format.js";
 
-const DATA_URL = "data/detours.geojson";
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
-
-/** The commands that make DATA_URL, named when it's missing. */
-const MAKE_DATA_COMMANDS =
-  "uv run python -m septa_detours.match\n" +
-  "uv run python -m septa_detours.export detours";
 
 /** Used when a feature's `route_color` is null (export emits null, never junk). */
 const FALLBACK_COLOR = "#555555";
@@ -28,26 +17,20 @@ const LINES_LAYER_ID = "detour-lines";
 const STARTS_LAYER_ID = "detour-starts";
 
 /**
- * Fetch and parse a GeoJSON FeatureCollection.
+ * Create the map in the element with id `container`, with zoom buttons.
  *
- * `fetch` only rejects on network failure. A 404 (file not exported yet)
- * resolves normally with `response.ok === false`, so that is checked here
- * and turned into an Error naming the URL, the status, and the commands
- * that make the file.
- *
- * @param {string} url
- * @returns {Promise<object>} the parsed FeatureCollection
+ * @param {string} container the id of the <div>
+ * @returns {maplibregl.Map}
  */
-async function loadCollection(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    // Template literal: backticks with ${...} interpolate, like a Python f-string.
-    throw new Error(
-      `Could not load ${url} (HTTP ${response.status}).\n` +
-        `Make it first:\n${MAKE_DATA_COMMANDS}`,
-    );
-  }
-  return response.json(); // also a Promise; the caller's `await` unwraps it
+export function createMap(container) {
+  const map = new maplibregl.Map({
+    container,
+    style: BASEMAP_STYLE,
+    center: PHILLY_CENTER,
+    zoom: 11,
+  });
+  map.addControl(new maplibregl.NavigationControl());
+  return map;
 }
 
 /**
@@ -74,7 +57,7 @@ function featurePositions(feature) {
  * @returns {[[number, number], [number, number]] | null} null when there
  *   are no positions at all (an empty collection has no bounds)
  */
-function collectionBounds(collection) {
+export function collectionBounds(collection) {
   let west = Infinity;
   let south = Infinity;
   let east = -Infinity;
@@ -128,7 +111,7 @@ function collectionBounds(collection) {
  * @param {maplibregl.Map} map
  * @param {object} collection
  */
-function addDetourLayers(map, collection) {
+export function addDetourLayers(map, collection) {
   map.addSource(SOURCE_ID, { type: "geojson", data: collection });
 
   const routeColor = ["coalesce", ["get", "route_color"], FALLBACK_COLOR];
@@ -180,7 +163,7 @@ function addDetourLayers(map, collection) {
  *
  * @param {maplibregl.Map} map
  */
-function addPopups(map) {
+export function addPopups(map) {
   map.on("click", (event) => {
     const starts = map.queryRenderedFeatures(event.point, {
       layers: [STARTS_LAYER_ID],
@@ -216,58 +199,3 @@ function addPopups(map) {
   }
 }
 
-/**
- * Show a short status line on the page.
- *
- * @param {string} message
- */
-function showStatus(message) {
-  // textContent (not innerHTML) so the message can't inject markup.
-  document.getElementById("status").textContent = message;
-}
-
-/**
- * Show an error message on the page (and in the console).
- *
- * @param {string} message
- */
-function showError(message) {
-  console.error(message);
-  document.getElementById("error").textContent = message;
-}
-
-/** Build the map, load the data, draw it, and zoom to it. */
-async function main() {
-  const map = new maplibregl.Map({
-    container: "map", // the id of the <div>
-    style: BASEMAP_STYLE,
-    center: PHILLY_CENTER,
-    zoom: 11,
-  });
-  map.addControl(new maplibregl.NavigationControl());
-
-  // The style loading and our data download are independent, so start both
-  // and wait for both. `map.once("load")` with no callback returns a Promise.
-  // Promise.all resolves to an array of results, in the order given; the
-  // `[, collection]` skips the first (the load event, which we don't need).
-  const [, collection] = await Promise.all([
-    map.once("load"),
-    loadCollection(DATA_URL),
-  ]);
-
-  addDetourLayers(map, collection);
-  addPopups(map);
-  showStatus(summarize(collection));
-
-  // No bounds means no detours: a true state, not an error. The map stays
-  // on Philadelphia and the status line says so.
-  const bounds = collectionBounds(collection);
-  if (bounds !== null) {
-    map.fitBounds(bounds, { padding: 40, duration: 0 });
-  }
-}
-
-// An async function returns a Promise; an error thrown inside it becomes a
-// rejection, which `.catch` turns into a visible message instead of a
-// silent console-only failure.
-main().catch((err) => showError(err.message));
