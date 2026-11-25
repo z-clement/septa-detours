@@ -40,6 +40,12 @@ TRIP_COLUMNS = [
     "direction_id",
     "shape_id",
 ]
+DIRECTION_COLUMNS = [
+    "route_id",
+    "direction_id",
+    "direction",
+    "direction_destination",
+]
 SHAPE_COLUMNS = [
     "shape_id",
     "shape_pt_lat",
@@ -125,6 +131,27 @@ def load_trips(
     Casts ``direction_id`` to an integer. ``shape_id`` stays a string.
     """
     df = _concat_feeds(feeds, "trips", TRIP_COLUMNS, root)
+    return df.with_columns(pl.col("direction_id").cast(pl.Int8))
+
+
+def load_directions(
+    feeds: Sequence[Feed] = ALL_FEEDS,
+    root: Path = DEFAULT_GTFS_ROOT,
+) -> pl.DataFrame:
+    """Load ``directions`` for the given feeds, stacked into one frame.
+
+    ``directions.txt`` is not part of the GTFS spec; it's an extension SEPTA
+    publishes, naming each ``(route_id, direction_id)``'s direction (e.g.
+    route 55: ``0`` = ``"Northbound"``, ``1`` = ``"Southbound"``). Bus
+    routes mostly use compass names, a few use ``"Inbound"``/``"Outbound"``
+    /``"Loop"``; rail uses only ``"Inbound"``/``"Outbound"``. Some routes
+    have only one row.
+
+    Casts ``direction_id`` to an integer (the same dtype as ``load_trips``,
+    so the two join without a cast). A feed without the file raises
+    ``FileNotFoundError``: if SEPTA drops the extension, we should notice.
+    """
+    df = _concat_feeds(feeds, "directions", DIRECTION_COLUMNS, root)
     return df.with_columns(pl.col("direction_id").cast(pl.Int8))
 
 
