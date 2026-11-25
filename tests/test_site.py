@@ -17,6 +17,7 @@ from septa_detours.export.site import (
     lines_bounds,
     route_catalog,
     route_detail,
+    route_directions,
     route_key,
     route_mode,
     route_shapes,
@@ -761,3 +762,132 @@ def test_route_shapes_rejects_a_shape_without_coordinates() -> None:
     trips = make_trips([("bus", "2", 0, "317310", 1), ("rail", "AIR", 0, "317310", 1)])
     with pytest.raises(ValueError, match=r"no coordinates: \[\('rail', '317310'\)\]"):
         route_shapes(trips, COORDINATES)
+
+
+# --- route_directions --------------------------------------------------------------
+
+# Must match ``load.load_directions`` output.
+DIRECTIONS_SCHEMA = {
+    "route_id": pl.String,
+    "direction_id": pl.Int8,
+    "direction": pl.String,
+    "direction_destination": pl.String,
+    "feed": pl.String,
+}
+
+
+def make_directions(
+    rows: list[tuple[str, int | None, str | None, str | None, Feed]],
+) -> pl.DataFrame:
+    return pl.DataFrame(rows, schema=DIRECTIONS_SCHEMA, orient="row")
+
+
+def shape_in(direction_id: int | None) -> RouteShape:
+    return RouteShape(
+        "317310", direction_id, 1, True, [[-75.17, 39.94], [-75.17, 39.93]]
+    )
+
+
+def test_route_directions_whole_output() -> None:
+    # Real rows for route 2 (out of order) and the Airport Line.
+    directions = make_directions(
+        [
+            ("2", 1, "Northbound", "Pulaski-Hunting Park", "bus"),
+            ("AIR", 0, "Inbound", "Center City Philadelphia", "rail"),
+            ("2", 0, "Southbound", "20th-Johnston", "bus"),
+            ("AIR", 1, "Outbound", "Philadelphia International Airport", "rail"),
+        ]
+    )
+    shapes = {"bus-2": [shape_in(0), shape_in(1)]}
+    assert route_directions(directions, shapes) == {
+        "bus-2": ROUTE_2_DIRECTIONS,
+        "rail-AIR": [
+            {
+                "direction_id": 0,
+                "name": "Inbound",
+                "destination": "Center City Philadelphia",
+            },
+            {
+                "direction_id": 1,
+                "name": "Outbound",
+                "destination": "Philadelphia International Airport",
+            },
+        ],
+    }
+
+
+def test_route_directions_adds_a_drawn_direction_the_file_lacks() -> None:
+    directions = make_directions(
+        [("2", 1, "Northbound", "Pulaski-Hunting Park", "bus")]
+    )
+    shapes = {"bus-2": [shape_in(1), shape_in(0), shape_in(None)]}
+    assert route_directions(directions, shapes) == {
+        "bus-2": [
+            {"direction_id": 0, "name": None, "destination": None},
+            {
+                "direction_id": 1,
+                "name": "Northbound",
+                "destination": "Pulaski-Hunting Park",
+            },
+        ]
+    }
+
+
+def test_route_directions_route_only_in_shapes() -> None:
+    assert route_directions(make_directions([]), {"bus-9": [shape_in(1)]}) == {
+        "bus-9": [{"direction_id": 1, "name": None, "destination": None}]
+    }
+
+
+def test_route_directions_route_without_shapes_keeps_its_rows() -> None:
+    directions = make_directions([("MANN", 0, "Loop", "Mann Center", "bus")])
+    assert route_directions(directions, {}) == {
+        "bus-MANN": [{"direction_id": 0, "name": "Loop", "destination": "Mann Center"}]
+    }
+
+
+def test_route_directions_shape_without_direction_adds_nothing() -> None:
+    assert route_directions(make_directions([]), {"bus-9": [shape_in(None)]}) == {
+        "bus-9": []
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "destination", "expected"),
+    [
+        ("Inbound\r", " Center City ", ("Inbound", "Center City")),
+        ("", "  ", (None, None)),
+        (None, None, (None, None)),
+    ],
+)
+def test_route_directions_names_are_stripped(
+    name: str | None, destination: str | None, expected: tuple[str | None, str | None]
+) -> None:
+    directions = make_directions([("AIR", 0, name, destination, "rail")])
+    [entry] = route_directions(directions, {})["rail-AIR"]
+    assert (entry["name"], entry["destination"]) == expected
+
+
+def test_route_directions_same_route_id_in_both_feeds() -> None:
+    directions = make_directions(
+        [("WTR", 0, "Inbound", None, "rail"), ("WTR", 0, "Eastbound", None, "bus")]
+    )
+    result = route_directions(directions, {})
+    assert (result["rail-WTR"][0]["name"], result["bus-WTR"][0]["name"]) == (
+        "Inbound",
+        "Eastbound",
+    )
+
+
+def test_route_directions_rejects_a_duplicate() -> None:
+    directions = make_directions([("2", 0, "Southbound", None, "bus")] * 2)
+    with pytest.raises(
+        ValueError, match="direction 0 of 'bus-2' appears more than once"
+    ):
+        route_directions(directions, {})
+
+
+def test_route_directions_rejects_a_missing_direction_id() -> None:
+    directions = make_directions([("2", None, "Southbound", None, "bus")])
+    with pytest.raises(ValueError, match="'bus-2' has no direction_id"):
+        route_directions(directions, {})

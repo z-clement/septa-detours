@@ -374,6 +374,56 @@ def route_shapes(
     return shapes
 
 
+def route_directions(
+    directions: pl.DataFrame, shapes: Mapping[str, Sequence[RouteShape]]
+) -> dict[str, list[DirectionEntry]]:
+    """List each route's directions for its detail file.
+
+    Args:
+        directions: Output of ``load.load_directions`` (SEPTA's extension).
+        shapes: Output of ``route_shapes``.
+
+    Returns:
+        Route ``key`` -> its directions sorted by ``direction_id``: every
+        ``directions.txt`` row, plus any direction its shapes use that the
+        file lacks (``name``/``destination`` ``None``), so every drawn
+        direction is listed. Names are stripped; blank -> ``None``. A route
+        in either input gets an entry; shapes with no ``direction_id`` add
+        nothing.
+
+    Raises:
+        ValueError: A row has no ``direction_id``, or a ``(route,
+            direction_id)`` appears twice (broken data); or a ``route_id``
+            isn't safe (``route_key``).
+    """
+    by_route: dict[str, dict[int, DirectionEntry]] = {}
+    for row in directions.iter_rows(named=True):
+        key = route_key(row["feed"], row["route_id"])
+        direction_id = row["direction_id"]
+        if direction_id is None:
+            raise ValueError(f"directions row for {key!r} has no direction_id")
+        route = by_route.setdefault(key, {})
+        if direction_id in route:
+            raise ValueError(
+                f"direction {direction_id} of {key!r} appears more than once"
+            )
+        route[direction_id] = {
+            "direction_id": direction_id,
+            "name": _blank_to_none(row["direction"]),
+            "destination": _blank_to_none(row["direction_destination"]),
+        }
+    for key, drawn in shapes.items():
+        route = by_route.setdefault(key, {})
+        for shape in drawn:
+            if shape.direction_id is not None and shape.direction_id not in route:
+                route[shape.direction_id] = {
+                    "direction_id": shape.direction_id,
+                    "name": None,
+                    "destination": None,
+                }
+    return {key: [route[d] for d in sorted(route)] for key, route in by_route.items()}
+
+
 def _blank_to_none(text: str | None) -> str | None:
     """Strip ``text``; empty or missing -> ``None``."""
     if text is None:
