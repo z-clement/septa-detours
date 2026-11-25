@@ -1,40 +1,25 @@
 """Tests for ``match.directions.find_direction_id``.
 
 Rows are copied from the real 2026-11-25 ``directions.txt`` files, except
-where a test says it builds a hypothetical one.
+where a test says it builds a hypothetical one. Frames are built with
+``directions_from_rows`` (conftest).
 """
+
+from collections.abc import Callable
 
 import polars as pl
 import pytest
 
 from septa_detours.match.directions import COMPASS_NAMES, find_direction_id
 
-# Must match what ``load.load_directions`` returns (column order and dtypes).
-DIRECTIONS_SCHEMA = {
-    "route_id": pl.String,
-    "direction_id": pl.Int8,
-    "direction": pl.String,
-    "direction_destination": pl.String,
-    "feed": pl.String,
-}
-
-
-def make_directions(rows: list[tuple]) -> pl.DataFrame:
-    """Build a directions frame from ``(feed, route_id, direction_id, direction)``.
-
-    ``direction_destination`` isn't read by ``find_direction_id``; it gets a
-    placeholder.
-    """
-    full_rows = [
-        (route_id, direction_id, direction, "Somewhere", feed)
-        for feed, route_id, direction_id, direction in rows
-    ]
-    return pl.DataFrame(full_rows, schema=DIRECTIONS_SCHEMA, orient="row")
+type DirectionsFromRows = Callable[
+    [list[tuple[str, str, int, str | None]]], pl.DataFrame
+]
 
 
 @pytest.fixture
-def directions() -> pl.DataFrame:
-    return make_directions(
+def directions(directions_from_rows: DirectionsFromRows) -> pl.DataFrame:
+    return directions_from_rows(
         [
             ("bus", "55", 0, "Northbound"),
             ("bus", "55", 1, "Southbound"),
@@ -113,9 +98,9 @@ def test_unknown_route_raises(directions: pl.DataFrame):
         find_direction_id(directions, "bus", "999", "SB")
 
 
-def test_other_feed_is_ignored():
+def test_other_feed_is_ignored(directions_from_rows: DirectionsFromRows):
     """A rail row never answers for a bus route with the same ``route_id``."""
-    directions = make_directions([("rail", "21", 0, "Eastbound")])
+    directions = directions_from_rows([("rail", "21", 0, "Eastbound")])
     with pytest.raises(ValueError, match=r"\(has none\)$"):
         find_direction_id(directions, "bus", "21", "EB")
 
@@ -129,16 +114,18 @@ def test_other_route_is_ignored(directions: pl.DataFrame):
 @pytest.mark.parametrize(
     "spelling", ["northbound", "Northbound ", "North", "Northbound Express"]
 )
-def test_direction_name_match_is_exact(spelling: str):
+def test_direction_name_match_is_exact(
+    spelling: str, directions_from_rows: DirectionsFromRows
+):
     """Hypothetical near-miss spellings: not SEPTA's, so no match."""
-    directions = make_directions([("bus", "55", 0, spelling)])
+    directions = directions_from_rows([("bus", "55", 0, spelling)])
     with pytest.raises(ValueError, match="has no Northbound direction"):
         find_direction_id(directions, "bus", "55", "NB")
 
 
-def test_duplicate_direction_raises():
+def test_duplicate_direction_raises(directions_from_rows: DirectionsFromRows):
     """Hypothetical: both direction_ids named Eastbound. Don't pick one."""
-    directions = make_directions(
+    directions = directions_from_rows(
         [("bus", "21", 0, "Eastbound"), ("bus", "21", 1, "Eastbound")]
     )
     with pytest.raises(
@@ -147,9 +134,11 @@ def test_duplicate_direction_raises():
         find_direction_id(directions, "bus", "21", "EB")
 
 
-def test_null_direction_names_are_skipped_in_message():
+def test_null_direction_names_are_skipped_in_message(
+    directions_from_rows: DirectionsFromRows,
+):
     """Hypothetical null name: not listed, and doesn't crash the message."""
-    directions = make_directions(
+    directions = directions_from_rows(
         [("bus", "55", 0, None), ("bus", "55", 1, "Southbound")]
     )
     with pytest.raises(ValueError, match=r"\(has Southbound\)$"):

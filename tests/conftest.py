@@ -5,7 +5,8 @@ other; anything shared lives here as a fixture (a callable, if it needs
 arguments).
 
 - Saved real alerts in ``fixtures/alerts/``.
-- Hand-built GTFS ``routes`` frames (real GTFS is not committed).
+- Hand-built GTFS ``routes``, ``trips`` and ``directions`` frames (real
+  GTFS is not committed), with the same columns and dtypes as the loaders.
 """
 
 from collections.abc import Callable
@@ -43,6 +44,65 @@ def routes_from_ids() -> Callable[[list[tuple[str, str]]], pl.DataFrame]:
             for feed, route_id in rows
         ]
         return pl.DataFrame(full_rows, schema=ROUTES_SCHEMA, orient="row")
+
+    return build
+
+
+# Must match what ``load.load_trips`` returns (column order and dtypes).
+TRIPS_SCHEMA = {
+    "route_id": pl.String,
+    "service_id": pl.String,
+    "trip_id": pl.String,
+    "trip_headsign": pl.String,
+    "direction_id": pl.Int8,
+    "shape_id": pl.String,
+    "feed": pl.String,
+}
+
+
+@pytest.fixture
+def trips_from_rows() -> Callable[[list[tuple[str, str, int, str]]], pl.DataFrame]:
+    """Return a builder: ``(feed, route_id, direction_id, shape_id)`` -> trips.
+
+    One trip per row; ``trip_id`` is unique per row (as in real data),
+    ``service_id``/``trip_headsign`` are placeholders.
+    """
+
+    def build(rows: list[tuple[str, str, int, str]]) -> pl.DataFrame:
+        full_rows = [
+            (route_id, "WKDY", f"trip{i}", "Somewhere", direction_id, shape_id, feed)
+            for i, (feed, route_id, direction_id, shape_id) in enumerate(rows)
+        ]
+        return pl.DataFrame(full_rows, schema=TRIPS_SCHEMA, orient="row")
+
+    return build
+
+
+# Must match what ``load.load_directions`` returns (column order and dtypes).
+DIRECTIONS_SCHEMA = {
+    "route_id": pl.String,
+    "direction_id": pl.Int8,
+    "direction": pl.String,
+    "direction_destination": pl.String,
+    "feed": pl.String,
+}
+
+
+@pytest.fixture
+def directions_from_rows() -> Callable[
+    [list[tuple[str, str, int, str | None]]], pl.DataFrame
+]:
+    """Return a builder: ``(feed, route_id, direction_id, direction)`` -> frame.
+
+    ``direction_destination`` is a placeholder (``match/`` doesn't read it).
+    """
+
+    def build(rows: list[tuple[str, str, int, str | None]]) -> pl.DataFrame:
+        full_rows = [
+            (route_id, direction_id, direction, "Somewhere", feed)
+            for feed, route_id, direction_id, direction in rows
+        ]
+        return pl.DataFrame(full_rows, schema=DIRECTIONS_SCHEMA, orient="row")
 
     return build
 
