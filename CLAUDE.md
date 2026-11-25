@@ -397,9 +397,8 @@ ty and imports pass. Layout:
   structural error fails the whole snapshot (`ValidationError`): API
   drift should be loud, not skipped.
 - `text.py::clean_text(raw) -> str | None`: **done** (see below).
-- `times.py::parse_api_datetime(raw) -> datetime`: fixed API format
-  only, attach `SEPTA_ZONE` (stdlib `zoneinfo`, America/New_York);
-  raises `ValueError` quoting `raw`.
+- `times.py::parse_api_datetime(raw) -> datetime` and
+  `local_time_issue(moment) -> str | None`: **done** (see below).
 - `direction.py`: `normalize_direction(token) -> Direction | None` and
   `find_directions(message) -> tuple[Direction, ...]` (distinct, in
   first-appearance order). Finding is separate from deciding.
@@ -417,9 +416,6 @@ Decisions:
 - `end` < `start` -> keep both, add an issue. API `start`/`end` win over
   times in the message text.
 Open (TODOs in the docstrings; decide while implementing):
-- `parse_api_datetime`: DST fall-back (ambiguous, `zoneinfo` silently
-  picks `fold=0`) and spring-forward (nonexistent, accepted silently):
-  raise, or accept and note?
 - `normalize_direction`: case handling (data shows `NB` and
   `Eastbound`); token splitting must keep `W/B` whole and must not read
   `WB` into a word like "Webster".
@@ -439,11 +435,43 @@ fixtures, since `tests/` has no `__init__.py`): `read_alert_fixture`
 (full file name -> bytes) and `alert_fixture_names` (sorted `*.json`).
 `tests/test_text.py` (18) includes a sweep validating every fixture
 location/reason against the real `CleanText`; 8 mutations, all caught.
-Write NBSP in tests as `" "` (RUF001). 203 tests total.
+Write NBSP in tests as `"\u00a0"` (RUF001).
+
+Done: `parse/times.py`. `parse_api_datetime`: `clean_text` (blank ->
+`ValueError("blank datetime '...'")`), then `strptime` with
+`API_DATETIME_FORMAT = "%m/%d/%Y %I:%M %p"` (leading zeros optional, any
+case of AM/PM; all 108 fixture values fit), then
+`.replace(tzinfo=SEPTA_ZONE)`. Failure -> `ValueError("unrecognized
+datetime '...'")` `from None`; messages quote `raw` as sent. Needs
+`# noqa: DTZ007` (zone attached on the next line). Never
+`naive.astimezone(zone)`: it reads naive as the *machine's* zone and
+passes only on an Eastern machine (a `TZ=UTC` + `time.tzset()` test
+guards it). `strptime` already treats a format space as `\s+`, so
+`clean_text` is redundant there but kept to state the rule explicitly.
+Decided DST (option C): accept, don't raise. `strptime` gives `fold=0`,
+so a fall-back 1:xx reads as EDT; a spring-forward 2:xx keeps the
+pre-change offset (= 3:xx EDT). Separate pure
+`local_time_issue(moment) -> str | None` flags it: gap = wall time
+changes on a UTC round trip (checked first, since in a gap flipping
+`fold` also changes the offset, PEP 495); overlap = flipping `fold`
+changes `utcoffset()`. Uses `moment.tzinfo` (fixed offsets never
+flagged); naive -> `ValueError`. Messages: `"nonexistent local time
+2027-03-14 02:30 (DST gap); read as 03:30 EDT"`, `"ambiguous local time
+2027-11-07 01:30 (DST overlap); read as EDT"`. **`parse_detour` must call
+it for start and end** and add the result (field-prefixed) to `issues`.
+Python gotcha: aware datetimes with the *same* `tzinfo` compare by wall
+time, ignoring offset and `fold`. Harmless now (we never make `fold=1`),
+but `parse_detour`'s `end < start` check compares wall clocks; use
+`.astimezone(UTC)` if that ever matters. `tests/test_times.py` (53);
+20 mutations, 17 caught, 3 equivalent (cached `ZoneInfo` is the same
+object; `raw.strip()` vs `clean_text`; `resolved != moment`). The
+reusable mutation runner is a scratch script (not committed): copy the
+file, apply `[old, new]` pairs that must each match once, run pytest
+with `PYTHONDONTWRITEBYTECODE=1`, restore in `finally`. 256 tests total.
 
 Next (clean session): Claude implements `parse/`, one function at a
 time, with tests from the fixture index, stopping for my review after each.
-Order: ~~`clean_text`~~ -> `parse_api_datetime` -> `normalize_direction` ->
+Order: ~~`clean_text`~~ -> ~~`parse_api_datetime`~~ -> `normalize_direction` ->
 `find_directions` -> `make_source_key` -> `_api.read_snapshot` ->
 `parse_detour` -> `parse_snapshot`. Keep
 collecting snapshots over several days. Later, `match/` must map API
