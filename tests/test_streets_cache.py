@@ -1,14 +1,22 @@
 """Tests for ``septa_detours.streets.cache``."""
 
+import json
 import math
+from pathlib import Path
 
 import polars as pl
 import pytest
 
 from septa_detours.streets.cache import (
+    BUILD_COMMAND,
     DEFAULT_MARGIN_M,
+    DEFAULT_STREET_CACHE,
+    StreetCacheInfo,
     combine_street_ways,
+    read_street_cache,
+    read_street_cache_info,
     service_bbox,
+    write_street_cache,
 )
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
@@ -247,3 +255,200 @@ def test_no_stops_with_coordinates_raises(frame):
 def test_bad_margin_raises(margin_m):
     with pytest.raises(ValueError, match="margin_m must be >= 0"):
         service_bbox(SEPTA_STOPS, margin_m)
+
+
+# --- write_street_cache / read_street_cache / read_street_cache_info ----------
+
+INFO = StreetCacheInfo(
+    sources=(
+        "pennsylvania-261124.osm.pbf",
+        "new-jersey-261124.osm.pbf",
+        "delaware-261124.osm.pbf",
+    ),
+    bbox=(-75.85826825031805, 39.65160256534086, -74.73035474968195, 40.35210143465915),
+)
+
+PHILLY_BOX = (-75.2, 39.9, -75.1, 40.0)
+
+
+def write_raw_parquet(path: Path, frame: pl.DataFrame, metadata: dict[str, str]):
+    """A Parquet file this module didn't write (for the read-side checks)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame.write_parquet(path, metadata=metadata)
+
+
+def good_metadata(**overrides: str) -> dict[str, str]:
+    metadata = {
+        "septa_detours:sources": json.dumps(list(INFO.sources)),
+        "septa_detours:bbox": json.dumps(list(INFO.bbox)),
+    }
+    metadata.update(overrides)
+    return metadata
+
+
+def test_cache_round_trip(tmp_path):
+    path = tmp_path / "streets.parquet"
+    original = ways(BROAD, WASHINGTON, STATION, TURNPIKE)
+    write_street_cache(original, INFO, path)
+
+    loaded = read_street_cache(path)
+    assert loaded.rows() == original.rows()
+    assert loaded.schema == STREET_WAYS_SCHEMA
+    assert read_street_cache_info(path) == INFO
+
+
+def test_cache_round_trip_keeps_exact_floats(tmp_path):
+    """Parquet stores Float64 exactly: no rounding of coordinates or bbox."""
+    point = [-75.16771234567891, 39.95123456789012]
+    path = tmp_path / "streets.parquet"
+    write_street_cache(ways((1, "X Street", "residential", [1], [point])), INFO, path)
+    assert read_street_cache(path)["coordinates"].to_list() == [[point]]
+    assert read_street_cache_info(path).bbox == INFO.bbox
+
+
+def test_cache_empty_ways_round_trip(tmp_path):
+    path = tmp_path / "streets.parquet"
+    write_street_cache(ways(), INFO, path)
+    loaded = read_street_cache(path)
+    assert loaded.is_empty()
+    assert loaded.schema == STREET_WAYS_SCHEMA
+
+
+def test_cache_creates_directory_and_leaves_no_temp_file(tmp_path):
+    path = tmp_path / "data" / "processed" / "streets.parquet"
+    write_street_cache(ways(BROAD), INFO, path)
+    assert [p.name for p in path.parent.iterdir()] == ["streets.parquet"]
+
+
+def test_cache_replaces_existing(tmp_path):
+    path = tmp_path / "streets.parquet"
+    write_street_cache(ways(BROAD, WASHINGTON), INFO, path)
+    newer = StreetCacheInfo(sources=("pennsylvania-261201.osm.pbf",), bbox=PHILLY_BOX)
+    write_street_cache(ways(STATION), newer, path)
+    assert read_street_cache(path).rows() == [STATION]
+    assert read_street_cache_info(path) == newer
+
+
+def test_cache_default_path(tmp_path, monkeypatch):
+    assert Path("data/processed/streets.parquet") == DEFAULT_STREET_CACHE
+    monkeypatch.chdir(tmp_path)
+    write_street_cache(ways(BROAD), INFO)
+    assert (tmp_path / DEFAULT_STREET_CACHE).is_file()
+    assert read_street_cache().rows() == [BROAD]
+    assert read_street_cache_info() == INFO
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        ways(BROAD).with_columns(pl.col("highway").cast(pl.Categorical)),
+        ways(BROAD).with_columns(extra=pl.lit(1)),
+        ways(BROAD).drop("highway"),
+        ways(BROAD).select(list(reversed(STREET_WAYS_SCHEMA))),
+    ],
+    ids=["dtype", "extra-column", "missing-column", "column-order"],
+)
+def test_write_rejects_wrong_schema_and_writes_nothing(tmp_path, bad):
+    path = tmp_path / "streets.parquet"
+    with pytest.raises(ValueError, match="expected Schema"):
+        write_street_cache(bad, INFO, path)
+    assert not path.exists()
+
+
+def test_write_rejects_repeated_way_id_and_keeps_old_cache(tmp_path):
+    path = tmp_path / "streets.parquet"
+    write_street_cache(ways(BROAD), INFO, path)
+    renamed = (101, "Broad Street", *BROAD[2:])
+    with pytest.raises(ValueError, match="repeated way_ids"):
+        write_street_cache(ways(BROAD, renamed), INFO, path)
+    assert read_street_cache(path).rows() == [BROAD]
+
+
+def test_interrupted_write_keeps_old_cache(tmp_path, monkeypatch):
+    """Half a file then a failure: the old cache is intact (atomic write)."""
+    path = tmp_path / "streets.parquet"
+    write_street_cache(ways(BROAD), INFO, path)
+
+    real_write_bytes = Path.write_bytes
+
+    def write_half_then_fail(self: Path, data: bytes) -> int:
+        real_write_bytes(self, data[: len(data) // 2])
+        raise OSError("simulated disk full")
+
+    monkeypatch.setattr(Path, "write_bytes", write_half_then_fail)
+    with pytest.raises(OSError, match="simulated disk full"):
+        write_street_cache(ways(STATION, TURNPIKE), INFO, path)
+    monkeypatch.undo()
+
+    assert read_street_cache(path).rows() == [BROAD]
+    assert [p.name for p in tmp_path.iterdir()] == ["streets.parquet"]
+
+
+@pytest.mark.parametrize("reader", [read_street_cache, read_street_cache_info])
+def test_missing_cache_names_the_build_command(tmp_path, reader):
+    path = tmp_path / "streets.parquet"
+    with pytest.raises(FileNotFoundError, match="no street cache at") as excinfo:
+        reader(path)
+    assert BUILD_COMMAND in str(excinfo.value)
+    assert str(path) in str(excinfo.value)
+
+
+def test_read_rejects_old_schema_and_names_the_build_command(tmp_path):
+    """E.g. a cache written before a column was added."""
+    path = tmp_path / "streets.parquet"
+    write_raw_parquet(path, ways(BROAD).drop("highway"), good_metadata())
+    with pytest.raises(ValueError, match="rebuild it with") as excinfo:
+        read_street_cache(path)
+    assert BUILD_COMMAND in str(excinfo.value)
+
+
+def test_info_integer_bbox_values_become_floats(tmp_path):
+    path = tmp_path / "streets.parquet"
+    write_raw_parquet(
+        path, ways(), good_metadata(**{"septa_detours:bbox": "[-76, 39, -74, 41]"})
+    )
+    bbox = read_street_cache_info(path).bbox
+    assert bbox == (-76.0, 39.0, -74.0, 41.0)
+    assert all(type(v) is float for v in bbox)
+
+
+def test_info_missing_metadata(tmp_path):
+    """A Parquet file this module didn't write."""
+    path = tmp_path / "streets.parquet"
+    write_raw_parquet(path, ways(BROAD), {})
+    with pytest.raises(ValueError, match="missing or malformed provenance"):
+        read_street_cache_info(path)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"septa_detours:sources": "not json"},
+        {"septa_detours:bbox": "[1, 2,"},
+        {"septa_detours:sources": '"pennsylvania-261124.osm.pbf"'},
+        {"septa_detours:sources": "[1, 2]"},
+        {"septa_detours:bbox": "[-76, 39, -74]"},
+        {"septa_detours:bbox": "[-76, 39, -74, 41, 0]"},
+        {"septa_detours:bbox": '[-76, 39, -74, "41"]'},
+        {"septa_detours:bbox": "[-76, 39, -74, true]"},
+        {"septa_detours:bbox": "[-76, 39, -74, null]"},
+        {"septa_detours:bbox": '{"west": -76}'},
+    ],
+    ids=[
+        "sources-not-json",
+        "bbox-not-json",
+        "sources-not-list",
+        "sources-not-strings",
+        "bbox-three",
+        "bbox-five",
+        "bbox-string",
+        "bbox-bool",
+        "bbox-null",
+        "bbox-object",
+    ],
+)
+def test_info_malformed_metadata(tmp_path, overrides):
+    path = tmp_path / "streets.parquet"
+    write_raw_parquet(path, ways(BROAD), good_metadata(**overrides))
+    with pytest.raises(ValueError, match="malformed provenance"):
+        read_street_cache_info(path)

@@ -5,12 +5,28 @@ of MB and loads in well under a second. Bus routes change rarely, so the
 cache is rebuilt by hand when the extracts are refreshed, not on every run.
 """
 
+import io
+import json
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 import polars as pl
 
-from septa_detours.streets.load import BBox
+from septa_detours.io import write_bytes_atomic
+from septa_detours.streets.load import STREET_WAYS_SCHEMA, BBox
+
+# The path assumes you run from the repo root (data/processed/ is gitignored,
+# except sample_* files).
+DEFAULT_STREET_CACHE = Path("data/processed/streets.parquet")
+
+# Named in error messages when the cache is missing or out of date.
+BUILD_COMMAND = "uv run python -m septa_detours.streets"
+
+# Parquet key-value metadata keys (values are JSON strings).
+_SOURCES_KEY = "septa_detours:sources"
+_BBOX_KEY = "septa_detours:bbox"
 
 # How many conflicting way IDs an error message lists before "and N more".
 _MAX_IDS_IN_MESSAGE = 5
@@ -122,3 +138,113 @@ def service_bbox(stops: pl.DataFrame, margin_m: float = DEFAULT_MARGIN_M) -> BBo
     m_per_deg_lon = _M_PER_DEG_LON_AT_EQUATOR * math.cos(math.radians(furthest_lat))
     lon_margin = margin_m / m_per_deg_lon
     return (west - lon_margin, south, east + lon_margin, north)
+
+
+@dataclass(frozen=True)
+class StreetCacheInfo:
+    """Where a street cache came from, stored inside the Parquet file.
+
+    Attributes:
+        sources: The extract file names it was built from, e.g.
+            ``("pennsylvania-261124.osm.pbf", ...)``. The dates in the names
+            say how fresh the street data is.
+        bbox: The ``(west, south, east, north)`` box the ways were clipped to.
+    """
+
+    sources: tuple[str, ...]
+    bbox: BBox
+
+
+def write_street_cache(
+    ways: pl.DataFrame, info: StreetCacheInfo, path: Path = DEFAULT_STREET_CACHE
+) -> None:
+    """Write ``ways`` and ``info`` to a Parquet file, replacing any old one.
+
+    The file is built in memory (tens of MB) and written with
+    ``write_bytes_atomic``, so readers never see half a cache. ``info`` is
+    stored as JSON in the file's key-value metadata.
+
+    Args:
+        ways: Combined ways, e.g. from ``combine_street_ways``.
+        info: Provenance to store alongside.
+        path: Destination. Defaults to ``data/processed/streets.parquet``.
+
+    Raises:
+        ValueError: If ``ways`` doesn't have ``STREET_WAYS_SCHEMA`` or has a
+            repeated ``way_id`` (readers rely on both).
+        OSError: If the file can't be written.
+    """
+    if ways.schema != STREET_WAYS_SCHEMA:
+        msg = f"street ways have schema {ways.schema}, expected {STREET_WAYS_SCHEMA}"
+        raise ValueError(msg)
+    if ways.get_column("way_id").is_duplicated().any():
+        msg = "street ways have repeated way_ids; combine them with combine_street_ways"
+        raise ValueError(msg)
+
+    metadata = {
+        _SOURCES_KEY: json.dumps(list(info.sources)),
+        _BBOX_KEY: json.dumps(list(info.bbox)),
+    }
+    buffer = io.BytesIO()
+    ways.write_parquet(buffer, metadata=metadata)
+    write_bytes_atomic(buffer.getvalue(), path)
+
+
+def read_street_cache(path: Path = DEFAULT_STREET_CACHE) -> pl.DataFrame:
+    """Read the street ways written by ``write_street_cache``.
+
+    Raises:
+        FileNotFoundError: If there's no cache yet; the message names the
+            build command.
+        ValueError: If the file's schema isn't ``STREET_WAYS_SCHEMA`` (e.g.
+            built by an older version of this code): rebuild it.
+    """
+    try:
+        ways = pl.read_parquet(path)
+    except FileNotFoundError as err:
+        msg = f"no street cache at {path}; build it with: {BUILD_COMMAND}"
+        raise FileNotFoundError(msg) from err
+
+    if ways.schema != STREET_WAYS_SCHEMA:
+        msg = (
+            f"street cache {path} has schema {ways.schema}, expected "
+            f"{STREET_WAYS_SCHEMA}; rebuild it with: {BUILD_COMMAND}"
+        )
+        raise ValueError(msg)
+    return ways
+
+
+def read_street_cache_info(path: Path = DEFAULT_STREET_CACHE) -> StreetCacheInfo:
+    """Read only the provenance stored by ``write_street_cache``.
+
+    Raises:
+        FileNotFoundError: If there's no cache yet; the message names the
+            build command.
+        ValueError: If the metadata is missing or malformed (not a file
+            this code wrote).
+    """
+    try:
+        metadata = pl.read_parquet_metadata(path)
+    except FileNotFoundError as err:
+        msg = f"no street cache at {path}; build it with: {BUILD_COMMAND}"
+        raise FileNotFoundError(msg) from err
+
+    try:
+        sources = json.loads(metadata[_SOURCES_KEY])
+        bbox = json.loads(metadata[_BBOX_KEY])
+    except (KeyError, json.JSONDecodeError) as err:
+        msg = f"street cache {path} has missing or malformed provenance metadata"
+        raise ValueError(msg) from err
+
+    sources_ok = isinstance(sources, list) and all(isinstance(s, str) for s in sources)
+    bbox_ok = (
+        isinstance(bbox, list)
+        and len(bbox) == 4
+        and all(isinstance(v, int | float) and not isinstance(v, bool) for v in bbox)
+    )
+    if not (sources_ok and bbox_ok):
+        msg = f"street cache {path} has malformed provenance metadata"
+        raise ValueError(msg)
+
+    west, south, east, north = (float(v) for v in bbox)
+    return StreetCacheInfo(sources=tuple(sources), bbox=(west, south, east, north))
