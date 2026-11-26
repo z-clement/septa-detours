@@ -132,3 +132,18 @@ export function searchRoutes(routes, query) {
   const contains = (name) => name !== null && name.toLowerCase().includes(needle);
   return routes.filter((route) => contains(route.short_name) || contains(route.long_name));
 }
+
+/**
+ * The routes the sidebar lists: those matching the search whose mode is on.
+ *
+ * A route must pass both (`searchRoutes` and the mode chips). Catalog
+ * order kept. No modes on lists nothing, whatever the search.
+ *
+ * @param {object[]} routes routes.json
+ * @param {string} query what the user typed
+ * @param {Set<string>} modes the modes whose chips are on
+ * @returns {object[]}
+ */
+export function visibleRoutes(routes, query, modes) {
+  return searchRoutes(routes, query).filter((route) => modes.has(route.mode));
+}

@@ -11,6 +11,7 @@ import {
   routesBounds,
   searchRoutes,
   timingCounts,
+  visibleRoutes,
 } from "../js/routes.js";
 
 /** A routes.json entry with just the fields routes.js reads. */
@@ -280,4 +281,43 @@ test("searchRoutes: a route with no long name matches on its short name only", (
   const noLong = named("bus-X9", "X9", null);
   assert.deepEqual(searchRoutes([noLong, N_K], "x9"), [noLong]);
   assert.deepEqual(searchRoutes([noLong, N_K], "null"), []); // not the text "null"
+});
+
+/** A routes.json entry with its key, names and mode. */
+function full(key, shortName, longName, mode) {
+  return { key, short_name: shortName, long_name: longName, mode };
+}
+
+// Real names and modes, in routes.json order.
+const F_L1 = full("bus-L1", "L1", "Market-Frankford Line All Stops", "metro");
+const F_T1 = full("bus-T1", "T1", "13th St to 63rd-Malvern/Overbrook", "trolley");
+const F_59 = full("bus-59", "59", "Castor-Bustleton to Arrott TC", "trackless");
+const F_2 = full("bus-2", "2", "20-Johnston to Pulaski-Hunting Park", "bus");
+const F_5 = full("bus-5", "5", "2nd-Market to Frankford Transit Ctr", "bus");
+const F_23 = full("bus-23", "23", "11th Market to Chestnut Hill", "bus");
+const F_AIR = full("rail-AIR", "AIR", "Airport Line", "rail");
+const FULL = [F_L1, F_T1, F_59, F_2, F_5, F_23, F_AIR];
+const ALL_MODES = new Set(["metro", "trolley", "trackless", "bus", "rail"]);
+
+test("visibleRoutes: a route must match the search and have its mode on", () => {
+  assert.deepEqual(visibleRoutes(FULL, "market", new Set(["bus"])), [F_5, F_23]);
+  assert.deepEqual(visibleRoutes(FULL, "market", new Set(["metro", "bus"])), [F_L1, F_5, F_23]);
+});
+
+test("visibleRoutes: blank search keeps the modes that are on, catalog order", () => {
+  // The Set's own order doesn't matter: rail is listed first here.
+  assert.deepEqual(visibleRoutes(FULL, "", new Set(["rail", "trolley"])), [F_T1, F_AIR]);
+});
+
+test("visibleRoutes: every mode on and a blank search is the whole catalog", () => {
+  assert.deepEqual(visibleRoutes(FULL, "  ", ALL_MODES), FULL);
+});
+
+test("visibleRoutes: no modes on lists nothing", () => {
+  assert.deepEqual(visibleRoutes(FULL, "", new Set()), []);
+  assert.deepEqual(visibleRoutes(FULL, "market", new Set()), []);
+});
+
+test("visibleRoutes: a mode on but nothing of it matching lists nothing of it", () => {
+  assert.deepEqual(visibleRoutes(FULL, "market", new Set(["rail", "trackless"])), []);
 });
