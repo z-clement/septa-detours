@@ -608,9 +608,10 @@ ROUTE_2_DIRECTIONS: list[DirectionEntry] = [
     {"direction_id": 1, "name": "Northbound", "destination": "Pulaski-Hunting Park"},
 ]
 # Every line distinct, lon ~ -75, lat ~ 40; trip counts all different.
-SOUTH = RouteShape("317310", 0, 301, True, [[-75.1716, 39.9405], [-75.1716, 39.9365]])
-NORTH = RouteShape("317312", 1, 289, True, [[-75.1706, 39.9365], [-75.1706, 39.9405]])
-SHORT = RouteShape("317315", 0, 14, False, [[-75.1716, 39.9405], [-75.1716, 39.9385]])
+SOUTH = RouteShape("317310", 0, 301, [[-75.1716, 39.9405], [-75.1716, 39.9365]])
+NORTH = RouteShape("317312", 1, 289, [[-75.1706, 39.9365], [-75.1706, 39.9405]])
+# A branch piece (south's other shape, off to the west).
+SHORT = RouteShape("317315", 0, 14, [[-75.1716, 39.9385], [-75.1736, 39.9385]])
 
 
 def line(shape: RouteShape, color: str | None = "#00A1DE") -> dict[str, object]:
@@ -621,7 +622,6 @@ def line(shape: RouteShape, color: str | None = "#00A1DE") -> dict[str, object]:
             "shape_id": shape.shape_id,
             "direction_id": shape.direction_id,
             "trip_count": shape.trip_count,
-            "covering": shape.covering,
             "color": color,
         },
     }
@@ -643,7 +643,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 8,
+        "schema_version": 9,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -661,7 +661,7 @@ def test_route_detail_shape_properties_are_the_contract_ones() -> None:
 
 
 def test_route_detail_shape_in_both_directions_is_two_lines() -> None:
-    both = [SOUTH, SOUTH._replace(direction_id=1, trip_count=3, covering=False)]
+    both = [SOUTH, SOUTH._replace(direction_id=1, trip_count=3)]
     detail = route_detail(ROUTE_2, [], both, [])
     assert detail["shapes"]["features"] == [line(both[0]), line(both[1])]
 
@@ -769,6 +769,7 @@ COORDINATES = make_coordinates(RAW_LINES)
 
 
 def test_route_shapes_whole_output() -> None:
+    # 317315 is a short-turn along 317310: covered, so it adds no piece.
     trips = make_trips(
         [
             ("bus", "2", 0, "317315", 5),
@@ -779,32 +780,40 @@ def test_route_shapes_whole_output() -> None:
     )
     assert route_shapes(trips, COORDINATES) == {
         "bus-2": [
-            RouteShape(
-                "317310", 0, 3, True, [[-75.17161, 39.94051], [-75.17161, 39.93651]]
-            ),
-            RouteShape(
-                "317315", 0, 5, False, [[-75.17161, 39.94051], [-75.17151, 39.93851]]
-            ),
-            RouteShape(
-                "317312", 1, 2, True, [[-75.17061, 39.93651], [-75.17061, 39.94051]]
-            ),
+            RouteShape("317310", 0, 3, [[-75.17161, 39.94051], [-75.17161, 39.93651]]),
+            RouteShape("317312", 1, 2, [[-75.17061, 39.93651], [-75.17061, 39.94051]]),
         ],
         "rail-AIR": [
-            RouteShape(
-                "001005", 1, 4, True, [[-75.24123, 39.87654], [-75.20123, 39.90654]]
-            )
+            RouteShape("001005", 1, 4, [[-75.24123, 39.87654], [-75.20123, 39.90654]])
         ],
     }
 
 
-@pytest.mark.parametrize("tied", [("b", "a"), ("a", "b")])
-def test_route_shapes_order_within_a_direction(tied: tuple[str, str]) -> None:
-    # Three separate branches (all covering) and a direction-less shape.
-    # The tied pair comes in both orders, so the result can't be input order.
+def test_route_shapes_a_branch_is_a_piece_joined_to_its_trunk() -> None:
+    # The trunk runs 2.2 km north; the branch shares its first 556 m, then
+    # turns east for 853 m. Only the branch's own part is drawn, from the
+    # corner on: the shared street once.
     lines: dict[tuple[Feed, str], list[list[float]]] = {
-        ("bus", "b"): [[-75.10, 40.00], [-75.10, 40.01]],
-        ("bus", "a"): [[-75.12, 40.00], [-75.12, 40.01]],
-        ("bus", "c"): [[-75.14, 40.00], [-75.14, 40.01]],
+        ("bus", "trunk"): [[-75.10, 40.00], [-75.10, 40.02]],
+        ("bus", "branch"): [[-75.10, 40.00], [-75.10, 40.005], [-75.09, 40.005]],
+    }
+    trips = make_trips([("bus", "9", 0, "branch", 8), ("bus", "9", 0, "trunk", 2)])
+    assert route_shapes(trips, make_coordinates(lines)) == {
+        "bus-9": [
+            RouteShape("trunk", 0, 2, [[-75.1, 40.0], [-75.1, 40.02]]),
+            RouteShape("branch", 0, 8, [[-75.1, 40.005], [-75.09, 40.005]]),
+        ]
+    }
+
+
+@pytest.mark.parametrize("tied", [("b", "a"), ("a", "b")])
+def test_route_shapes_order_is_by_direction_then_longest(tied: tuple[str, str]) -> None:
+    # Three separate branches of different lengths, trips the other way
+    # round, and a direction-less shape. Input order varies (``tied``).
+    lines: dict[tuple[Feed, str], list[list[float]]] = {
+        ("bus", "a"): [[-75.10, 40.00], [-75.10, 40.03]],  # longest
+        ("bus", "b"): [[-75.12, 40.00], [-75.12, 40.02]],
+        ("bus", "c"): [[-75.14, 40.00], [-75.14, 40.01]],  # most trips
         ("bus", "n"): [[-75.16, 40.00], [-75.16, 40.01]],
     }
     trips = make_trips(
@@ -812,16 +821,16 @@ def test_route_shapes_order_within_a_direction(tied: tuple[str, str]) -> None:
             ("bus", "9", None, "n", 9),
             ("bus", "9", 1, tied[0], 2),
             ("bus", "9", 1, "c", 7),
-            ("bus", "9", 1, tied[1], 2),
-            ("bus", "9", 0, "b", 1),
+            ("bus", "9", 1, tied[1], 3),
+            ("bus", "9", 0, "c", 1),
         ]
     )
     result = route_shapes(trips, make_coordinates(lines))
     assert [(s.direction_id, s.shape_id) for s in result["bus-9"]] == [
-        (0, "b"),
-        (1, "c"),  # most trips
-        (1, "a"),  # tie on trips: by shape_id
+        (0, "c"),
+        (1, "a"),
         (1, "b"),
+        (1, "c"),
         (None, "n"),  # no direction: last
     ]
 
@@ -868,9 +877,7 @@ def make_directions(
 
 
 def shape_in(direction_id: int | None) -> RouteShape:
-    return RouteShape(
-        "317310", direction_id, 1, True, [[-75.17, 39.94], [-75.17, 39.93]]
-    )
+    return RouteShape("317310", direction_id, 1, [[-75.17, 39.94], [-75.17, 39.93]])
 
 
 def test_route_directions_whole_output() -> None:
@@ -993,22 +1000,11 @@ AIR: RouteEntry = {
     "bounds": ([-75.25, 39.87], [-75.16, 39.96]),
     "detours": {"total": 0, "placed": 0, "windows": []},
 }
-# Raw lines. 317312's midpoint is 3.4 m off its line: kept at 2 m, dropped
-# at 5 m. "001005" is in both feeds with different lines.
-NETWORK_RAW = make_coordinates(
-    {
-        ("bus", "317310"): [[-75.171612, 39.940512], [-75.171612, 39.936512]],
-        ("bus", "317312"): [
-            [-75.170612, 39.936512],
-            [-75.170652, 39.938512],
-            [-75.170612, 39.940512],
-        ],
-        ("bus", "001005"): [[-75.0, 40.1], [-75.0, 40.2]],
-        ("rail", "001005"): [[-75.241234, 39.876543], [-75.201234, 39.906543]],
-    }
-)
-# ``line`` isn't used by network_collection (it reads the raw lines).
-UNUSED_LINE = [[0.0, 0.0], [1.0, 1.0]]
+# Piece lines (as ``route_shapes`` gives them). 317312's midpoint is
+# 3.4 m off its line: kept at 2 m, dropped at the overview's 5 m.
+PIECE_2_SOUTH = [[-75.17161, 39.94051], [-75.17161, 39.93651]]
+PIECE_2_NORTH = [[-75.17061, 39.93651], [-75.170650, 39.93851], [-75.17061, 39.94051]]
+PIECE_AIR = [[-75.24123, 39.87654], [-75.20123, 39.90654]]
 
 
 def overview(
@@ -1028,65 +1024,72 @@ def overview(
 
 def test_network_whole_output() -> None:
     shapes = {
-        "rail-AIR": [RouteShape("001005", 1, 4, True, UNUSED_LINE)],
+        "rail-AIR": [RouteShape("001005", 1, 4, PIECE_AIR)],
         "bus-2": [
-            RouteShape("317310", 0, 3, True, UNUSED_LINE),
-            RouteShape("317315", 0, 5, False, UNUSED_LINE),  # not drawn
-            RouteShape("317312", 1, 2, True, UNUSED_LINE),
+            RouteShape("317310", 0, 3, PIECE_2_SOUTH),
+            RouteShape("317312", 1, 2, PIECE_2_NORTH),
         ],
     }
-    assert network_collection([ROUTE_2, AIR], shapes, NETWORK_RAW) == {
+    assert network_collection([ROUTE_2, AIR], shapes) == {
         "type": "FeatureCollection",
         "features": [
-            overview(ROUTE_2, 0, [[-75.17161, 39.94051], [-75.17161, 39.93651]]),
+            overview(ROUTE_2, 0, PIECE_2_SOUTH),
             overview(ROUTE_2, 1, [[-75.17061, 39.93651], [-75.17061, 39.94051]]),
-            overview(AIR, 1, [[-75.24123, 39.87654], [-75.20123, 39.90654]]),
+            overview(AIR, 1, PIECE_AIR),
         ],
     }
+
+
+def test_network_rounds_after_simplifying() -> None:
+    shapes = {
+        "bus-2": [
+            RouteShape("317310", 0, 3, [[-75.1716123, 39.9405], [-75.1716, 39.94]])
+        ]
+    }
+    [feature] = network_collection([ROUTE_2], shapes)["features"]
+    assert feature["geometry"]["coordinates"] == [
+        [-75.17161, 39.9405],
+        [-75.1716, 39.94],
+    ]
+
+
+def test_network_every_piece_is_a_line() -> None:
+    # A direction in two pieces (trunk and branch): two lines.
+    branch = [[-75.17161, 39.93851], [-75.17361, 39.93851]]
+    shapes = {
+        "bus-2": [
+            RouteShape("317310", 0, 3, PIECE_2_SOUTH),
+            RouteShape("317315", 0, 1, branch),
+        ]
+    }
+    assert network_collection([ROUTE_2], shapes)["features"] == [
+        overview(ROUTE_2, 0, PIECE_2_SOUTH),
+        overview(ROUTE_2, 0, branch),
+    ]
 
 
 def test_network_properties_are_the_contract_ones() -> None:
-    shapes = {"bus-2": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
-    [feature] = network_collection([ROUTE_2], shapes, NETWORK_RAW)["features"]
+    shapes = {"bus-2": [RouteShape("317310", 0, 3, PIECE_2_SOUTH)]}
+    [feature] = network_collection([ROUTE_2], shapes)["features"]
     assert tuple(feature["properties"]) == NETWORK_PROPERTIES
-
-
-def test_network_shape_covering_both_directions_is_two_lines() -> None:
-    shapes = {
-        "bus-2": [
-            RouteShape("317310", 0, 3, True, UNUSED_LINE),
-            RouteShape("317310", 1, 1, True, UNUSED_LINE),
-        ]
-    }
-    line = [[-75.17161, 39.94051], [-75.17161, 39.93651]]
-    assert network_collection([ROUTE_2], shapes, NETWORK_RAW)["features"] == [
-        overview(ROUTE_2, 0, line),
-        overview(ROUTE_2, 1, line),
-    ]
 
 
 def test_network_route_without_shapes_draws_nothing() -> None:
     entry: RouteEntry = {**ROUTE_2, "has_shapes": False, "bounds": None}
-    assert network_collection([entry], {}, NETWORK_RAW)["features"] == []
+    assert network_collection([entry], {})["features"] == []
 
 
 def test_network_color_may_be_null() -> None:
     entry: RouteEntry = {**ROUTE_2, "color": None}
-    shapes = {"bus-2": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
-    [feature] = network_collection([entry], shapes, NETWORK_RAW)["features"]
+    shapes = {"bus-2": [RouteShape("317310", 0, 3, PIECE_2_SOUTH)]}
+    [feature] = network_collection([entry], shapes)["features"]
     assert feature["properties"]["color"] is None
 
 
 def test_network_rejects_shapes_for_a_route_not_in_the_catalog() -> None:
-    shapes = {"bus-9": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
+    shapes = {"bus-9": [RouteShape("317310", 0, 3, PIECE_2_SOUTH)]}
     with pytest.raises(ValueError, match=r"not in the catalog: \['bus-9'\]"):
-        network_collection([ROUTE_2], shapes, NETWORK_RAW)
-
-
-def test_network_rejects_a_covering_shape_without_coordinates() -> None:
-    shapes = {"rail-AIR": [RouteShape("317310", 0, 3, True, UNUSED_LINE)]}
-    with pytest.raises(ValueError, match=r"\('rail', '317310'\) has no coordinates"):
-        network_collection([AIR], shapes, NETWORK_RAW)
+        network_collection([ROUTE_2], shapes)
 
 
 PHILLY = ZoneInfo("America/New_York")
@@ -1386,7 +1389,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 8,
+        "schema_version": 9,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",

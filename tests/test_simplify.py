@@ -3,7 +3,13 @@ import math
 
 import pytest
 
-from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
+from septa_detours.export.simplify import (
+    covering_shapes,
+    distinct_pieces,
+    round_line,
+    simplify_line,
+)
+from septa_detours.geo import EARTH_RADIUS_M
 
 # Near 17th & Washington. Worked out by hand from the mean Earth radius
 # (1 deg = 111,195 m): 0.00005 deg of latitude is 5.56 m; 0.00007 deg of
@@ -281,3 +287,125 @@ def test_covering_rejects_negative_or_nan_tolerance(tolerance_m: float) -> None:
 def test_covering_rejects_a_line_under_two_points() -> None:
     with pytest.raises(ValueError, match="shape '317338' has 1 point"):
         covering_shapes({"main": MAIN, "317338": [[LON, LAT]]})
+
+
+# distinct_pieces, on the same grid as covering_shapes.
+
+
+def test_pieces_first_line_is_kept_whole() -> None:
+    assert distinct_pieces([MAIN]) == [(0, MAIN)]
+
+
+def test_pieces_no_lines() -> None:
+    assert distinct_pieces([]) == []
+
+
+def test_pieces_a_copy_digitized_a_metre_away_adds_nothing() -> None:
+    # Route 79 on Snyder: shapes ~1 m apart (0.00001 deg north).
+    copy_ = [[lon, lat + 0.00001] for lon, lat in MAIN]
+    assert distinct_pieces([MAIN, copy_]) == [(0, MAIN)]
+
+
+# Where a line crosses the 20 m buffer north of MAIN, in grid steps.
+EDGE = 20.0 / (EARTH_RADIUS_M * math.pi / 180) / 0.001
+
+
+def pieces_approx(pieces):
+    """``pieces`` with every coordinate as ``pytest.approx`` (1 mm)."""
+    return [
+        (index, [pytest.approx(point, abs=1e-8) for point in piece])
+        for index, piece in pieces
+    ]
+
+
+def test_pieces_a_branch_keeps_its_own_part_joined_to_the_trunk() -> None:
+    # Leaves MAIN at (1, 0): from the buffer's edge (EDGE north) on, plus the
+    # joint on MAIN.
+    branch = grid((0, 0), (1, 0), (1, 1), (1, 2))
+    assert distinct_pieces([MAIN, branch]) == pieces_approx(
+        [(0, MAIN), (1, grid((1, 0), (1, EDGE), (1, 1), (1, 2)))]
+    )
+
+
+def test_pieces_a_line_joining_the_trunk_keeps_its_approach() -> None:
+    joining = grid((0, 2), (0, 1), (0, 0), (1, 0))
+    assert distinct_pieces([MAIN, joining]) == pieces_approx(
+        [(0, MAIN), (1, grid((0, 2), (0, 1), (0, EDGE), (0, 0)))]
+    )
+
+
+def test_pieces_a_loop_off_the_trunk_and_back() -> None:
+    # Leaves at (1, 0), back at (2, 0), on to (3, 0): only the loop.
+    loop = grid((0, 0), (1, 0), (1, 1), (2, 1), (2, 0), (3, 0))
+    assert distinct_pieces([MAIN, loop]) == pieces_approx(
+        [(0, MAIN), (1, grid((1, 0), (1, EDGE), (1, 1), (2, 1), (2, EDGE), (2, 0)))]
+    )
+
+
+def test_pieces_two_separate_divergences_are_two_pieces() -> None:
+    line = grid((0, 0), (0, 1), (1, 1), (1, 0), (2, 0), (2, 1), (3, 1), (3, 0))
+    assert distinct_pieces([MAIN, line]) == pieces_approx(
+        [
+            (0, MAIN),
+            (1, grid((0, 0), (0, EDGE), (0, 1), (1, 1), (1, EDGE), (1, 0))),
+            (1, grid((2, 0), (2, EDGE), (2, 1), (3, 1), (3, EDGE), (3, 0))),
+        ]
+    )
+
+
+def test_pieces_keep_travel_order() -> None:
+    # Southbound, joining MAIN's east end from the north.
+    south = grid((4, 2), (4, 1), (4, 0), (3, 0))
+    assert distinct_pieces([MAIN, south]) == pieces_approx(
+        [(0, MAIN), (1, grid((4, 2), (4, 1), (4, EDGE), (4, 0)))]
+    )
+
+
+def test_pieces_a_straight_trunk_splits_where_the_branch_turns() -> None:
+    # The trunk has no point at the turn (x = 2): the cut is made there
+    # anyway, not at the trunk's last point before it.
+    branch = grid((0, 0), (2, 0), (2, 3))  # longer: drawn first, whole
+    trunk = grid((0, 0), (4, 0))
+    [_, (index, piece)] = distinct_pieces([branch, trunk])
+    assert index == 1
+    # Starts at the joint on the branch, then the buffer's edge ~20 m east.
+    assert piece[0] == pytest.approx(grid((2, 0))[0], abs=1e-8)
+    east_of_turn = (piece[1][0] - grid((2, 0))[0][0]) / 0.001 * 85.27
+    assert east_of_turn == pytest.approx(20.0, abs=0.1)
+    assert piece[-1] == grid((4, 0))[0]
+
+
+def test_pieces_compare_with_every_earlier_line() -> None:
+    # The third line runs on MAIN, then on the branch: nothing new.
+    branch = grid((1, 0), (1, 1), (1, 2), (1, 3))
+    third = grid((3, 0), (2, 0), (1, 0), (1, 1), (1, 2))
+    assert [index for index, _ in distinct_pieces([MAIN, branch, third])] == [0, 1]
+
+
+@pytest.mark.parametrize(("north", "kept"), [(0.17, False), (0.19, True)])
+def test_pieces_tolerance(north: float, kept: bool) -> None:
+    # 0.17 steps is 18.9 m, 0.19 steps 21.1 m.
+    nearby = grid((0, north), (1, north), (2, north))
+    expected = [(0, MAIN), (1, nearby)] if kept else [(0, MAIN)]
+    assert distinct_pieces([MAIN, nearby]) == expected
+
+
+def test_pieces_tolerance_is_a_parameter() -> None:
+    nearby = grid((0, 0.17), (1, 0.17), (2, 0.17))  # 18.9 m away
+    assert distinct_pieces([MAIN, nearby], tolerance_m=10.0) == [(0, MAIN), (1, nearby)]
+
+
+def test_pieces_are_new_lists() -> None:
+    lines = [[tuple(point) for point in MAIN]]
+    [(_, piece)] = distinct_pieces(lines)
+    assert piece == MAIN
+    assert all(isinstance(point, list) for point in piece)
+    assert lines == [[tuple(point) for point in MAIN]]
+
+
+def test_pieces_reject_bad_input() -> None:
+    with pytest.raises(ValueError, match="line 1 has 1 point"):
+        distinct_pieces([MAIN, MAIN[:1]])
+    for tolerance in (0.0, -1.0, math.nan):
+        with pytest.raises(ValueError, match="tolerance_m must be > 0"):
+            distinct_pieces([MAIN], tolerance_m=tolerance)

@@ -34,7 +34,9 @@ rejoin); 6, detour features (starts, skipped, paths) trade ``timing``
 for ``start``/``end``: the page times them with its own clock; 7, the
 detour object gains ``route_steps`` (the card lists the turns); 8, daily
 hours: the detour object's ``hours``, the features' ``hours_*`` (the page
-hides a detour outside them).
+hides a detour outside them); 9, each direction drawn once: network lines
+and route detail ``shapes`` are pieces (``export/simplify.distinct_pieces``),
+and route detail shapes lose ``covering``.
 """
 
 from typing import Final, Literal, TypedDict
@@ -43,7 +45,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus, Turn
 
-SCHEMA_VERSION: Final = 8
+SCHEMA_VERSION: Final = 9
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -209,15 +211,17 @@ class RouteDetail(TypedDict):
     key: str
     directions: list[DirectionEntry]
     shapes: FeatureCollection
-    """Every shape of the route (``SHAPE_PROPERTIES``), not just the
-    overview's covering set."""
+    """The route's lines, each direction drawn once (``SHAPE_PROPERTIES``):
+    pieces of its covering shapes, the same as ``network.geojson``'s at
+    finer detail."""
     detours: list[DetourObject]
     """Every matched detour on the route, placed or not, snapshot order."""
 
 
 NETWORK_PROPERTIES: Final = ("key", "direction_id", "mode", "color")
-"""Feature properties in ``network.geojson`` (LineStrings). The rest of a
-route's fields come from ``routes.json`` by ``key``."""
+"""Feature properties in ``network.geojson`` (LineStrings: each
+route-direction's pieces, so a street is drawn once per direction). The
+rest of a route's fields come from ``routes.json`` by ``key``."""
 
 START_PROPERTIES: Final = (
     "key",
@@ -244,12 +248,6 @@ PATH_PROPERTIES: Final = START_PROPERTIES
 """Feature properties in ``paths.geojson`` (LineStrings, one per detour
 with a path), as ``START_PROPERTIES``."""
 
-SHAPE_PROPERTIES: Final = (
-    "shape_id",
-    "direction_id",
-    "trip_count",
-    "covering",
-    "color",
-)
-"""Feature properties of ``RouteDetail.shapes`` (LineStrings). ``covering``
-is ``True`` for shapes in the overview's covering set."""
+SHAPE_PROPERTIES: Final = ("shape_id", "direction_id", "trip_count", "color")
+"""Feature properties of ``RouteDetail.shapes`` (LineStrings, one per
+piece): the shape the piece comes from and its trips in that direction."""

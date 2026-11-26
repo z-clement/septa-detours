@@ -191,9 +191,8 @@ export function addOverviewLayers(map, site) {
     },
   });
 
-  // The focused route's every shape (route detail, not the network's
-  // covering set): covering shapes as thick as detoured lines, short-turns
-  // and branches thinner. Empty on the overview.
+  // The focused route's lines (route detail): each direction drawn once,
+  // in pieces (U5b), as thick as detoured lines. Empty on the overview.
   map.addLayer({
     id: FOCUS_LAYER,
     type: "line",
@@ -206,9 +205,9 @@ export function addOverviewLayers(map, site) {
         ["linear"],
         ["zoom"],
         10,
-        ["case", ["get", "covering"], 2, 1],
+        2,
         16,
-        ["case", ["get", "covering"], 6, 3],
+        6,
       ],
       "line-offset": offset,
     },

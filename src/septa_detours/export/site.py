@@ -30,7 +30,12 @@ from septa_detours.export.geojson import (
     line_feature,
     point_feature,
 )
-from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
+from septa_detours.export.simplify import (
+    covering_shapes,
+    distinct_pieces,
+    round_line,
+    simplify_line,
+)
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import DailyHours, Detour, StartPoint
 
@@ -297,19 +302,21 @@ def path_line(detour: Detour) -> list[Position] | None:
 
 
 class RouteShape(NamedTuple):
-    """One shape of a route in one direction, ready for its detail file.
+    """One piece of a route's lines in one direction, ready to draw.
 
-    A shape used in both directions is two ``RouteShape``s.
+    A piece is part (or all) of one covering shape: the part no earlier
+    shape of its direction already draws (``distinct_pieces``), so each
+    direction is drawn once (UI plan U5b). A shape used in both
+    directions gives pieces in each.
     """
 
     shape_id: str
+    """The shape the piece comes from."""
     direction_id: int | None
     trip_count: int
-    """How many trips use this shape in this direction."""
-    covering: bool
-    """In this route-direction's covering set (``covering_shapes``)."""
+    """How many trips use that shape in this direction."""
     line: list[Position]
-    """Already simplified and rounded (``simplify_line``, ``round_line``)."""
+    """Simplified at ``DETAIL_TOLERANCE_M`` and rounded."""
 
 
 def route_detail(
@@ -349,7 +356,6 @@ def route_detail(
                 "shape_id": shape.shape_id,
                 "direction_id": shape.direction_id,
                 "trip_count": shape.trip_count,
-                "covering": shape.covering,
                 "color": entry["color"],
             },
         )
@@ -367,7 +373,7 @@ def route_detail(
 def route_shapes(
     trips: pl.DataFrame, coordinates: pl.DataFrame
 ) -> dict[str, list[RouteShape]]:
-    """Prepare every route's shapes for its detail file.
+    """Prepare every route's lines: each direction drawn once, in pieces.
 
     Args:
         trips: Output of ``load.load_trips``. Trips without a ``shape_id``
@@ -375,12 +381,17 @@ def route_shapes(
         coordinates: Output of ``shapes.shape_coordinates`` (raw lines).
 
     Returns:
-        Route ``key`` -> its shapes, one per ``(shape, direction)`` used by
-        its trips. Each line is simplified at ``DETAIL_TOLERANCE_M`` and
-        rounded to ``COORDINATE_DECIMALS``; ``covering`` comes from
-        ``covering_shapes`` per direction, on the simplified lines. Order:
-        by ``direction_id`` (missing last), covering first, most trips
-        first, then ``shape_id``. Routes without shaped trips are absent.
+        Route ``key`` -> its ``RouteShape`` pieces. Per direction: the
+        shapes its trips use, simplified at ``DETAIL_TOLERANCE_M``; their
+        covering set (``covering_shapes``, longest first: short-turns and
+        stitched shapes add nothing); then ``distinct_pieces`` of those,
+        so shapes sharing a street (a trunk, or copies digitized a metre
+        apart) draw it once; each piece simplified again at
+        ``DETAIL_TOLERANCE_M`` (dropping points the cut added on a
+        straight stretch) and rounded to
+        ``COORDINATE_DECIMALS``.
+        Order: by ``direction_id`` (missing last), then piece order.
+        Routes without shaped trips are absent.
 
     Raises:
         ValueError: A trip's shape has no coordinates (named, never
@@ -408,30 +419,26 @@ def route_shapes(
         )
 
     shapes: dict[str, list[RouteShape]] = {}
-    for (key, direction_id), members in groups.items():
+    for (key, direction_id), members in sorted(
+        groups.items(),
+        key=lambda item: (item[0][0], item[0][1] is None, item[0][1] or 0),
+    ):
         lines = {
             shape_id: simplified[(feed, shape_id)] for feed, shape_id, _ in members
         }
-        covering = set(covering_shapes(lines, COVERING_TOLERANCE_M))
+        trip_counts = {shape_id: trip_count for _, shape_id, trip_count in members}
+        covering = covering_shapes(lines, COVERING_TOLERANCE_M)
+        pieces = distinct_pieces([lines[shape_id] for shape_id in covering])
         shapes.setdefault(key, []).extend(
             RouteShape(
-                shape_id=shape_id,
+                shape_id=covering[index],
                 direction_id=direction_id,
-                trip_count=trip_count,
-                covering=shape_id in covering,
-                line=round_line(lines[shape_id], COORDINATE_DECIMALS),
+                trip_count=trip_counts[covering[index]],
+                line=round_line(
+                    simplify_line(piece, DETAIL_TOLERANCE_M), COORDINATE_DECIMALS
+                ),
             )
-            for _, shape_id, trip_count in members
-        )
-    for route in shapes.values():
-        route.sort(
-            key=lambda shape: (
-                shape.direction_id is None,
-                shape.direction_id or 0,
-                not shape.covering,
-                -shape.trip_count,
-                shape.shape_id,
-            )
+            for index, piece in pieces
         )
     return shapes
 
@@ -489,51 +496,39 @@ def route_directions(
 def network_collection(
     catalog: Sequence[RouteEntry],
     shapes: Mapping[str, Sequence[RouteShape]],
-    coordinates: pl.DataFrame,
 ) -> FeatureCollection:
     """Build ``network.geojson``: the overview's lines for every route.
 
     Args:
         catalog: Output of ``route_catalog`` (order, ``mode``, ``color``).
-        shapes: Output of ``route_shapes``; only ``covering`` shapes are drawn.
-        coordinates: Output of ``shapes.shape_coordinates`` (raw lines).
+        shapes: Output of ``route_shapes`` (each direction once, in pieces).
 
     Returns:
-        One LineString per covering shape and direction, properties
-        ``NETWORK_PROPERTIES``. Lines are simplified from the *raw* shape
-        at ``OVERVIEW_TOLERANCE_M`` (not from the 2 m lines, so errors
-        don't add up) and rounded to ``COORDINATE_DECIMALS``. Order:
-        ``catalog`` order, then each route's ``route_shapes`` order.
+        One LineString per piece, properties ``NETWORK_PROPERTIES``. Each
+        piece is simplified again at ``OVERVIEW_TOLERANCE_M`` (from the
+        2 m lines: the two simplifications can add up to ~7 m, small next
+        to ``COVERING_TOLERANCE_M``) and rounded to ``COORDINATE_DECIMALS``.
+        Order: ``catalog`` order, then each route's ``route_shapes`` order.
 
     Raises:
-        ValueError: ``shapes`` has a route that isn't in ``catalog``, or a
-            covering shape has no coordinates.
+        ValueError: ``shapes`` has a route that isn't in ``catalog``.
     """
     unknown = sorted(set(shapes) - {entry["key"] for entry in catalog})
     if unknown:
         raise ValueError(f"shapes for routes not in the catalog: {unknown}")
-    raw = {(feed, shape_id): line for feed, shape_id, line in coordinates.rows()}
-    simplified: dict[tuple[str, str], list[Position]] = {}
     features = []
     for entry in catalog:
         for shape in shapes.get(entry["key"], ()):
-            if not shape.covering:
-                continue
-            source = (entry["feed"], shape.shape_id)
-            if source not in simplified:
-                if source not in raw:
-                    raise ValueError(f"shape {source} has no coordinates")
-                simplified[source] = round_line(
-                    simplify_line(raw[source], OVERVIEW_TOLERANCE_M),
-                    COORDINATE_DECIMALS,
-                )
+            line = round_line(
+                simplify_line(shape.line, OVERVIEW_TOLERANCE_M), COORDINATE_DECIMALS
+            )
             properties = {
                 "key": entry["key"],
                 "direction_id": shape.direction_id,
                 "mode": entry["mode"],
                 "color": entry["color"],
             }
-            features.append(line_feature(simplified[source], properties))
+            features.append(line_feature(line, properties))
     return {"type": "FeatureCollection", "features": features}
 
 

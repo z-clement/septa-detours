@@ -752,3 +752,21 @@ Tests: 125 JS.
   card with hours says "Hours: ..." after the reason, plus "not running
   now" when within its dates but outside its hours (the map hides it
   then). Harness screenshot: route 79 at 8 pm Thursday.
+- U5b, one line per direction (2026-11-26; yours, from route 79 zoomed
+  in: shapes of one direction digitized ~1 m apart showed as doubled
+  lines). `simplify.distinct_pieces(lines, tolerance_m=20)`: the first
+  line whole, each later one minus a 20 m buffer around the earlier
+  ones (shapely, local equirectangular metres), each part cut at the
+  buffer's edge joined to the nearest earlier point (end joint added
+  before the start one: a test caught the index shift). First tried
+  point-based (as `covering_shapes`): a straight trunk has no point at
+  the corner where a branch turns, so it doubled the street up to it;
+  densifying every 10 m fixed that but took > 10 min in pure Python.
+  `route_shapes` now yields pieces of each direction's covering shapes
+  (longest first), simplified again at 2 m; `network_collection` draws
+  the same pieces at 5 m (no raw coordinates any more). Contract 9:
+  route detail shapes are pieces, no `covering`; the page draws them at
+  one width. Real `145719Z`: 703 pieces (200 directions in one, route
+  67 direction 1 in 20 real variants; 8 under 25 m), web/data 3.7 ->
+  2.0 MB, network.geojson 970 -> 684 KB, export ~10 s. Map side not
+  checked by eye.

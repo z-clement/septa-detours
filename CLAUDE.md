@@ -235,8 +235,8 @@ those**). P1-P6 (Python) and W1-W6 are done (W6: check on a phone).
 Tiers B and C are built (check the stretches and paths by eye); their
 follow-ups are in `docs/geography-plan.md`. **Current: the UI/UX pass**,
 `docs/ui-plan.md` (goal: riders, readable at a glance; decisions A1 B1
-C1 E1; U1-U8 done 2026-11-26, contract now schema 8; next: U5b, one
-line per direction, then the color pass and by-eye fixes). Next: pick from there, the web plan's
+C1 E1; U1-U8 and U5b done 2026-11-26, contract now schema 9; next:
+the color pass and by-eye fixes). Next: pick from there, the web plan's
 "Later in the web part", or the backlog: ask which.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot

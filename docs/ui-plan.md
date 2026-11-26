@@ -181,7 +181,8 @@ checked by eye with your screenshots. Rough sizes in brackets.
   to tell apart (route 47 NB vs SB): show direction (arrows along the
   line?) and/or fade the direction that isn't the focused detour's.
   Confirm the exact form when we get here.
-- **U5b. One line per direction** (yours, 2026-11-26, seen on route 79
+- **U5b. One line per direction** (done 2026-11-26, contract 9; not yet
+  checked by eye) (yours, 2026-11-26, seen on route 79
   zoomed in: four lines on Snyder, two per direction) [medium: export
   geometry + contract change]. Cause, measured (`145719Z`): a direction
   is drawn once per GTFS shape, and shapes of one direction are

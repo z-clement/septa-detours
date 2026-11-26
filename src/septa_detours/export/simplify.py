@@ -1,7 +1,8 @@
 """Shrink GTFS shapes for the map: fewer points, shapes, and digits.
 
 ``simplify_line`` drops points, ``covering_shapes`` picks the shapes the
-overview needs, ``round_line`` shortens coordinates. Pure functions on
+overview needs, ``distinct_pieces`` keeps only the parts of a direction's
+shapes that aren't drawn already, ``round_line`` shortens coordinates. Pure functions on
 ``[lon, lat]`` lines. Distances use the shared equirectangular
 approximation in ``septa_detours.geo``.
 """
@@ -9,6 +10,10 @@ approximation in ``septa_detours.geo``.
 import math
 from collections.abc import Mapping, Sequence
 from itertools import pairwise
+
+from shapely import LineString, Point
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import nearest_points
 
 from septa_detours.export.geojson import Position
 from septa_detours.geo import EARTH_RADIUS_M, distance_to_line_m, distance_to_segment
@@ -170,6 +175,84 @@ def covering_shapes(
         if not all(_is_drawn(point, kept, tolerance_m) for point in line):
             kept.append((shape_id, line, _widened_box(line, tolerance_m)))
     return [shape_id for shape_id, _, _ in kept]
+
+
+def distinct_pieces(
+    lines: Sequence[Sequence[Sequence[float]]], tolerance_m: float = 20.0
+) -> list[tuple[int, list[Position]]]:
+    """Draw one route-direction once: each line minus what's drawn before it.
+
+    Shapes of one direction overlap: branches share a trunk, and copies of
+    a street are digitized a metre or so apart, which shows as doubled
+    lines when zoomed in (UI plan U5b). The first line is kept whole; of
+    each later one, only its parts farther than ``tolerance_m`` from every
+    earlier line are kept (shapely: the line minus a buffer around the
+    earlier ones, in local metres), and each part that stops at that
+    buffer's edge is joined to the nearest point of the earlier lines, so
+    a branch meets its trunk.
+
+    Args:
+        lines: ``[lon, lat]`` lines in priority order (e.g. covering
+            shapes, longest first).
+        tolerance_m: How far (metres) a line may stray from earlier ones
+            and still count as drawn.
+
+    Returns:
+        ``(index into lines, piece)`` pairs, in line order then along each
+        line (travel order kept), as new ``[lon, lat]`` lists. A line
+        wholly drawn before it gives none.
+
+    Raises:
+        ValueError: ``tolerance_m`` isn't more than 0 (or is NaN), or a line
+            has fewer than two points.
+    """
+    if not tolerance_m > 0:
+        raise ValueError(f"tolerance_m must be > 0, got {tolerance_m}")
+    for index, line in enumerate(lines):
+        if len(line) < 2:
+            raise ValueError(f"line {index} has {len(line)} point(s), needs 2")
+    if not lines:
+        return []
+    # Local flat metres around the lines' mean latitude (equirectangular).
+    lats = [point[1] for line in lines for point in line]
+    x_scale = _METRES_PER_DEGREE * math.cos(math.radians(sum(lats) / len(lats)))
+
+    def to_metres(line: Sequence[Sequence[float]]) -> LineString:
+        return LineString([(p[0] * x_scale, p[1] * _METRES_PER_DEGREE) for p in line])
+
+    def to_lon_lat(coords: Sequence[Sequence[float]]) -> list[Position]:
+        return [[x / x_scale, y / _METRES_PER_DEGREE] for x, y in coords]
+
+    pieces: list[tuple[int, list[Position]]] = [
+        (0, [[point[0], point[1]] for point in lines[0]])
+    ]
+    kept = to_metres(lines[0])
+    for index, line in enumerate(lines[1:], start=1):
+        shape = to_metres(line)
+        outside = shape.difference(kept.buffer(tolerance_m))
+        parts = [p for p in getattr(outside, "geoms", [outside]) if not p.is_empty]
+        parts.sort(key=lambda part: shape.project(Point(part.coords[0])))
+        for part in parts:
+            coords = list(part.coords)
+            first, last = Point(coords[0]), Point(coords[-1])
+            if _at_edge(kept, last, tolerance_m):
+                coords.append(_nearest_xy(kept, last))
+            if _at_edge(kept, first, tolerance_m):
+                coords.insert(0, _nearest_xy(kept, first))
+            pieces.append((index, to_lon_lat(coords)))
+        kept = kept.union(shape)
+    return pieces
+
+
+def _at_edge(kept: BaseGeometry, end: Point, tolerance_m: float) -> bool:
+    """Whether a part's end was cut at the buffer's edge (not its line's end)."""
+    return kept.distance(end) <= tolerance_m * (1 + 1e-9)
+
+
+def _nearest_xy(kept: BaseGeometry, end: Point) -> tuple[float, float]:
+    """The point of ``kept`` nearest ``end``: where a part joins it."""
+    joint = nearest_points(kept, end)[0]
+    return (joint.x, joint.y)
 
 
 def _length_m(line: Sequence[Sequence[float]]) -> float:

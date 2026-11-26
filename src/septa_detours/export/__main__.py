@@ -216,7 +216,7 @@ def export_site(
             detours, _snapshot_name(detours, detours_file), _feed_versions(), now
         ),
         "routes.json": catalog,
-        "network.geojson": network_collection(catalog, shapes, coordinates),
+        "network.geojson": network_collection(catalog, shapes),
         "starts.geojson": starts,
         "skipped.geojson": skipped,
         "paths.geojson": paths_collection(catalog, detours),
