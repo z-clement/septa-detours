@@ -559,3 +559,45 @@ lines in a different line style (in `web-plan.md`'s "Later").
 - Checked: chooser and panel DOM in the scratch harness; the map side
   needs a real browser.
 Tests: 111 JS.
+
+## W6: mobile bottom sheet, keyboard and screen readers (2026-11-25)
+
+Decided first (yours): below 700 px a bottom sheet with three heights,
+tapped through peek -> half -> full -> peek, no dragging. Mine: starts
+at half; focusing a route (or a dot) raises it to at least half, the
+search box to full.
+
+- `sheet.js` (pure, tested): `SHEET_HEIGHTS`, `SHEET_START`,
+  `nextSheet`, `raisedSheet` (never lowers), `sheetHeightPx(sheet,
+  viewportHeight)` (peek 112 px but never above half; half/full 0.5/0.9,
+  rounded: an odd viewport, 667, was needed to kill a floor mutant).
+  One number for both the sheet's CSS height (`--sheet-height` on
+  `<html>`, also read by MapLibre's bottom controls) and the map's room.
+- `state.js`: `sheet` in the store, `cycleSheet`, `raiseSheet`. `focus`
+  on a route raises the sheet **in the same update**: raising from a
+  subscriber would re-enter the store and leave the outer subscriber
+  with a stale state (fitRoute would read the old height).
+- `mapview.js`: `fitPadding(coverBottom)`; `fitRoute` and `panToDot`
+  take `coverBottom` (0 on wide screens). `panToDot` now checks the
+  projected pixel against the visible part and pans with an offset of
+  half the cover, so the dot lands centred above the sheet.
+- CSS: the sheet is `position: fixed` over a full-screen map; at peek
+  everything below the status line is `visibility: hidden` (layout kept,
+  and it leaves the tab order); `prefers-reduced-motion` drops the
+  height transition. Headless screenshots catch the transition mid-way;
+  the harness turns it off.
+- Keyboard/screen readers: focusing a route moves keyboard focus to the
+  panel title (`tabindex -1`, labels the panel); leaving it returns to
+  the route's row (or the search box, not on a phone: focusing it raises
+  the sheet) when the keyboard was in the panel. The panel keeps focus
+  across re-renders via `data-focus-id` (back, title, `card:<key>`,
+  `issues:<key>`, `ended`). A visually hidden `aria-live="polite"`
+  region reads `focusAnnouncement` ("Route 2 ...: 4 now, 2 later.",
+  "All routes."). `:focus-visible` rings everywhere (inset on full-width
+  rows/cards). Contrast: `#777` -> `#666`; greyed rows 0.5 -> 0.65
+  opacity; unavailable chips dashed with muted colors instead of 40%
+  opacity.
+- Checked in the harness: the three heights at 390 x 844, panel focus
+  restore (every control, and not carried to another route), chip
+  states. Real phone and the map side not checked.
+Tests: 125 JS.

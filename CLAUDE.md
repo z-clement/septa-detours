@@ -64,7 +64,8 @@ src/septa_detours/model.py
 web/             map frontend (the detours map): index.html, css/app.css,
                  js/ (ES modules: main, data, mapview = the only
                  maplibregl user, sidebar = the sidebar DOM; format,
-                 routes, detours, state = pure), test/
+                 routes, detours, state, sheet = pure),
+                 dom = shared DOM helpers, test/
                  (node --test); web/data/ holds the data contract
                  (`export site`; gitignored)
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
@@ -198,22 +199,25 @@ draws it: grey network, detoured routes in color, start dots by timing.
 Since W3 a fixed left sidebar (`sidebar.js`) holds the status line,
 search (prefix matches first), mode chips, "Detoured now", every route
 by mode with counts by timing, and "Not on the map"; `routes.json`
-carries detour windows (schema 2). Since W4 a row, line or dot
-focuses a route: the panel replaces
-the list (detours grouped by timing, "Ended" collapsed), the map dims
-the rest, the URL hash (`#route=...&detour=...`) and Back/Escape work.
-State lives in `state.js`. Since W5 (built; map side still to check
-by eye) cards and dots are linked (hover, select, scroll, pan) and a
-click on several routes opens a chooser. 111 JS tests.
+carries detour windows (schema 2). Since W4 a row, line or dot focuses
+a route: the panel replaces the list (detours grouped by timing,
+"Ended" collapsed), the map dims the rest, the URL hash
+(`#route=...&detour=...`) and Back/Escape work; state lives in
+`state.js`. Since W5 cards and dots are linked (hover, select, scroll,
+pan) and a click on several routes opens a chooser. Since W6 (built;
+check on a phone) below 700 px the sidebar is a bottom sheet (3
+heights, tap handle; `sheet.js`), plus a keyboard/screen-reader pass.
+125 JS tests.
 
 ## Next
 
 **The web app**: `docs/web-plan.md` holds the whole plan (decisions
 made, facts measured, the contract's files, the JS module layout, the
 order of work, and **decisions still to confirm: ask before building
-those**). P1-P6 (Python) and W1-W5 are done (W5's map side: check by
-eye); continue at its "Order of work", **W6** (mobile bottom sheet,
-keyboard/a11y pass).
+those**). P1-P6 (Python) and W1-W6 are done (W6: check on a phone).
+Its "Order of work" is finished; next is picking from "Later in the
+web part" (detoured lines in their own line style, stops/closures,
+live vehicles) or the backlog: ask which.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
 collection, small follow-ups) and `docs/geography-plan.md` (tier A step

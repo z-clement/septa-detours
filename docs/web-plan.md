@@ -325,6 +325,8 @@ web/
   js/detours.js       PURE: detourTiming(start, end, now); later sort,
                       summaries
   js/format.js        PURE: times (America/New_York), labels, plurals
+  js/sheet.js         PURE (W6): the mobile sheet's heights
+  js/dom.js           DOM helpers shared by sidebar and chooser (W5)
   test/*.test.js      node --test for the PURE modules
 ```
 
@@ -478,7 +480,7 @@ Web (plain JS):
     - Step 4 (done): the focused map (`mapview.js`).
     - Step 5 (done): wiring (`main.js`): row/line/dot clicks focus, hash,
       Back/Escape, the W3 gaps.
-11. **W5** (built; map side to check by eye) Card <-> dot linking, the multi-route click chooser.
+11. **W5** (done) Card <-> dot linking, the multi-route click chooser.
     Decided 2026-11-25: (a) hovering a card highlights its dot; clicking
     a card selects it (highlighted card, selected dot style, URL hash)
     and pans the map to its dot only if it's off screen, no zoom
@@ -493,7 +495,7 @@ Web (plain JS):
     - Step 3 (done): dot states (hover, selected) on the map.
     - Step 4 (done): cards: hover/click/keyboard, scroll to the selected card,
       pan to its dot.
-12. **W6** (next) Mobile bottom sheet, keyboard/a11y pass. Decided
+12. **W6** (built; check on a phone) Mobile bottom sheet, keyboard/a11y pass. Decided
     2026-11-25: below 700 px the sidebar is a bottom sheet with three
     heights (peek: handle + status line; half ~50%; full ~90%); tapping
     the handle steps peek -> half -> full -> peek; no dragging (rejected:
@@ -501,10 +503,10 @@ Web (plain JS):
     route or clicking a dot raises it to at least half; focusing the
     search box raises it to full. Mine: it starts at half (the list
     shows on first load); the map's fit/pan leave room for the sheet.
-    - Step 1: `sheet.js` (pure): heights, next, raise, pixel height;
+    - Step 1 (done): `sheet.js` (pure): heights, next, raise, pixel height;
       `sheet` in the store.
-    - Step 2: the sheet's CSS, handle and wiring.
-    - Step 3: keyboard and screen readers: focus moves into the panel
+    - Step 2 (done): the sheet's CSS, handle and wiring.
+    - Step 3 (done): keyboard and screen readers: focus moves into the panel
       and back to the row, an `aria-live` announcement on focus change,
       visible focus rings, contrast, labels.
 
