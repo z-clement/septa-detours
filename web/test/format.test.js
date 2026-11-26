@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  TIMING_WORDS,
+  apiRouteName,
   describeDetour,
   describeRoute,
   formatTime,
@@ -14,6 +16,7 @@ import {
   routeLabel,
   statusLine,
   timingSummary,
+  unmatchedSummary,
 } from "../js/format.js";
 
 // Times must show in SEPTA_TIME_ZONE whatever the machine's own zone. On a
@@ -227,4 +230,86 @@ test("timingSummary: zero parts are left out", () => {
 
 test("timingSummary: no detours gives an empty string", () => {
   assert.equal(timingSummary({ active: 0, upcoming: 0, ended: 0, unknown: 0 }), "");
+});
+
+test("timingSummary: uses TIMING_WORDS", () => {
+  assert.deepEqual(TIMING_WORDS, {
+    active: "now",
+    upcoming: "later",
+    ended: "ended",
+    unknown: "unknown",
+  });
+  assert.ok(Object.isFrozen(TIMING_WORDS));
+});
+
+// --- apiRouteName -----------------------------------------------------------
+
+test("apiRouteName: each API prefix is dropped", () => {
+  assert.equal(apiRouteName("bus_route_L"), "L");
+  assert.equal(apiRouteName("bus_route_21"), "21");
+  assert.equal(apiRouteName("trolley_route_15"), "15");
+});
+
+test("apiRouteName: the name is upper-cased, the prefix only matched at the start", () => {
+  assert.equal(apiRouteName("rr_route_mfo"), "MFO");
+  assert.equal(apiRouteName("x_bus_route_L"), "x_bus_route_L");
+});
+
+test("apiRouteName: an unknown id is shown unchanged", () => {
+  assert.equal(apiRouteName("APP"), "APP");
+  assert.equal(apiRouteName("ferry_route_1"), "ferry_route_1");
+});
+
+// --- unmatchedSummary -------------------------------------------------------
+
+// Route L's real NB detour (status.json `unmatched`, snapshot 121123Z).
+const ROUTE_L_NB = {
+  source_key: "78237091dd0d62b1",
+  route: "bus_route_L",
+  status: "complete",
+  direction: "NB",
+  direction_id: null,
+  location_start: "Nedro & 20th St",
+  location_end: "Wister btwn Church & Spencer",
+  start: "2026-11-23T12:00:00-05:00",
+  end: "2026-11-30T16:00:00-05:00",
+  reason: "Contractors",
+  message:
+    "7am - 9pm, Mon - Fri until 11/30/26, NB via Nedro, Right on 20th St, " +
+    "Left on Chelten Ave, Right on Wister, Reg Rt",
+  issues: ["route: no GTFS route for API route 'bus_route_L' (looked for bus route 'L')"],
+  start_point: null,
+  shape_ids: [],
+};
+
+test("unmatchedSummary: a real detour, whole line", () => {
+  assert.equal(
+    unmatchedSummary(ROUTE_L_NB),
+    "Route L, NB: Nedro & 20th St to Wister btwn Church & Spencer",
+  );
+});
+
+test("unmatchedSummary: no direction", () => {
+  assert.equal(
+    unmatchedSummary({ ...ROUTE_L_NB, direction: null }),
+    "Route L: Nedro & 20th St to Wister btwn Church & Spencer",
+  );
+});
+
+test("unmatchedSummary: one location missing leaves out its half", () => {
+  assert.equal(
+    unmatchedSummary({ ...ROUTE_L_NB, location_end: null }),
+    "Route L, NB: Nedro & 20th St",
+  );
+  assert.equal(
+    unmatchedSummary({ ...ROUTE_L_NB, location_start: null }),
+    "Route L, NB: to Wister btwn Church & Spencer",
+  );
+});
+
+test("unmatchedSummary: no location at all", () => {
+  assert.equal(
+    unmatchedSummary({ ...ROUTE_L_NB, location_start: null, location_end: null }),
+    "Route L, NB: location not given",
+  );
 });

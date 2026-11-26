@@ -137,6 +137,56 @@ export function describeDetour(detour, route) {
   ].join("\n");
 }
 
+/** The sidebar's word for each `detourTiming` result. */
+export const TIMING_WORDS = Object.freeze({
+  active: "now",
+  upcoming: "later",
+  ended: "ended",
+  unknown: "unknown",
+});
+
+/** The alerts API's route id prefixes; what follows is the route's name. */
+const API_ROUTE_PREFIXES = ["bus_route_", "trolley_route_", "rr_route_"];
+
+/**
+ * A display name for an alerts API route id: "bus_route_L" -> "L".
+ *
+ * Upper-cased after the prefix, so "rr_route_mfo" -> "MFO". An id without
+ * a known prefix is shown unchanged rather than guessed at.
+ *
+ * @param {string} apiRouteId e.g. a `status.unmatched` detour's `route`
+ * @returns {string}
+ */
+export function apiRouteName(apiRouteId) {
+  const prefix = API_ROUTE_PREFIXES.find((p) => apiRouteId.startsWith(p));
+  return prefix === undefined ? apiRouteId : apiRouteId.slice(prefix.length).toUpperCase();
+}
+
+/**
+ * One line for a detour not matched to a route ("Not on the map").
+ *
+ * e.g. "Route L, NB: Nedro & 20th St to Wister btwn Church & Spencer".
+ * The direction is left out when null; a missing location leaves out its
+ * half, and none at all says "location not given".
+ *
+ * @param {object} detour a `status.unmatched` detour object
+ * @returns {string}
+ */
+export function unmatchedSummary(detour) {
+  const route = `Route ${apiRouteName(detour.route)}`;
+  const head = detour.direction === null ? route : `${route}, ${detour.direction}`;
+  const { location_start: from, location_end: to } = detour;
+  let where = "location not given";
+  if (from !== null && to !== null) {
+    where = `${from} to ${to}`;
+  } else if (from !== null) {
+    where = from;
+  } else if (to !== null) {
+    where = `to ${to}`;
+  }
+  return `${head}: ${where}`;
+}
+
 /**
  * A sidebar row's detour count by timing: "3 now, 4 later".
  *
@@ -149,10 +199,10 @@ export function describeDetour(detour, route) {
  */
 export function timingSummary(counts) {
   const parts = [
-    [counts.active, "now"],
-    [counts.upcoming, "later"],
-    [counts.ended, "ended"],
-    [counts.unknown, "unknown"],
+    [counts.active, TIMING_WORDS.active],
+    [counts.upcoming, TIMING_WORDS.upcoming],
+    [counts.ended, TIMING_WORDS.ended],
+    [counts.unknown, TIMING_WORDS.unknown],
   ];
   return parts
     .filter(([count]) => count > 0)

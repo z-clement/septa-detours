@@ -4,7 +4,14 @@
 // (routes.js, format.js), which have the tests. Text always goes in through
 // `textContent`, never `innerHTML`, so names from the data can't inject markup.
 
-import { modeLabel, timingSummary } from "./format.js";
+import { detourTiming } from "./detours.js";
+import {
+  TIMING_WORDS,
+  formatTime,
+  modeLabel,
+  timingSummary,
+  unmatchedSummary,
+} from "./format.js";
 import { detouredNow, groupByMode, timingCounts } from "./routes.js";
 
 /**
@@ -77,6 +84,44 @@ function routeSection(title, routes, now) {
 }
 
 /**
+ * The "Not on the map" section: detours whose route isn't in GTFS.
+ *
+ * Each is a `<details>`: one summary line plus its timing word, opening
+ * to its times, reason and the raw message (no JS needed to toggle).
+ *
+ * @param {object[]} detours `status.unmatched`
+ * @param {Date} now
+ * @returns {HTMLElement}
+ */
+function unmatchedSection(detours, now) {
+  const section = element("section", "route-section");
+  section.append(
+    element("h2", undefined, "Not on the map"),
+    element(
+      "p",
+      "unmatched-note",
+      "Their route isn't in SEPTA's GTFS (often a pre-2025 route name).",
+    ),
+  );
+  for (const detour of detours) {
+    const item = element("details", "unmatched");
+    const summary = element("summary");
+    summary.append(
+      element("span", "name", unmatchedSummary(detour)),
+      element("span", "count", TIMING_WORDS[detourTiming(detour.start, detour.end, now)]),
+    );
+    item.append(
+      summary,
+      element("p", undefined, `${formatTime(detour.start)} to ${formatTime(detour.end)}`),
+      element("p", undefined, `Reason: ${detour.reason ?? "(none given)"}`),
+      element("p", "message", detour.message),
+    );
+    section.append(item);
+  }
+  return section;
+}
+
+/**
  * Draw the route list into `container`, replacing what was there.
  *
  * "Detoured now" first (left out when no detour is active), then every
@@ -84,7 +129,8 @@ function routeSection(title, routes, now) {
  * is also in its group. Rebuilt whole on every call: 181 rows is cheap,
  * and it avoids patching. Draws whatever routes it's given, in their
  * order: filtering and ranking are the caller's. No routes shows
- * `emptyText` instead.
+ * `emptyText` instead. Unmatched detours, when any are given, come last
+ * in "Not on the map" (the caller passes none while filtering).
  *
  * @param {HTMLElement} container
  * @param {object} view
@@ -92,8 +138,9 @@ function routeSection(title, routes, now) {
  * @param {Date} view.now
  * @param {string[]} view.modeOrder the catalog's mode order
  * @param {string} view.emptyText shown when `routes` is empty
+ * @param {object[]} view.unmatched `status.unmatched` detours to list
  */
-export function renderRouteList(container, { routes, now, modeOrder, emptyText }) {
+export function renderRouteList(container, { routes, now, modeOrder, emptyText, unmatched }) {
   if (routes.length === 0) {
     container.replaceChildren(element("p", "route-list-empty", emptyText));
     return;
@@ -105,6 +152,9 @@ export function renderRouteList(container, { routes, now, modeOrder, emptyText }
   }
   for (const group of groupByMode(routes, modeOrder)) {
     sections.push(routeSection(modeLabel(group.mode), group.routes, now));
+  }
+  if (unmatched.length > 0) {
+    sections.push(unmatchedSection(unmatched, now));
   }
   container.replaceChildren(...sections);
 }

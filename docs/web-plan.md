@@ -368,10 +368,13 @@ that then notify subscribers (sidebar and map re-render from state):
   all. A number (digits only) is a route number: it matches only at the
   start of `short_name` (`2` finds 2, 21, 204; not 12, and not route 5,
   whose long name is "2nd-Market to ..."). Anything else matches anywhere
-  in `short_name` or `long_name` (`owl` finds both OWL buses). Open: a
-  single letter is noisy (`k` matches 62 routes via "Frankford"; route K
-  is buried); maybe rank route-number matches first. Try it on the drawn
-  sidebar before deciding.
+  in `short_name` or `long_name` (`owl` finds both OWL buses). Ranking
+  (decided 2026-11-25): a single letter was noisy (`k` matched 62
+  routes via "Frankford"; route K was 58th), so text matches whose
+  `short_name` starts with the query come first, then the rest, each in
+  catalog order. Ranking reorders routes *within* a mode group only: the
+  groups keep the catalog's mode order (`groupByMode(routes,
+  modeOrder)`). Rejected: the best match's group moving to the top.
 - Click a line or dot on the map, or a sidebar row -> focus that route
   (a dot also selects its detour). If several routes' lines are under the
   click, show a small chooser popup instead of guessing.

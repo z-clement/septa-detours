@@ -175,6 +175,37 @@ body {
   font-size: 12px;
 }
 
+/* "Not on the map": unmatched detours, each a <details>. */
+.unmatched-note {
+  margin: 6px 12px;
+  color: #777;
+  font-size: 12px;
+}
+.unmatched {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.unmatched summary {
+  display: flex; /* name | timing, like a route row */
+  gap: 8px;
+  cursor: pointer;
+}
+.unmatched summary .name {
+  flex: 1;
+}
+.unmatched summary .count {
+  flex: none;
+  color: #b00020;
+  font-size: 12px;
+}
+.unmatched p {
+  margin: 4px 0 4px 12px;
+  color: #444;
+}
+.unmatched .message {
+  white-space: pre-line;
+}
+
 /* Routes without shapes (D4): listed, but greyed. */
 .route-row.no-shapes {
   opacity: 0.5;

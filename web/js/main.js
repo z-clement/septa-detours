@@ -76,11 +76,15 @@ async function main() {
     // other chips don't count, or switching one off would grey it).
     const searched = searchRoutes(site.routes, state.search);
     updateChips(state.modes, new Set(searched.map((route) => route.mode)));
+    // "Not on the map" only in the unfiltered list (decided): its detours
+    // have no mode, and a search for "21" shouldn't end with route L's.
+    const filtered = state.search.trim() !== "" || state.modes.size < modeOrder.length;
     renderRouteList(listElement, {
       routes: visibleRoutes(site.routes, state.search, state.modes),
       now: state.now,
       modeOrder,
       emptyText: state.modes.size === 0 ? "No modes selected." : "No routes match.",
+      unmatched: filtered ? [] : site.status.unmatched,
     });
   };
   render();
