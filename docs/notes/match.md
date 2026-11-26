@@ -287,3 +287,10 @@ The mutation runner is now a scratch script taking a mutations file
   the street or reachable, or two targets tie exactly (a binary-exact
   test: lon -75.5 / -75.0 / -74.5). Weight by metres, not hops, is
   pinned (a 1-edge far target vs a 2-edge near one).
+- `walk.turn_side(incoming, outgoing)` (step 3a): `"left"`/`"right"`
+  from the cross product of the directions read over `TURN_LOOK_M`
+  (100 m: the first point at least that far back / ahead, else the
+  walk's end); `None` for a walk under 2 points (an empty one too: no
+  IndexError) or exactly straight on. `Side` (not `Turn`: the model's
+  has `"via"`). Tests rebuild the Penn Square corner (first segment says
+  right, the turn is left) and pin the look distance at 99 / 101 m.

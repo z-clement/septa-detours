@@ -10,7 +10,12 @@ import polars as pl
 import pytest
 
 from septa_detours.geo import EARTH_RADIUS_M
-from septa_detours.match.walk import street_graph, walk_street
+from septa_detours.match.walk import (
+    TURN_LOOK_M,
+    street_graph,
+    turn_side,
+    walk_street,
+)
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
 LON, LAT = -75.1716, 39.9385
@@ -221,3 +226,93 @@ def test_walk_street_takes_any_iterables() -> None:
     sources = (node for node in [10])
     targets = (node for node in [12, 12])
     assert walk_street(STREET, sources, targets) == (10, 11, 12)
+
+
+# turn_side: the corner is (LON, LAT). STEP east is ~85 m, north ~111 m.
+CORNER = [LON, LAT]
+FROM_WEST = [[LON - STEP, LAT], CORNER]  # heading east
+FROM_NORTH = [[LON, LAT + STEP], CORNER]  # heading south
+
+
+@pytest.mark.parametrize(
+    ("incoming", "outgoing", "expected"),
+    [
+        (FROM_WEST, [CORNER, [LON, LAT + STEP]], "left"),  # east, then north
+        (FROM_WEST, [CORNER, [LON, LAT - STEP]], "right"),  # east, then south
+        (FROM_NORTH, [CORNER, [LON + STEP, LAT]], "left"),  # south, then east
+        (FROM_NORTH, [CORNER, [LON - STEP, LAT]], "right"),  # south, then west
+    ],
+)
+def test_turn_side_square_corners(incoming, outgoing, expected: str) -> None:
+    assert turn_side(incoming, outgoing) == expected
+
+
+def test_turn_side_reads_past_a_misleading_first_segment() -> None:
+    # Like 15th St -> South Penn Square: heading south, the new street
+    # first runs ~44 m south and a touch west (a "right"), then ~170 m
+    # east: a left turn.
+    outgoing = [CORNER, [LON - 0.00002, LAT - 0.0004], [LON + 0.002, LAT - 0.0006]]
+    assert turn_side(FROM_NORTH, outgoing) == "left"
+    assert turn_side(FROM_NORTH, outgoing[:2]) == "right"
+
+
+def test_turn_side_reads_only_so_far_back() -> None:
+    # Heading east for the last ~170 m, but from 2.2 km north before that:
+    # the whole incoming walk's chord points south, the bus heads east. A
+    # turn to the north-west is left from east (right from south).
+    incoming = [[LON - 0.002, LAT + 0.02], [LON - 0.002, LAT], CORNER]
+    outgoing = [CORNER, [LON - 0.001, LAT + 0.002]]
+    assert turn_side(incoming, outgoing) == "left"
+
+
+def test_turn_side_look_distance() -> None:
+    assert TURN_LOOK_M == 100.0
+    # A first segment just under the look distance is passed over (99 m
+    # south-west, then east); one just over it decides (101 m).
+    for metres, expected in [(99.0, "left"), (101.0, "right")]:
+        south = metres / NORTH_SOUTH_M * STEP
+        outgoing = [CORNER, [LON - 0.000001, LAT - south], [LON + 0.01, LAT - south]]
+        assert turn_side(FROM_NORTH, outgoing) == expected
+
+
+@pytest.mark.parametrize(
+    ("incoming", "outgoing"),
+    [
+        ([CORNER], [CORNER, [LON, LAT + STEP]]),  # incoming: one node
+        (FROM_WEST, [CORNER]),  # outgoing: one node
+        ([], []),
+        ([], [CORNER, [LON, LAT + STEP]]),  # empty: no IndexError
+        (FROM_WEST, []),
+    ],
+)
+def test_turn_side_needs_two_points_each(incoming, outgoing) -> None:
+    assert turn_side(incoming, outgoing) is None
+
+
+def test_turn_side_straight_on_is_none() -> None:
+    # Binary-exact: the cross product is exactly 0.
+    assert (
+        turn_side([[-75.5, 40.0], [-75.0, 40.0]], [[-75.0, 40.0], [-74.5, 40.0]])
+        is None
+    )
+
+
+def test_turn_side_reads_back_past_a_short_last_segment() -> None:
+    # The last ~25 m run east, the ~400 m before them north-east: read
+    # over 100 m the bus heads north-east, and an east-north-east turn
+    # from north-east is a right.
+    incoming = [[LON - 0.003, LAT - 0.003], [LON - 0.0003, LAT], CORNER]
+    outgoing = [CORNER, [LON + 0.002, LAT + 0.001]]
+    assert turn_side(incoming, outgoing) == "right"
+
+
+def test_turn_side_adds_up_short_segments() -> None:
+    # Five ~33 m segments south and a touch west (together past 100 m),
+    # then far east: read at 100 m, the bus has turned right (south-west).
+    south = 0.0003
+    outgoing = (
+        [CORNER]
+        + [[LON - 0.000001 * i, LAT - south * i] for i in range(1, 6)]
+        + [[LON + 0.01, LAT - 5 * south]]
+    )
+    assert turn_side(FROM_NORTH, outgoing) == "right"

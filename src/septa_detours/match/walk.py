@@ -10,8 +10,10 @@ Graphs are networkx ``Graph`` objects: nodes are OSM node IDs with
 carry their ``length_m``.
 """
 
+import itertools
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from typing import Literal
 
 import networkx as nx
 import polars as pl
@@ -84,7 +86,68 @@ def walk_street(
     return tuple(paths[reached[0][1]])
 
 
-def _metres_between(p: list[float], q: list[float]) -> float:
+TURN_LOOK_M = 100.0
+"""How far along each walk a turn's directions are read.
+
+Not just the segments at the corner: ``South Penn Square`` leaves 15th
+St almost straight south for ~45 m before curving east, so the first
+segments say "right" where the turn is "left". Real data (``121123Z``):
+read 30, 100 or 200 m out, all 185 checkable turns agree with their
+message.
+"""
+
+
+type Side = Literal["left", "right"]
+"""Which way a turn goes (``model.Turn`` without ``"via"``)."""
+
+
+def turn_side(
+    incoming: Sequence[Sequence[float]], outgoing: Sequence[Sequence[float]]
+) -> Side | None:
+    """Which way the bus turns where ``incoming`` ends and ``outgoing`` starts.
+
+    Directions are read over ``TURN_LOOK_M``: from the first point at
+    least that far back along ``incoming`` to the corner, and from the
+    corner to the first point at least that far along ``outgoing`` (a
+    shorter walk: its far end). Left or right is the sign of their cross
+    product (positive: left, as x is east and y north); scaling longitude
+    to metres wouldn't change the sign.
+
+    Args:
+        incoming: ``[lon, lat]`` points in travel order, ending at the
+            corner.
+        outgoing: ``[lon, lat]`` points in travel order, starting at the
+            corner (``outgoing[0]`` is the corner used).
+
+    Returns:
+        ``"left"``, ``"right"``, or ``None`` when either walk has fewer
+        than two points (no direction) or the directions are exactly in
+        line.
+    """
+    if len(incoming) < 2 or len(outgoing) < 2:
+        return None
+    corner = outgoing[0]
+    back = _point_along(incoming[::-1])
+    ahead = _point_along(outgoing)
+    cross = (corner[0] - back[0]) * (ahead[1] - corner[1]) - (corner[1] - back[1]) * (
+        ahead[0] - corner[0]
+    )
+    if cross == 0:
+        return None
+    return "left" if cross > 0 else "right"
+
+
+def _point_along(points: Sequence[Sequence[float]]) -> Sequence[float]:
+    """The first point at least ``TURN_LOOK_M`` along ``points``, else the last."""
+    walked = 0.0
+    for previous, point in itertools.pairwise(points):
+        walked += _metres_between(previous, point)
+        if walked >= TURN_LOOK_M:
+            return point
+    return points[-1]
+
+
+def _metres_between(p: Sequence[float], q: Sequence[float]) -> float:
     """Approximate ground distance between ``[lon, lat]`` points, in metres.
 
     The same formula as ``crossings._metres_between`` (equirectangular,
