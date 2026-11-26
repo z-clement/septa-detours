@@ -7,6 +7,10 @@ import { loadSite, routeDetailLoader } from "./data.js";
 import { statusLine } from "./format.js";
 import { addOverviewLayers, addPopups, createMap } from "./mapview.js";
 import { detouredRoutes, routesBounds } from "./routes.js";
+import { renderRouteList } from "./sidebar.js";
+
+/** How often `now` moves on, so detours become active/ended on screen. */
+const NOW_REFRESH_MS = 60_000;
 
 /**
  * Show a short status line on the page.
@@ -41,6 +45,16 @@ async function main() {
   addOverviewLayers(map, site);
   addPopups(map, site.routes, routeDetailLoader());
   showStatus(statusLine(site.status));
+
+  // Page state; moves to state.js in W4. Every change re-renders the list.
+  const state = { now: new Date() };
+  const listElement = document.getElementById("route-list");
+  const render = () => renderRouteList(listElement, site.routes, state.now);
+  render();
+  setInterval(() => {
+    state.now = new Date();
+    render();
+  }, NOW_REFRESH_MS);
 
   // Zoom to the detoured routes; with none, to the whole network. No
   // bounds at all (no shapes) leaves the map on Philadelphia.

@@ -61,6 +61,71 @@ body {
   display: none;
 }
 
+/* Route list: one section per group, its heading stuck to the top of
+   the sidebar while its rows scroll under it. */
+.route-section h2 {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 8px 12px 4px;
+  background: #f4f4f4;
+  color: #444;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* A row: badge | name (takes the slack, cut with "...") | count. */
+.route-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.route-row:hover {
+  background: #f0f4ff;
+}
+
+/* The defaults here are the fallback for a null color/text_color; the
+   route's own colors are set inline by sidebar.js when present. */
+.route-row .badge {
+  flex: none;
+  min-width: 2.6em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #555555;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.route-row .name {
+  flex: 1;
+  min-width: 0; /* lets a flex item shrink below its text, so ellipsis works */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-row .count {
+  flex: none;
+  color: #b00020;
+  font-size: 12px;
+}
+
+/* Routes without shapes (D4): listed, but greyed. */
+.route-row.no-shapes {
+  opacity: 0.5;
+}
+
 /* Popup text keeps its line breaks (describeStart joins with \n). */
 .maplibregl-popup-content {
   white-space: pre-line;
