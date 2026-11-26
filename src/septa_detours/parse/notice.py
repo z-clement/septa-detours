@@ -13,6 +13,7 @@ from septa_detours.model import DetourNotice, Direction, Location, SourceText
 from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
 from septa_detours.parse.direction import find_directions
 from septa_detours.parse.location import parse_location
+from septa_detours.parse.steps import parse_route_steps
 from septa_detours.parse.text import clean_text
 from septa_detours.parse.times import local_time_issue, parse_api_datetime
 
@@ -95,6 +96,9 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
           ``partial``).
         - Stop closures vs reroutes: the model has no ``kind`` field yet.
           Adding one changes ``model.py`` (flag it first).
+        - Route steps (``parse_route_steps``): the message's path, or
+          ``()`` with no issue when it has none or it isn't recognized
+          (tier B uses it when present; a missing path costs nothing).
     """
     source = SourceText(
         snapshot=snapshot,
@@ -121,6 +125,10 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
     end_place, _ = _parse_place("location_end", detour.location_end)
     direction, direction_issues = _pick_direction(detour.message)
     issues.extend(direction_issues)
+    try:
+        route_steps = parse_route_steps(detour.message)
+    except ValueError:
+        route_steps = ()
     return DetourNotice(
         source=source,
         source_key=make_source_key(route.route_id, detour.location_start, detour.start),
@@ -132,6 +140,7 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         end_place=end_place,
         reason=clean_text(detour.reason),
         direction=direction,
+        route_steps=route_steps,
         issues=tuple(issues),
     )
 

@@ -158,6 +158,11 @@ class DetourNotice(_Frozen):
             way: the end can be inferred from the detour's path).
         reason: Stripped reason, or ``None`` if blank.
         direction: Affected direction from the message, or ``None``.
+        route_steps: The detour's path from the message (``parse/steps.py``):
+            the ``via`` street, then each turn, up to ``Reg Rt``. Empty
+            when the message has no such path (a stop closure, a layover)
+            or it isn't in a recognized form, with no issue: messages
+            aren't modeled yet, and an issue would make it ``partial``.
         issues: Why fields are ``None`` or doubtful, one string each, e.g.
             ``"end: unparseable '12/1/2026  11:5 PM'"``.
 
@@ -177,6 +182,7 @@ class DetourNotice(_Frozen):
     end_place: Location | None
     reason: CleanText | None
     direction: Direction | None
+    route_steps: tuple[Step, ...] = ()
     issues: tuple[CleanText, ...] = ()
 
     @property

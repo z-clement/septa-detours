@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from septa_detours.model import DetourNotice, Intersection, Segment, SourceText
+from septa_detours.model import DetourNotice, Intersection, Segment, SourceText, Step
 from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
 from septa_detours.parse.notice import (
     SOURCE_KEY_LENGTH,
@@ -193,6 +193,11 @@ def test_parse_detour_route_55_baseline(
         end_place=Segment(street="Old York Rd", between=("65th Ave", "66th Ave")),
         reason="Sinkhole",
         direction="SB",
+        route_steps=(
+            Step(turn="via", street="Broad St"),
+            Step(turn="right", street="65th Ave"),
+            Step(turn="left", street="Old York Rd"),
+        ),
     )
     assert notice == expected
     assert notice.status == "complete"
@@ -250,6 +255,19 @@ def make_api_detour(**overrides: str) -> ApiDetour:
 
 def parse_made(**overrides: str) -> DetourNotice:
     return parse_detour(ROUTE_55, make_api_detour(**overrides), f"{OLD}.json")
+
+
+def test_parse_detour_route_steps_from_the_message() -> None:
+    notice = parse_made()  # "SB via Broad St, Reg Rt"
+    assert notice.route_steps == (Step(turn="via", street="Broad St"),)
+
+
+def test_parse_detour_no_route_steps_is_not_an_issue() -> None:
+    """A message without a readable path (a stop closure) costs nothing."""
+    notice = parse_made(message="24/7 until 12-31-2026, SB stop at Broad St closed")
+    assert notice.route_steps == ()
+    assert notice.issues == ()
+    assert notice.status == "complete"
 
 
 def test_parse_detour_made_baseline_has_no_issues() -> None:
