@@ -44,6 +44,7 @@ from septa_detours.export.site import (
     route_directions,
     route_key,
     route_shapes,
+    skipped_collection,
     starts_collection,
     status,
 )
@@ -208,6 +209,7 @@ def export_site(
             by_route.setdefault(key, []).append(detour)
 
     starts = starts_collection(catalog, detours, now)
+    skipped = skipped_collection(catalog, detours, now)
     files: dict[str, object] = {
         "status.json": status(
             detours, _snapshot_name(detours, detours_file), _feed_versions(), now
@@ -215,6 +217,7 @@ def export_site(
         "routes.json": catalog,
         "network.geojson": network_collection(catalog, shapes, coordinates),
         "starts.geojson": starts,
+        "skipped.geojson": skipped,
     }
     for entry in catalog:
         key = entry["key"]

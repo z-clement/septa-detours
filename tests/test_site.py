@@ -9,6 +9,7 @@ import pytest
 from septa_detours.export.contract import (
     NETWORK_PROPERTIES,
     SHAPE_PROPERTIES,
+    SKIPPED_PROPERTIES,
     START_PROPERTIES,
     DirectionEntry,
     Mode,
@@ -28,6 +29,7 @@ from septa_detours.export.site import (
     route_mode,
     route_shapes,
     route_sort_key,
+    skipped_collection,
     starts_collection,
     status,
 )
@@ -39,6 +41,7 @@ from septa_detours.model import (
     Detour,
     DetourNotice,
     RouteMatch,
+    SkippedStretch,
     StartPoint,
 )
 from septa_detours.parse.notice import parse_snapshot
@@ -409,13 +412,26 @@ def with_shapes(
     return Detour(notice=notice, match=match)
 
 
+# Route 2 #0's real skipped stretch, cut to its first two and last point.
+# The second point is ~1 m from the first, so the 2 m simplification
+# drops it; the rest are rounded to 5 decimals.
+ROUTE_2_SKIPPED = (
+    (-75.17157596637267, 39.93846011209412),
+    (-75.171579, 39.93845),
+    (-75.17460535658819, 39.92455858152203),
+)
+
+
 def test_detour_object_matched_and_placed(notices) -> None:
-    # Route 2 #0 with its real match: SB shape, start at 17th & Washington.
+    # Route 2 #0 with its real match: SB shape, start at 17th & Washington,
+    # rejoin at Passyunk & 17th.
     match = RouteMatch(
         feed="bus",
         route_id="2",
         shapes=(AffectedShape(shape_id="317310", direction_id=0),),
         start_point=StartPoint(node_id=110024066, lon=-75.1716, lat=39.9385),
+        rejoin_point=StartPoint(node_id=110024247, lon=-75.1746167, lat=39.9245599),
+        skipped=SkippedStretch(shape_id="317310", line=ROUTE_2_SKIPPED),
     )
     detour = Detour(notice=notices("bus_route_2")[0], match=match, issues=("x: y",))
     assert detour_object(detour) == {
@@ -433,6 +449,8 @@ def test_detour_object_matched_and_placed(notices) -> None:
         "Washington, Right on Broad, Right on Passyunk, Left on 17th, Reg Rt",
         "issues": ["x: y"],
         "start_point": {"lon": -75.1716, "lat": 39.9385, "node_id": 110024066},
+        "rejoin_point": {"lon": -75.1746167, "lat": 39.9245599, "node_id": 110024247},
+        "skipped": [[-75.17158, 39.93846], [-75.17461, 39.92456]],
         "shape_ids": ["317310"],
     }
 
@@ -455,6 +473,8 @@ def test_detour_object_unmatched(notices) -> None:
         "message": notice.source.message,
         "issues": ["location_start: unrecognized location 'PNC Center'", "route: none"],
         "start_point": None,
+        "rejoin_point": None,
+        "skipped": None,
         "shape_ids": [],
     }
 
@@ -590,7 +610,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 2,
+        "schema_version": 3,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1176,6 +1196,90 @@ def test_starts_rejects_a_naive_now(notices) -> None:
         starts_collection([ROUTE_2], detours, datetime(2026, 11, 25, 14, 0))  # noqa: DTZ001
 
 
+# --- skipped_collection -----------------------------------------------------------
+
+
+def skipping(
+    notice: DetourNotice,
+    line: tuple[tuple[float, float], ...],
+    feed: Feed = "bus",
+    route_id: str = "2",
+) -> Detour:
+    """A placed detour with a skipped stretch along ``line``."""
+    start = StartPoint(node_id=110024066, lon=line[0][0], lat=line[0][1])
+    match = RouteMatch(
+        feed=feed,
+        route_id=route_id,
+        start_point=start,
+        skipped=SkippedStretch(shape_id="317310", line=line),
+    )
+    return Detour(notice=notice, match=match)
+
+
+def stretch_feature(
+    line: list[list[float]], key: str, source_key: str, color: str | None, timing: str
+):
+    return {
+        "type": "Feature",
+        "geometry": {"type": "LineString", "coordinates": line},
+        "properties": {
+            "key": key,
+            "source_key": source_key,
+            "color": color,
+            "timing": timing,
+        },
+    }
+
+
+AIR_STRETCH = ((-75.2345, 39.8765), (-75.2301, 39.8812))
+
+
+def test_skipped_whole_output(notices) -> None:
+    # Timings as in test_starts_whole_output; only detours with a stretch.
+    route_2 = notices("bus_route_2")
+    detours = [
+        placed_at(route_2[2], -75.1690, 39.9620),  # placed, no stretch
+        Detour(notice=route_2[3], match=None),  # unmatched
+        skipping(route_2[4], AIR_STRETCH, feed="rail", route_id="AIR"),
+        skipping(route_2[0], ROUTE_2_SKIPPED),
+    ]
+    assert skipped_collection([ROUTE_2, AIR], detours, STARTS_NOW) == {
+        "type": "FeatureCollection",
+        "features": [
+            stretch_feature(
+                [[-75.2345, 39.8765], [-75.2301, 39.8812]],
+                "rail-AIR",
+                "ff53152c4c7f9011",
+                "#5A6F7B",
+                "ended",
+            ),
+            stretch_feature(
+                [[-75.17158, 39.93846], [-75.17461, 39.92456]],  # as the detour object
+                "bus-2",
+                "5d0d22dfe7d86935",
+                "#00A1DE",
+                "active",
+            ),
+        ],
+    }
+
+
+def test_skipped_properties_are_the_contract_ones(notices) -> None:
+    assert SKIPPED_PROPERTIES == START_PROPERTIES
+    detours = [skipping(notices("bus_route_2")[0], ROUTE_2_SKIPPED)]
+    [feature] = skipped_collection([ROUTE_2], detours, STARTS_NOW)["features"]
+    assert tuple(feature["properties"]) == SKIPPED_PROPERTIES
+
+
+def test_skipped_rejects_a_route_not_in_the_catalog(notices) -> None:
+    notice = notices("bus_route_2")[0]
+    detours = [skipping(notice, ROUTE_2_SKIPPED, route_id="21")]
+    with pytest.raises(
+        ValueError, match=f"{notice.source_key} is on unknown route 'bus-21'"
+    ):
+        skipped_collection([ROUTE_2], detours, STARTS_NOW)
+
+
 # --- status ----------------------------------------------------------------------
 
 SNAPSHOT = "2026-11-25T121123Z.json"
@@ -1193,7 +1297,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",

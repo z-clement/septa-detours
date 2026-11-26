@@ -8,6 +8,7 @@ Layout::
     routes.json             list[RouteEntry], in display order
     network.geojson         FeatureCollection (NETWORK_PROPERTIES)
     starts.geojson          FeatureCollection (START_PROPERTIES)
+    skipped.geojson         FeatureCollection (SKIPPED_PROPERTIES)
     routes/<key>.json       RouteDetail
 
 Each export overwrites these in place (decided: no history), one file at
@@ -24,7 +25,8 @@ data would then read silently wrong: refuse it instead). Adding a file or
 an optional field the page can ignore doesn't need a bump.
 
 Versions: 1, the first contract; 2, ``routes.json`` gains
-``detours.windows``.
+``detours.windows``; 3, tier B: the detour object gains ``rejoin_point``
+and ``skipped``, and ``skipped.geojson`` is new (the page draws them).
 """
 
 from typing import Final, Literal, TypedDict
@@ -33,7 +35,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus
 
-SCHEMA_VERSION: Final = 2
+SCHEMA_VERSION: Final = 3
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -47,7 +49,7 @@ type Bounds = tuple[Position, Position]
 
 
 class StartPointObject(TypedDict):
-    """Where a placed detour starts: an OSM node near the route."""
+    """Where a placed detour starts (or rejoins): an OSM node near the route."""
 
     lon: float
     lat: float
@@ -76,6 +78,12 @@ class DetourObject(TypedDict):
     issues: list[str]
     """Parse issues, then match issues."""
     start_point: StartPointObject | None
+    rejoin_point: StartPointObject | None
+    """Where the detour gets back on its route (tier B), or ``None``."""
+    skipped: list[Position] | None
+    """The regular route it skips, start to rejoin, ``[lon, lat]`` in
+    travel order (simplified at ``DETAIL_TOLERANCE_M``, rounded), or
+    ``None`` when unknown."""
     shape_ids: list[str]
     """The matched shapes, in match order; ``[]`` when unmatched."""
 
@@ -172,6 +180,10 @@ route's fields come from ``routes.json`` by ``key``."""
 START_PROPERTIES: Final = ("key", "source_key", "color", "timing")
 """Feature properties in ``starts.geojson`` (Points, one per placed
 detour). ``timing`` is a ``Timing``, computed at export time."""
+
+SKIPPED_PROPERTIES: Final = ("key", "source_key", "color", "timing")
+"""Feature properties in ``skipped.geojson`` (LineStrings, one per detour
+with a skipped stretch), as ``START_PROPERTIES``."""
 
 SHAPE_PROPERTIES: Final = (
     "shape_id",

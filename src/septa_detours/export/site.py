@@ -18,6 +18,7 @@ from septa_detours.export.contract import (
     Mode,
     RouteDetail,
     RouteEntry,
+    StartPointObject,
     Status,
     Timing,
 )
@@ -31,7 +32,7 @@ from septa_detours.export.geojson import (
 )
 from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
 from septa_detours.gtfs.load import Feed
-from septa_detours.model import Detour
+from septa_detours.model import Detour, StartPoint
 
 MODE_ORDER: Final[tuple[Mode, ...]] = ("metro", "trolley", "trackless", "bus", "rail")
 """The sidebar's mode order (decided: the user's), fewest routes first."""
@@ -212,12 +213,12 @@ def detour_object(detour: Detour) -> DetourObject:
     they all agree, else ``None`` (no shapes, mixed, or unknown).
     ``issues`` lists parse issues, then match issues. Times are ISO 8601
     with the UTC offset as parsed; anything unknown is ``None``.
+    ``skipped`` is ``skipped_line``.
     """
     notice = detour.notice
     match = detour.match
     shapes = () if match is None else match.shapes
     direction_ids = {shape.direction_id for shape in shapes}
-    start_point = None if match is None else match.start_point
     return {
         "source_key": notice.source_key,
         "route": notice.source.route_id
@@ -233,15 +234,31 @@ def detour_object(detour: Detour) -> DetourObject:
         "reason": notice.reason,
         "message": notice.source.message,
         "issues": [*notice.issues, *detour.issues],
-        "start_point": None
-        if start_point is None
-        else {
-            "lon": start_point.lon,
-            "lat": start_point.lat,
-            "node_id": start_point.node_id,
-        },
+        "start_point": _point_object(None if match is None else match.start_point),
+        "rejoin_point": _point_object(None if match is None else match.rejoin_point),
+        "skipped": skipped_line(detour),
         "shape_ids": [shape.shape_id for shape in shapes],
     }
+
+
+def _point_object(point: StartPoint | None) -> StartPointObject | None:
+    """A start or rejoin point as the page reads it."""
+    if point is None:
+        return None
+    return {"lon": point.lon, "lat": point.lat, "node_id": point.node_id}
+
+
+def skipped_line(detour: Detour) -> list[Position] | None:
+    """A detour's skipped stretch for the page, or ``None`` without one.
+
+    Simplified at ``DETAIL_TOLERANCE_M`` and rounded to
+    ``COORDINATE_DECIMALS``, like a route detail's shapes, so it lies on
+    the drawn route. Shared by the detour object and ``skipped.geojson``.
+    """
+    if detour.match is None or detour.match.skipped is None:
+        return None
+    line = simplify_line(detour.match.skipped.line, DETAIL_TOLERANCE_M)
+    return round_line(line, COORDINATE_DECIMALS)
 
 
 class RouteShape(NamedTuple):
@@ -551,6 +568,46 @@ def starts_collection(
         }
         position = [match.start_point.lon, match.start_point.lat]
         features.append(point_feature(position, properties))
+    return {"type": "FeatureCollection", "features": features}
+
+
+def skipped_collection(
+    catalog: Sequence[RouteEntry], detours: Sequence[Detour], now: datetime
+) -> FeatureCollection:
+    """Build ``skipped.geojson``: each detour's skipped stretch, all routes.
+
+    Args:
+        catalog: Output of ``route_catalog`` (each line's ``color``).
+        detours: The snapshot's detours; only those with a skipped stretch
+            (``RouteMatch.skipped``) get a line.
+        now: As ``starts_collection``'s: the export-time ``timing``.
+
+    Returns:
+        One LineString per stretch (``skipped_line``), in snapshot order,
+        properties ``SKIPPED_PROPERTIES``.
+
+    Raises:
+        ValueError: As ``starts_collection``.
+    """
+    colors = {entry["key"]: entry["color"] for entry in catalog}
+    features = []
+    for detour in detours:
+        line = skipped_line(detour)
+        if line is None or detour.match is None:
+            continue
+        key = route_key(detour.match.feed, detour.match.route_id)
+        if key not in colors:
+            raise ValueError(
+                f"detour {detour.notice.source_key} is on unknown route {key!r}"
+            )
+        notice = detour.notice
+        properties: Properties = {
+            "key": key,
+            "source_key": notice.source_key,
+            "color": colors[key],
+            "timing": detour_timing(notice.start, notice.end, now),
+        }
+        features.append(line_feature(line, properties))
     return {"type": "FeatureCollection", "features": features}
 
 

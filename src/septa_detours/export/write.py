@@ -31,7 +31,13 @@ DEFAULT_WEB_DATA_DIR = Path("web/data")
 _SAFE_ROUTE_ID = re.compile(r"[A-Za-z0-9_-]+")
 
 SITE_FILES = frozenset(
-    {"status.json", "routes.json", "network.geojson", "starts.geojson"}
+    {
+        "status.json",
+        "routes.json",
+        "network.geojson",
+        "starts.geojson",
+        "skipped.geojson",
+    }
 )
 """The contract's fixed files (``export/contract.py``); route details go in
 ``routes/<key>.json``."""

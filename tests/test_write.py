@@ -269,6 +269,7 @@ def test_site_files_are_the_contract_ones() -> None:
         "routes.json",
         "network.geojson",
         "starts.geojson",
+        "skipped.geojson",
     } == SITE_FILES
 
 
