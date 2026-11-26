@@ -23,6 +23,5 @@ Other options, for later:
   maybe make `write_bytes_atomic` a wrapper over `write_chunks_atomic`;
   maybe a byte-progress line for the OSM download.
 
-Small follow-ups: plural "1 lines" in `export detours`' summary; a total
-(`N placed of M detours`) needs a FeatureCollection extra member from
-export.
+Small follow-ups: (done in W1/W2: the plurals, and the total, now in
+`status.json`.)

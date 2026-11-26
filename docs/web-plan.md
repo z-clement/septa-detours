@@ -1,6 +1,6 @@
 # Web plan: data contract and map app
 
-Status: **P1-P6 and W1 done** (the data contract: `export site`; `web/js/` modules); W2 next. Written
+Status: **P1-P6, W1, W2 done** (the page draws the data contract); W3 next. Written
 2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
@@ -281,11 +281,10 @@ nothing reaches into parse/match).
   `routes/<key>.json`), JSON encoding as `write_geojson` does
   (`allow_nan=False`, UTF-8, compact).
 - `export/__main__.py`: a new subcommand `export site [detours.json]`
-  (newest by default, like `export detours`). Needs `load_directions` and
-  both feeds' routes (rail routes appear in the catalog even without
-  detours). **Confirm** (D7): `export detours` stays until the web part
-  stops reading `detours.geojson` (step W2), then is removed.
-  `export route` stays as a debugging tool (decided).
+  (newest by default). Needs `load_directions` and both feeds' routes
+  (rail routes appear in the catalog even without detours). `export
+  detours` was removed in W2 (D7, decided). `export route` stays as a
+  debugging tool (decided).
 
 ## Part 2: the web app (plain JS)
 
@@ -395,9 +394,9 @@ Web (plain JS):
 7. **W1** (done) Split `map.js` into the modules above with **no visible
    change** (still reads `detours.geojson`); `node --test` for
    `format.js`. Fix the "1 lines" plural while here.
-8. **W2** `data.js` reads `status` (schema check), `routes`,
+8. **W2** (done) `data.js` reads `status` (schema check), `routes`,
    `network`, `starts`; overview map + status line. Then remove `export
-   detours` (if D7 confirmed).
+   detours` (D7: done).
 9. **W3** Sidebar: grouped list, search, mode chips, "Detoured now",
    "Not on the map". `routes.js` + `detours.js` with tests.
 10. **W4** Focus: detail fetch + cache, map focus, panel with detour
@@ -422,10 +421,9 @@ Web (plain JS):
   (recommended).
 - **D6** Ended detours shown in a collapsed "Ended" group (recommended)
   vs. hidden.
-- **D7** `export site` replaces `export detours` once W2 lands
-  (recommended).
-- **D8** Mode order metro, trolley, trackless, bus, rail; faint network
-  colored by route color vs. one neutral grey.
+- **D7** (decided, done) `export site` replaced `export detours` in W2.
+- **D8** (decided) Mode order metro, trolley, trackless, bus, rail; the
+  faint network in one neutral grey (not route colors).
 - GTFS provenance string in `status.json` (`feed_info.txt` vs. file
   mtimes).
 

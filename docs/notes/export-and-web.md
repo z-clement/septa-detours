@@ -340,3 +340,21 @@ by writing the page's status line against the real file. Now
 several snapshots in one file raise), or, with no detours, from the file
 name minus `match`'s `detours-` prefix. Lesson: check exported values
 against what they *mean*, not just what the code produced.
+
+Done (2026-11-25): **W2, the page draws the data contract.** `data.js`:
+`loadSite()` (status.json first, alone, schema-checked, then routes,
+network, starts in parallel), `routeDetailLoader()` (one fetch per route
+file, failures retried). `format.js`: `routeLabel`, `statusLine` (zero
+parts left out; a hand-named snapshot shows its name), `describeDetour`
+(detour objects: explicit nulls, `issues` a list), `describeRoute`.
+`routes.js` (pure): `detouredRoutes`/`detouredKeys` (any matched detour,
+placed or not), `routesBounds`. `mapview.js`: grey network (D8, mine),
+detoured routes in color on top (55 routes), start dots by export-time
+`timing` (active solid, upcoming hollow, ended grey); a dot popup fetches
+its route file (Loading... then the detour), a line popup lists each
+route under the click once. Zoom: detoured routes' bounds, else the
+whole network. Removed (D7, mine): `export detours`, `export/detours.py`
+and their tests; the old page code. Checked with a scratch Node smoke
+test (fake `maplibregl`/`document`/`fetch` on the real `web/data/`:
+loads, layers, dot/line clicks, a stale schema) and by eye. Tests: 31
+JS (`format`, `data`, `routes`).

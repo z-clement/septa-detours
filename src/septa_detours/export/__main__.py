@@ -4,16 +4,14 @@ Usage (from the repo root, since default paths are relative to it)::
 
     uv run python -m septa_detours.export site [detours.json]
     uv run python -m septa_detours.export route bus 21
-    uv run python -m septa_detours.export detours [detours.json]
 
 ``site`` reads a ``match`` output (default: the newest
 ``data/processed/detours-*.json``) plus both GTFS feeds and writes the
-data contract (``export/contract.py``) to ``web/data/``. ``route`` writes
-``web/data/<feed>-<route_id>.geojson`` (a debugging tool). ``detours``
-writes ``web/data/detours.geojson`` (the current page; replaced by
-``site``). Glue only: every decision about *what* goes in a file lives in
-``gtfs/`` and ``export/`` builders, and *how* it is written lives in
-``export/write.py``.
+data contract (``export/contract.py``) to ``web/data/``, which the map
+page reads. ``route`` writes ``web/data/<feed>-<route_id>.geojson`` (a
+debugging tool; the page doesn't read it). Glue only: every decision
+about *what* goes in a file lives in ``gtfs/`` and the ``export/``
+builders, and *how* it is written lives in ``export/write.py``.
 
 Output: one ``wrote ...`` summary line on stdout.
 
@@ -33,9 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from septa_detours.export.detours import detours_feature_collection
 from septa_detours.export.geojson import (
-    FeatureCollection,
     join_route_lines,
     route_feature_collection,
     route_properties,
@@ -78,11 +74,9 @@ MATCH_COMMAND = "uv run python -m septa_detours.match"
 # ``match``'s output name for a stamped snapshot: ``detours-<stamp>.json``.
 _DETOURS_NAME = re.compile(r"detours-\d{4}-\d{2}-\d{2}T\d{6}Z\.json")
 
-DETOURS_GEOJSON = DEFAULT_WEB_DATA_DIR / "detours.geojson"
-
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser: a required ``site``, ``route`` or ``detours``.
+    """Build the argument parser: a required ``site`` or ``route`` command.
 
     ``route``'s ``feed`` is limited to ``ALL_FEEDS`` via ``choices``, so a
     typo is rejected by argparse (exit 2, usage message) before any GTFS
@@ -90,7 +84,7 @@ def _build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         prog="python -m septa_detours.export",
-        description="Write GeoJSON for the web map to web/data/.",
+        description="Write data for the web map to web/data/.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -109,15 +103,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="GTFS route_id (e.g. 21, L1); not always the public route name.",
     )
 
-    detours = commands.add_parser(
-        "detours", help="Write detoured route lines and start points."
-    )
-    detours.add_argument(
-        "detours_file",
-        nargs="?",
-        type=Path,
-        help="match output to read (default: the newest in data/processed/).",
-    )
     return parser
 
 
@@ -179,40 +164,6 @@ def find_latest_detours(root: Path = DEFAULT_DETOURS_DIR) -> Path:
         msg = f"no detours file in {root}; make one with: {MATCH_COMMAND}"
         raise FileNotFoundError(msg)
     return max(candidates, key=lambda path: path.name)
-
-
-def export_detours(detours_file: Path, path: Path = DETOURS_GEOJSON) -> str:
-    """Write the GeoJSON for a detours file; return a summary line.
-
-    Loads GTFS only for the feeds the matched detours use (none, if nothing
-    matched). Unlike ``export_route``, an empty collection is written:
-    "no detours to draw" is a true state, not a sign of a bug.
-
-    Raises:
-        FileNotFoundError: ``detours_file`` or a GTFS file is missing.
-        ValueError: ``detours_file`` isn't a valid detours list (pydantic's
-            ``ValidationError`` is a ``ValueError``), or it disagrees with
-            GTFS (unknown route, shape without coordinates).
-    """
-    detours = read_detours(detours_file.read_bytes())
-    feeds = sorted({d.match.feed for d in detours if d.match is not None})
-    # Loaders treat an empty feed list as a bug, so with nothing matched
-    # there's nothing to load: the collection is empty either way.
-    collection = (
-        detours_feature_collection(
-            detours, load_routes(feeds), shape_coordinates(load_shapes(feeds))
-        )
-        if feeds
-        else FeatureCollection(type="FeatureCollection", features=[])
-    )
-
-    write_geojson(collection, path)
-    types = [feature["geometry"]["type"] for feature in collection["features"]]
-    return (
-        f"wrote {path} ({types.count('LineString')} lines, "
-        f"{types.count('Point')} start points from {len(detours)} detours "
-        f"in {detours_file.name})"
-    )
 
 
 def export_site(
@@ -327,13 +278,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "site":
             summary = export_site(args.detours_file or find_latest_detours())
-        elif args.command == "route":
+        else:
             # argparse types attributes as Any; `choices` guarantees a Feed.
             feed = cast("Feed", args.feed)
             summary = f"wrote {export_route(feed, args.route_id)}"
-        else:
-            detours_file: Path = args.detours_file or find_latest_detours()
-            summary = export_detours(detours_file)
     except (FileNotFoundError, ValueError) as exc:
         # Expected, explainable failures only. Anything else is a bug and
         # should surface with its full traceback.
