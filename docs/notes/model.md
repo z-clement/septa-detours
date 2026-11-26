@@ -48,3 +48,12 @@ route 2 entry). 15 mutations, all caught. 185 tests total.
 bounded; default `None`). Defaults keep pre-tier-B files readable (a
 test reads one). Bounds can't catch a lat/lon swap in Philly (-75 is a
 valid latitude): the realistic-coordinate tests in `match/` do.
+
+## Tier C field (2026-11-26)
+
+`RouteMatch.path`: the detour's own line, `(lon, lat)` points in travel
+order, at least 2, bounded like `SkippedStretch.line`; default `None`
+(a test reads a pre-tier-C file). A plain tuple, not a model: unlike a
+stretch, it isn't cut from one shape, so there's nothing to name with
+it. `rejoin_point`'s docstring now says it may come from the walk (a
+rejoin tier B couldn't find).

@@ -279,9 +279,10 @@ class RouteMatch(_Frozen):
             ``Detour.issues``, unless the notice has no start intersection
             at all). Required, so forgetting to look it up can't pass for
             "not found".
-        rejoin_point: Where the detour gets back on the route (tier B): the
+        rejoin_point: Where the detour gets back on the route: the
             crossing of the message's last two streets, on the affected
-            shapes (``place.find_rejoin_point``). ``None`` with no issue
+            shapes (tier B, ``place.find_rejoin_point``), or else where
+            ``path`` gets back on them (tier C). ``None`` with no issue
             when unknown: best effort, and normal for stop closures and
             layovers. Defaults to ``None`` (unlike ``start_point``) so
             detours files written before tier B still read.
@@ -289,9 +290,12 @@ class RouteMatch(_Frozen):
             or ``None`` with no issue (either point unknown, or no
             affected shape gives a believable stretch). Defaults to
             ``None`` like ``rejoin_point``.
-
-    The detoured path itself (coordinates or street segments) is not here
-    yet; add it when ``match/`` can produce one.
+        path: Where the detour goes (tier C): the message's streets
+            walked from ``start_point`` to ``rejoin_point``
+            (``match/path.py``), ``(lon, lat)`` points in travel order, at
+            least 2, bounded like ``StartPoint``'s. ``None`` with no issue
+            when any step can't be walked without guessing. Defaults to
+            ``None`` so older detours files still read.
     """
 
     feed: Feed
@@ -300,6 +304,9 @@ class RouteMatch(_Frozen):
     start_point: StartPoint | None
     rejoin_point: StartPoint | None = None
     skipped: SkippedStretch | None = None
+    path: (
+        Annotated[tuple[tuple[Longitude, Latitude], ...], Field(min_length=2)] | None
+    ) = None
 
 
 class Detour(_Frozen):

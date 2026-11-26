@@ -308,6 +308,46 @@ def test_skipped_stretch_rejects_bad_points(point):
         SkippedStretch(shape_id="317310", line=(STRETCH_LINE[0], point))
 
 
+# --- tier C: the detour's path ----------------------------------------------------
+
+# Route 2's detour: 17th & Washington, east to Broad, south (lon, lat).
+PATH_LINE = ((-75.1716, 39.9385), (-75.1695, 39.9387), (-75.1699, 39.9369))
+
+
+def make_route_match(**fields) -> RouteMatch:
+    return RouteMatch(feed="bus", route_id="2", start_point=None, **fields)
+
+
+def test_route_match_written_before_tier_c_still_reads():
+    old = '{"feed":"bus","route_id":"2","shapes":[],"start_point":null}'
+    assert RouteMatch.model_validate_json(old).path is None
+
+
+def test_path_round_trips_through_json():
+    match = make_route_match(path=PATH_LINE)
+    data = json.loads(match.model_dump_json())
+    assert data["path"] == [
+        [-75.1716, 39.9385],
+        [-75.1695, 39.9387],
+        [-75.1699, 39.9369],
+    ]
+    assert RouteMatch.model_validate_json(match.model_dump_json()) == match
+
+
+def test_path_needs_two_points():
+    with pytest.raises(ValidationError, match="path"):
+        make_route_match(path=PATH_LINE[:1])
+
+
+@pytest.mark.parametrize(
+    "point",
+    [(-75.1, 90.000001), (-180.000001, 39.9), (float("nan"), 39.9)],
+)
+def test_path_rejects_bad_points(point):
+    with pytest.raises(ValidationError, match="path"):
+        make_route_match(path=(PATH_LINE[0], point))
+
+
 LOCATION = TypeAdapter(Location)
 
 

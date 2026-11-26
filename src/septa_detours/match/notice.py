@@ -9,6 +9,7 @@ from septa_detours.gtfs.load import Feed
 from septa_detours.gtfs.routes import route_shape_ids
 from septa_detours.gtfs.shapes import shape_coordinates
 from septa_detours.match.directions import find_direction_id
+from septa_detours.match.path import DetourPath, detour_path
 from septa_detours.match.place import find_rejoin_point, find_start_point
 from septa_detours.match.routes import find_gtfs_route
 from septa_detours.match.skipped import skipped_stretch
@@ -116,6 +117,11 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
           the notice's ``route_steps`` and the lines of its affected
           shapes only (the rejoin is on the route in the detour's
           direction); ``None`` with no issue when not found.
+          Its ``path`` comes from ``path.detour_path`` (start point
+          needed), walking the steps with the affected shapes' lines;
+          ``None`` with no issue when not found. A path's rejoin becomes
+          ``rejoin_point`` (the same point when tier B found one; else a
+          rejoin tier B couldn't find).
           Its ``skipped`` comes from ``_skipped`` (both points needed);
           ``None`` with no issue when not found.
 
@@ -136,12 +142,13 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
         reference.street_keys,
         _route_lines(feed, route_id, reference),
     )
+    affected_lines = [reference.shape_lines[(feed, shape.shape_id)] for shape in shapes]
     rejoin_point = find_rejoin_point(
-        notice.route_steps,
-        reference.ways,
-        reference.street_keys,
-        [reference.shape_lines[(feed, shape.shape_id)] for shape in shapes],
+        notice.route_steps, reference.ways, reference.street_keys, affected_lines
     )
+    path = _path(notice, start_point, rejoin_point, affected_lines, reference)
+    if path is not None:
+        rejoin_point = path.rejoin
     skipped = _skipped(feed, shapes, start_point, rejoin_point, reference)
     return Detour(
         notice=notice,
@@ -152,6 +159,7 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
             start_point=start_point,
             rejoin_point=rejoin_point,
             skipped=skipped,
+            path=None if path is None else path.line,
         ),
         issues=shape_issues + start_issues,
     )
@@ -168,6 +176,21 @@ def _route_lines(
     """
     shape_ids = route_shape_ids(reference.trips, feed, route_id)["shape_id"]
     return [reference.shape_lines[(feed, s)] for s in dict.fromkeys(shape_ids)]
+
+
+def _path(
+    notice: DetourNotice,
+    start: StartPoint | None,
+    rejoin: StartPoint | None,
+    lines: Sequence[Sequence[Sequence[float]]],
+    reference: MatchReference,
+) -> DetourPath | None:
+    """The detour's path (``path.detour_path``), or ``None`` without a start."""
+    if start is None:
+        return None
+    return detour_path(
+        notice.route_steps, start, rejoin, reference.ways, reference.street_keys, lines
+    )
 
 
 def _skipped(

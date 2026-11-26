@@ -26,6 +26,7 @@ from septa_detours.match.notice import (
     match_notice,
     match_notices,
 )
+from septa_detours.match.place import find_rejoin_point
 from septa_detours.model import (
     AffectedShape,
     Detour,
@@ -109,6 +110,8 @@ STREET_WAYS = [
     (4, "Chestnut Street", [(40, -1, 0), (31, 0, 0), (41, 1, 0)], BROAD_CHESTNUT),
     # One block north of Washington on 17th: a rejoin apart from the start.
     (5, "Federal Street", [(50, -1, 1), (12, 0, 1), (51, 1, 1)], WASHINGTON_17TH),
+    # One block east of 17th, Washington to Federal: a path round the block.
+    (6, "South Mole Street", [(21, 1, 0), (51, 1, 1)], WASHINGTON_17TH),
 ]
 """``(way_id, name, [(node_id, east, north)], origin)``; offsets in 0.001 deg."""
 
@@ -509,6 +512,93 @@ def test_skipped_stretch_tries_the_next_shape(
     assert detour.match is not None
     assert detour.match.skipped is not None
     assert detour.match.skipped.shape_id == second
+
+
+def round_the_block(notice: DetourNotice, *, last_is_17th: bool) -> DetourNotice:
+    """``notice`` with a path from 17th & Washington round the block east:
+    Washington, Mole, Federal, and (``last_is_17th``) back onto 17th."""
+    steps = [
+        Step(turn="via", street="17th"),
+        Step(turn="right", street="Washington"),
+        Step(turn="left", street="Mole"),
+        Step(turn="left", street="Federal"),
+    ]
+    if last_is_17th:
+        steps.append(Step(turn="right", street="17th"))
+    return notice.model_copy(update={"route_steps": tuple(steps)})
+
+
+def block_point(east: int, north: int) -> tuple[float, float]:
+    lon, lat = WASHINGTON_17TH
+    return (lon + east / 1000, lat + north / 1000)
+
+
+ROUND_THE_BLOCK = tuple(block_point(*p) for p in [(0, 0), (1, 0), (1, 1), (0, 1)])
+
+
+def test_path_is_walked_to_the_rejoin(fixture_notices, reference: MatchReference):
+    notice = round_the_block(fixture_notices(ROUTE_2)[0], last_is_17th=True)
+    detour = match_notice(notice, reference)
+    assert detour.match is not None
+    assert detour.match.path == ROUND_THE_BLOCK
+    lon, lat = block_point(0, 1)
+    assert detour.match.rejoin_point == StartPoint(node_id=12, lon=lon, lat=lat)
+    assert detour.match.skipped is not None
+    assert detour.issues == ()
+
+
+def test_path_finds_a_rejoin_tier_b_cannot(fixture_notices, reference: MatchReference):
+    """Ending "Left on Federal, Reg Rt": Mole & Federal is ~85 m off 17th,
+    so no tier B rejoin; the walk west along Federal finds 17th."""
+    notice = round_the_block(fixture_notices(ROUTE_2)[0], last_is_17th=False)
+    assert (
+        find_rejoin_point(
+            notice.route_steps,
+            reference.ways,
+            reference.street_keys,
+            [reference.shape_lines[("bus", SHAPES["2"][0][0])]],
+        )
+        is None
+    )
+    detour = match_notice(notice, reference)
+    assert detour.match is not None
+    assert detour.match.path == ROUND_THE_BLOCK
+    lon, lat = block_point(0, 1)
+    assert detour.match.rejoin_point == StartPoint(node_id=12, lon=lon, lat=lat)
+    # The new rejoin gives a skipped stretch too.
+    assert detour.match.skipped is not None
+    assert detour.match.skipped.line[-1] == pytest.approx((lon, lat), abs=1e-7)
+
+
+def test_no_path_without_a_start(fixture_notices, reference: MatchReference):
+    notice = round_the_block(fixture_notices(ROUTE_2)[0], last_is_17th=True)
+    detour = match_notice(notice.model_copy(update={"start_place": None}), reference)
+    assert detour.match is not None
+    assert detour.match.start_point is None
+    assert detour.match.path is None
+    assert detour.match.rejoin_point is not None  # tier B's, kept
+
+
+def test_no_path_keeps_tier_b(fixture_notices, reference: MatchReference):
+    """The Federal path can't be walked (Federal doesn't touch the start)."""
+    detour = match_notice(
+        ending_at_federal_17th(fixture_notices(ROUTE_2)[0]), reference
+    )
+    assert detour.match is not None
+    assert detour.match.path is None
+    assert detour.match.rejoin_point is not None
+
+
+def test_path_uses_only_the_affected_shapes(fixture_notices, reference: MatchReference):
+    """Without a tier B rejoin, the walk looks for the SB shape only."""
+    sb_shape = SHAPES["2"][0][0]
+    shape_lines = dict(reference.shape_lines)
+    shape_lines[("bus", sb_shape)] = [list(point) for point in PLACEHOLDER_LINE]
+    notice = round_the_block(fixture_notices(ROUTE_2)[0], last_is_17th=False)
+    detour = match_notice(notice, replace(reference, shape_lines=shape_lines))
+    assert detour.match is not None
+    assert detour.match.start_point is not None
+    assert detour.match.path is None
 
 
 def test_start_point_uses_shapes_of_both_directions(

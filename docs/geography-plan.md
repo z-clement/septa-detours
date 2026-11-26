@@ -155,6 +155,7 @@ Steps (each committed; model and contract changes flagged):
    63 paths of 97 candidates, 22 of them with a rejoin tier B lacked.
    Follow-up: check the first turn (off the route) and a one-node last
    leg's turn against the route shape's direction.
-4. `RouteMatch.path` (model change), filled by `match_notice`.
+4. ~~`RouteMatch.path` (model change), filled by `match_notice`~~ (done:
+   a path's rejoin fills `rejoin_point`; real `121123Z` stretches 53 -> 75).
 5. Contract schema 4: the detour object's `path`, a `paths.geojson`.
 6. web: draw the path in its own style (ask which).

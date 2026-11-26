@@ -326,3 +326,12 @@ The mutation runner is now a scratch script taking a mutations file
   candidates (41 on tier B's rejoin, 22 rejoins found by walking),
   71 m-5.2 km (median 2.1 km), 5,199 points; `141550Z` 36 of 48 (28 +
   8), 1,776 points.
+- `RouteMatch.path` (step 4; model change): `match_notice` calls
+  `notice._path` (needs a start point) with the affected shapes' lines;
+  a path's rejoin replaces `rejoin_point` (the same point when tier B
+  had one), then `_skipped` cuts from it. Test streets gain "South Mole
+  Street" (a block east of 17th) for a round-the-block path; no fixture
+  pin moved (fixture paths can't be walked on the test streets). Real:
+  `121123Z` 63 paths, rejoins 67 -> 89, stretches 53 -> 75, detours file
+  263 -> 423 KB; `141550Z` 36 paths, rejoins 39 -> 48, stretches 29 ->
+  38.
