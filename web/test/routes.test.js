@@ -7,6 +7,7 @@ import {
   detouredKeys,
   detouredNow,
   detouredRoutes,
+  groupByMode,
   routesBounds,
   timingCounts,
 } from "../js/routes.js";
@@ -150,4 +151,61 @@ test("detouredNow: most active first, ties in catalog order, inactive left out",
 test("detouredNow: nothing active is empty", () => {
   assert.deepEqual(detouredNow([windowed("bus-19", [UPCOMING, ENDED])], NOW), []);
   assert.deepEqual(detouredNow([], NOW), []);
+});
+
+// --- groupByMode ------------------------------------------------------------
+
+/** A routes.json entry with just its key and mode. */
+function moded(key, mode) {
+  return { key, mode };
+}
+
+// Real keys, in routes.json order (metro, trolley, trackless, bus, rail);
+// unequal group sizes so a mixed-up group shows.
+const L1 = moded("bus-L1", "metro");
+const B1 = moded("bus-B1", "metro");
+const T1 = moded("bus-T1", "trolley");
+const TRACKLESS_59 = moded("bus-59", "trackless");
+const BUS_2_MODED = moded("bus-2", "bus");
+const BUS_21_MODED = moded("bus-21", "bus");
+const BUS_K = moded("bus-K", "bus");
+const AIR_MODED = moded("rail-AIR", "rail");
+
+test("groupByMode: groups in catalog order, routes in catalog order", () => {
+  const routes = [B1, L1, T1, TRACKLESS_59, BUS_2_MODED, BUS_21_MODED, BUS_K, AIR_MODED];
+  assert.deepEqual(groupByMode(routes), [
+    { mode: "metro", routes: [B1, L1] },
+    { mode: "trolley", routes: [T1] },
+    { mode: "trackless", routes: [TRACKLESS_59] },
+    { mode: "bus", routes: [BUS_2_MODED, BUS_21_MODED, BUS_K] },
+    { mode: "rail", routes: [AIR_MODED] },
+  ]);
+});
+
+test("groupByMode: the order comes from the routes, not a fixed mode list", () => {
+  assert.deepEqual(groupByMode([AIR_MODED, BUS_K, B1]), [
+    { mode: "rail", routes: [AIR_MODED] },
+    { mode: "bus", routes: [BUS_K] },
+    { mode: "metro", routes: [B1] },
+  ]);
+});
+
+test("groupByMode: only modes with routes get a group", () => {
+  assert.deepEqual(groupByMode([BUS_2_MODED, AIR_MODED]), [
+    { mode: "bus", routes: [BUS_2_MODED] },
+    { mode: "rail", routes: [AIR_MODED] },
+  ]);
+  assert.deepEqual(groupByMode([]), []);
+});
+
+test("groupByMode: a mode in two runs is one group, at its first place", () => {
+  assert.deepEqual(groupByMode([BUS_2_MODED, AIR_MODED, BUS_K]), [
+    { mode: "bus", routes: [BUS_2_MODED, BUS_K] },
+    { mode: "rail", routes: [AIR_MODED] },
+  ]);
+});
+
+test("groupByMode: keeps the route objects themselves", () => {
+  const [group] = groupByMode([BUS_K]);
+  assert.equal(group.routes[0], BUS_K);
 });

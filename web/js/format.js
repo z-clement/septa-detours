@@ -44,6 +44,28 @@ export function formatTime(iso) {
 
 // --- The data contract's text (status.json, routes.json, detour objects) ---
 
+/** Sidebar headings for routes.json's `mode` values. */
+const MODE_LABELS = {
+  metro: "Metro",
+  trolley: "Trolleys",
+  trackless: "Trackless Trolleys",
+  bus: "Buses",
+  rail: "Regional Rail",
+};
+
+/**
+ * The sidebar heading for a mode: "Buses", "Regional Rail".
+ *
+ * A mode this page doesn't know (a newer export) shows as itself rather
+ * than breaking the list; Python refuses unknown GTFS route types anyway.
+ *
+ * @param {string} mode a routes.json `mode`
+ * @returns {string}
+ */
+export function modeLabel(mode) {
+  return Object.hasOwn(MODE_LABELS, mode) ? MODE_LABELS[mode] : mode;
+}
+
 /**
  * "Route 21 Chestnut-Walnut", or "Route K" when there's no long name.
  *

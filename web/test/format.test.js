@@ -9,6 +9,7 @@ import {
   describeDetour,
   describeRoute,
   formatTime,
+  modeLabel,
   plural,
   routeLabel,
   statusLine,
@@ -190,4 +191,19 @@ test("describeRoute: with detours, one detour, and none", () => {
   assert.equal(describeRoute(one).split("\n")[1], "1 detour (0 on the map)");
   const none = { ...ROUTE_2, detours: { total: 0, placed: 0 } };
   assert.equal(describeRoute(none).split("\n")[1], "No detours");
+});
+
+// --- modeLabel --------------------------------------------------------------
+
+test("modeLabel: every routes.json mode", () => {
+  assert.deepEqual(
+    ["metro", "trolley", "trackless", "bus", "rail"].map(modeLabel),
+    ["Metro", "Trolleys", "Trackless Trolleys", "Buses", "Regional Rail"],
+  );
+});
+
+test("modeLabel: an unknown mode shows as itself", () => {
+  assert.equal(modeLabel("ferry"), "ferry");
+  // Not an Object method found through the prototype chain.
+  assert.equal(modeLabel("toString"), "toString");
 });

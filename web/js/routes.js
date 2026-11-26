@@ -83,3 +83,25 @@ export function detouredNow(routes, now) {
     .filter((row) => row.active > 0)
     .sort((a, b) => b.active - a.active);
 }
+
+/**
+ * The sidebar's mode groups: routes split by `mode`, catalog order kept.
+ *
+ * Groups come in order of each mode's first route, so the mode order is
+ * the one Python wrote into routes.json (not repeated here). Only modes
+ * with routes get a group. A mode that appears in two runs is still one
+ * group, its routes in catalog order.
+ *
+ * @param {object[]} routes routes.json (or any subset, e.g. search results)
+ * @returns {{mode: string, routes: object[]}[]}
+ */
+export function groupByMode(routes) {
+  const groups = new Map(); // insertion order = first appearance
+  for (const route of routes) {
+    if (!groups.has(route.mode)) {
+      groups.set(route.mode, []);
+    }
+    groups.get(route.mode).push(route);
+  }
+  return [...groups].map(([mode, members]) => ({ mode, routes: members }));
+}
