@@ -418,7 +418,7 @@ def test_rejoin_point_uses_only_the_affected_shapes(
     fixture_notices, reference: MatchReference
 ):
     """Unlike the start: the NB shape on 17th doesn't count for an SB detour."""
-    (sb_shape,) = SHAPES["2"][0]
+    sb_shape = SHAPES["2"][0][0]  # route 2 has one SB shape
     shape_lines = dict(reference.shape_lines)
     shape_lines[("bus", sb_shape)] = [list(point) for point in PLACEHOLDER_LINE]
     notice = ending_at_washington_17th(fixture_notices(ROUTE_2)[0])
