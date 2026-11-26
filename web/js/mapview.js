@@ -253,27 +253,50 @@ function dotStateSetter(map, name) {
 }
 
 /**
- * Pan the map to a detour's start point if it's off screen; no zoom.
+ * Pan the map to a detour's start point if it isn't visible; no zoom.
+ *
+ * Visible means inside the map and above the bottom `coverBottom` pixels
+ * (the mobile sheet). The pan centres the dot in that visible part: the
+ * offset moves it up by half the cover.
  *
  * @param {maplibregl.Map} map
  * @param {{lon: number, lat: number}} point a detour's `start_point`
+ * @param {number} [coverBottom] pixels hidden at the map's bottom
  */
-export function panToDot(map, { lon, lat }) {
-  if (!map.getBounds().contains([lon, lat])) {
-    map.panTo([lon, lat]);
+export function panToDot(map, { lon, lat }, coverBottom = 0) {
+  const { x, y } = map.project([lon, lat]);
+  const { clientWidth: width, clientHeight: height } = map.getContainer();
+  if (x < 0 || x > width || y < 0 || y > height - coverBottom) {
+    map.panTo([lon, lat], { offset: [0, -coverBottom / 2] });
   }
 }
 
+/** Room left around fitted lines, in CSS pixels. */
+const FIT_PADDING_PX = 40;
+
 /**
- * Move the camera to a route's lines (animated). A route without shapes
- * (`bounds` null) leaves the camera where it is.
+ * fitBounds padding that also clears `coverBottom` pixels at the bottom
+ * (the mobile sheet over the map; 0 on wide screens).
+ *
+ * @param {number} coverBottom
+ * @returns {{top: number, right: number, bottom: number, left: number}}
+ */
+export function fitPadding(coverBottom) {
+  const p = FIT_PADDING_PX;
+  return { top: p, right: p, bottom: p + coverBottom, left: p };
+}
+
+/**
+ * Move the camera to a route's lines (animated), clear of the sheet. A
+ * route without shapes (`bounds` null) leaves the camera where it is.
  *
  * @param {maplibregl.Map} map
  * @param {object} route a routes.json entry
+ * @param {number} [coverBottom] pixels hidden at the map's bottom
  */
-export function fitRoute(map, route) {
+export function fitRoute(map, route, coverBottom = 0) {
   if (route.bounds !== null) {
-    map.fitBounds(route.bounds, { padding: 40 });
+    map.fitBounds(route.bounds, { padding: fitPadding(coverBottom) });
   }
 }
 

@@ -20,6 +20,9 @@
   </head>
   <body>
     <aside id="sidebar">
+      <!-- The mobile sheet's handle (hidden on wide screens): each tap
+           steps peek -> half -> full -> peek. -->
+      <button id="sheet-handle" type="button" aria-controls="sidebar"></button>
       <div id="status" role="status"></div>
       <!-- The overview's list, or one route's panel: main.js shows one. -->
       <div id="browse">

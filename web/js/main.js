@@ -6,7 +6,14 @@
 
 import { loadSite, routeDetailLoader } from "./data.js";
 import { statusLine } from "./format.js";
-import { addClickHandler, addOverviewLayers, createMap, fitRoute, panToDot } from "./mapview.js";
+import {
+  addClickHandler,
+  addOverviewLayers,
+  createMap,
+  fitPadding,
+  fitRoute,
+  panToDot,
+} from "./mapview.js";
 import {
   detouredRoutes,
   groupByMode,
@@ -14,11 +21,15 @@ import {
   searchRoutes,
   visibleRoutes,
 } from "./routes.js";
+import { SHEET_HEIGHTS, nextSheet, sheetHeightPx } from "./sheet.js";
 import { createModeChips, renderRouteList, renderRoutePanel } from "./sidebar.js";
 import { createState, formatHash, parseHash } from "./state.js";
 
 /** How often `now` moves on, so detours become active/ended on screen. */
 const NOW_REFRESH_MS = 60_000;
+
+/** Where the sidebar becomes a bottom sheet; the same width as app.css. */
+const NARROW = window.matchMedia("(max-width: 699px)");
 
 /**
  * Show a short status line on the page.
@@ -60,12 +71,36 @@ async function main() {
   const modeOrder = groupByMode(site.routes).map((group) => group.mode);
   const store = createState({ modes: modeOrder, now: new Date() });
 
+  // --- The mobile sheet -----------------------------------------------------
+
+  // Pixels the sheet hides at the map's bottom: 0 on wide screens.
+  const coverBottom = () =>
+    NARROW.matches ? sheetHeightPx(store.get().sheet, window.innerHeight) : 0;
+  const handle = document.getElementById("sheet-handle");
+  const sidebar = document.getElementById("sidebar");
+  const applySheet = ({ sheet }) => {
+    sidebar.dataset.sheet = sheet; // app.css hides all but the status at peek
+    // On <html>: the sheet and MapLibre's bottom controls both read it.
+    document.documentElement.style.setProperty(
+      "--sheet-height",
+      `${sheetHeightPx(sheet, window.innerHeight)}px`,
+    );
+    // Whether the next tap raises or lowers it.
+    const raises = SHEET_HEIGHTS.indexOf(nextSheet(sheet)) > SHEET_HEIGHTS.indexOf(sheet);
+    handle.setAttribute("aria-label", raises ? "Show more of the panel" : "Show less of the panel");
+    handle.setAttribute("aria-expanded", String(sheet !== "peek"));
+  };
+  applySheet(store.get());
+  handle.addEventListener("click", store.cycleSheet);
+  // Heights are fractions of the viewport (rotation, the URL bar).
+  window.addEventListener("resize", () => applySheet(store.get()));
+
   // Zoom to the detoured routes; with none, to the whole network. No
   // bounds at all (no shapes) leaves the map on Philadelphia. Before the
   // hash is read, so a shared route link then moves on to its route.
   const bounds = routesBounds(detouredRoutes(site.routes)) ?? routesBounds(site.routes);
   if (bounds !== null) {
-    map.fitBounds(bounds, { padding: 40, duration: 0 });
+    map.fitBounds(bounds, { padding: fitPadding(coverBottom()), duration: 0 });
   }
 
   // --- The overview's list -------------------------------------------------
@@ -94,9 +129,13 @@ async function main() {
     });
   };
   // "input" fires on every keystroke, and on the clear button / Escape.
-  document.getElementById("search").addEventListener("input", (event) => {
+  const searchElement = document.getElementById("search");
+  searchElement.addEventListener("input", (event) => {
     store.setSearch(event.target.value);
   });
+  // Typing on a phone: the keyboard takes half the screen, so the sheet
+  // goes full (decided). Harmless on wide screens (no sheet there).
+  searchElement.addEventListener("focus", () => store.raiseSheet("full"));
   // One listener for every row (rows are rebuilt on each render).
   listElement.addEventListener("click", (event) => {
     const row = event.target.closest(".route-row");
@@ -159,7 +198,7 @@ async function main() {
     const detail = loaded.key === focus ? loaded.detail : null;
     const detour = detail?.detours.find((d) => d.source_key === selectedDetour);
     if (detour?.start_point != null) {
-      panToDot(map, detour.start_point);
+      panToDot(map, detour.start_point, coverBottom());
     }
   };
   // Cards: one listener each for the whole panel (cards are rebuilt on
@@ -213,6 +252,9 @@ async function main() {
   // --- State -> everything --------------------------------------------------
 
   store.subscribe((state, changed) => {
+    if (changed.has("sheet")) {
+      applySheet(state);
+    }
     if (changed.has("focus") || changed.has("selectedDetour")) {
       writeHash(state, changed);
     }
@@ -223,7 +265,8 @@ async function main() {
       setHoveredDot(null);
       if (state.focus !== null) {
         startLoading(state.focus);
-        fitRoute(map, routesByKey.get(state.focus));
+        // The sheet was raised in the same update, so coverBottom is current.
+        fitRoute(map, routesByKey.get(state.focus), coverBottom());
       }
     }
     // The list only while it's shown; returning to it redraws it.
