@@ -107,6 +107,8 @@ STREET_WAYS = [
     (2, "Washington Avenue", [(20, -1, 0), (11, 0, 0), (21, 1, 0)], WASHINGTON_17TH),
     (3, "South Broad Street", [(30, 0, -1), (31, 0, 0), (32, 0, 1)], BROAD_CHESTNUT),
     (4, "Chestnut Street", [(40, -1, 0), (31, 0, 0), (41, 1, 0)], BROAD_CHESTNUT),
+    # One block north of Washington on 17th: a rejoin apart from the start.
+    (5, "Federal Street", [(50, -1, 1), (12, 0, 1), (51, 1, 1)], WASHINGTON_17TH),
 ]
 """``(way_id, name, [(node_id, east, north)], origin)``; offsets in 0.001 deg."""
 
@@ -434,6 +436,79 @@ def test_rejoin_point_needs_the_direction(fixture_notices, reference: MatchRefer
     detour = match_notice(notice, reference)
     assert detour.match is not None
     assert detour.match.rejoin_point is None
+
+
+def ending_at_federal_17th(notice: DetourNotice) -> DetourNotice:
+    """``notice`` with a path rejoining 17th at Federal, a block north."""
+    steps = (
+        Step(turn="via", street="17th"),
+        Step(turn="right", street="Federal"),
+        Step(turn="right", street="17th"),
+    )
+    return notice.model_copy(update={"route_steps": steps})
+
+
+def test_skipped_stretch_runs_from_start_to_rejoin(
+    fixture_notices, reference: MatchReference
+):
+    """Route 2 #0 starts at Washington; this path rejoins at Federal.
+
+    The test shapes run north along 17th (both directions share the
+    line), so the rejoin comes after the start.
+    """
+    notice = ending_at_federal_17th(fixture_notices(ROUTE_2)[0])
+    detour = match_notice(notice, reference)
+    lon, lat = WASHINGTON_17TH
+    assert detour.match is not None
+    assert detour.match.rejoin_point == StartPoint(node_id=12, lon=lon, lat=lat + 0.001)
+    skipped = detour.match.skipped
+    assert skipped is not None
+    assert skipped.shape_id == SHAPES["2"][0][0]
+    assert skipped.line == (
+        pytest.approx((lon, lat), abs=1e-7),
+        pytest.approx((lon, lat + 0.001), abs=1e-7),
+    )
+    assert detour.issues == ()
+
+
+def test_no_skipped_stretch_when_start_and_rejoin_are_one_place(
+    fixture_notices, reference: MatchReference
+):
+    notice = ending_at_washington_17th(fixture_notices(ROUTE_2)[0])
+    detour = match_notice(notice, reference)
+    assert detour.match is not None
+    assert detour.match.rejoin_point is not None
+    assert detour.match.skipped is None
+
+
+def test_no_skipped_stretch_without_a_rejoin(
+    fixture_notices, reference: MatchReference
+):
+    detour = match_notice(fixture_notices(ROUTE_2)[0], reference)
+    assert detour.match is not None
+    assert detour.match.start_point is not None
+    assert detour.match.skipped is None
+
+
+def test_skipped_stretch_tries_the_next_shape(
+    fixture_notices, reference: MatchReference
+):
+    """Route 55's first affected shape is far away; the next gives it."""
+    notice = ending_at_federal_17th(
+        with_api_route_id(fixture_notices(ROUTE_2)[0], "bus_route_55")
+    )
+    first_match = match_notice(notice, reference).match
+    assert first_match is not None
+    first, second, *rest = [shape.shape_id for shape in first_match.shapes]
+    route_2_line = reference.shape_lines[("bus", SHAPES["2"][0][0])]
+    shape_lines = dict(reference.shape_lines)
+    shape_lines[("bus", first)] = [list(point) for point in PLACEHOLDER_LINE]
+    for shape_id in [second, *rest]:
+        shape_lines[("bus", shape_id)] = route_2_line
+    detour = match_notice(notice, replace(reference, shape_lines=shape_lines))
+    assert detour.match is not None
+    assert detour.match.skipped is not None
+    assert detour.match.skipped.shape_id == second
 
 
 def test_start_point_uses_shapes_of_both_directions(

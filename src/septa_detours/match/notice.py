@@ -1,6 +1,6 @@
 """Turn ``DetourNotice`` objects into ``Detour`` objects by matching to GTFS."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 import polars as pl
@@ -11,6 +11,7 @@ from septa_detours.gtfs.shapes import shape_coordinates
 from septa_detours.match.directions import find_direction_id
 from septa_detours.match.place import find_rejoin_point, find_start_point
 from septa_detours.match.routes import find_gtfs_route
+from septa_detours.match.skipped import skipped_stretch
 from septa_detours.match.streets import street_key_table
 from septa_detours.model import (
     AffectedShape,
@@ -18,6 +19,8 @@ from septa_detours.model import (
     DetourNotice,
     Direction,
     RouteMatch,
+    SkippedStretch,
+    StartPoint,
 )
 
 type ShapeLines = Mapping[tuple[Feed, str], list[list[float]]]
@@ -113,6 +116,8 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
           the notice's ``route_steps`` and the lines of its affected
           shapes only (the rejoin is on the route in the detour's
           direction); ``None`` with no issue when not found.
+          Its ``skipped`` comes from ``_skipped`` (both points needed);
+          ``None`` with no issue when not found.
 
     Only ``ValueError`` from the lookups becomes an issue; anything else
     (e.g. a malformed frame) is a bug and propagates.
@@ -137,6 +142,7 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
         reference.street_keys,
         [reference.shape_lines[(feed, shape.shape_id)] for shape in shapes],
     )
+    skipped = _skipped(feed, shapes, start_point, rejoin_point, reference)
     return Detour(
         notice=notice,
         match=RouteMatch(
@@ -145,6 +151,7 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
             shapes=shapes,
             start_point=start_point,
             rejoin_point=rejoin_point,
+            skipped=skipped,
         ),
         issues=shape_issues + start_issues,
     )
@@ -161,6 +168,34 @@ def _route_lines(
     """
     shape_ids = route_shape_ids(reference.trips, feed, route_id)["shape_id"]
     return [reference.shape_lines[(feed, s)] for s in dict.fromkeys(shape_ids)]
+
+
+def _skipped(
+    feed: Feed,
+    shapes: Sequence[AffectedShape],
+    start: StartPoint | None,
+    rejoin: StartPoint | None,
+    reference: MatchReference,
+) -> SkippedStretch | None:
+    """The skipped stretch on the first affected shape that gives one.
+
+    Shapes are tried in their (first-appearance) order; branches of one
+    route mostly agree (real, snapshot ``121123Z``: the stretch's length
+    differs between shapes in 5 of 51 detours). ``None`` without both
+    points, or when no shape gives one.
+    """
+    if start is None or rejoin is None:
+        return None
+    for shape in shapes:
+        line = skipped_stretch(
+            reference.shape_lines[(feed, shape.shape_id)],
+            (start.lon, start.lat),
+            (rejoin.lon, rejoin.lat),
+        )
+        if line is not None:
+            points = tuple((lon, lat) for lon, lat in line)
+            return SkippedStretch(shape_id=shape.shape_id, line=points)
+    return None
 
 
 def _affected_shapes(

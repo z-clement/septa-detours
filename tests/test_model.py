@@ -13,6 +13,7 @@ from septa_detours.model import (
     Location,
     RouteMatch,
     Segment,
+    SkippedStretch,
     SourceText,
     StartPoint,
     dump_detours,
@@ -256,6 +257,55 @@ def test_start_point_accepts_bounds(field, value):
 def test_start_point_rejects_bad_values(field, value):
     with pytest.raises(ValidationError, match=field):
         make_start_point(**{field: value})
+
+
+# --- tier B: rejoin point, skipped stretch ----------------------------------------
+
+# Route 2 SB along 17th, from Washington to Passyunk (lon, lat).
+STRETCH_LINE = ((-75.1716, 39.9385), (-75.1717, 39.9370), (-75.1719, 39.9352))
+
+
+def test_route_match_written_before_tier_b_still_reads():
+    old = '{"feed":"bus","route_id":"2","shapes":[],"start_point":null}'
+    match = RouteMatch.model_validate_json(old)
+    assert match.rejoin_point is None
+    assert match.skipped is None
+
+
+def test_tier_b_fields_round_trip_through_json():
+    match = RouteMatch(
+        feed="bus",
+        route_id="2",
+        start_point=make_start_point(),
+        rejoin_point=make_start_point(node_id=42, lat=39.9352),
+        skipped=SkippedStretch(shape_id="317310", line=STRETCH_LINE),
+    )
+    data = json.loads(match.model_dump_json())
+    assert data["skipped"] == {
+        "shape_id": "317310",
+        "line": [[-75.1716, 39.9385], [-75.1717, 39.937], [-75.1719, 39.9352]],
+    }
+    assert RouteMatch.model_validate_json(match.model_dump_json()) == match
+
+
+def test_skipped_stretch_needs_two_points():
+    with pytest.raises(ValidationError, match="line"):
+        SkippedStretch(shape_id="317310", line=STRETCH_LINE[:1])
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        (-75.1, -90.000001),
+        (-180.000001, 39.9),
+        (-75.1, 90.000001),
+        (float("nan"), 39.9),
+        (-75.1, float("inf")),
+    ],
+)
+def test_skipped_stretch_rejects_bad_points(point):
+    with pytest.raises(ValidationError, match="line"):
+        SkippedStretch(shape_id="317310", line=(STRETCH_LINE[0], point))
 
 
 LOCATION = TypeAdapter(Location)

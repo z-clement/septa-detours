@@ -243,6 +243,28 @@ class StartPoint(_Frozen):
     lat: Annotated[float, Field(ge=-90, le=90)]
 
 
+type Longitude = Annotated[float, Field(ge=-180, le=180)]
+type Latitude = Annotated[float, Field(ge=-90, le=90)]
+
+
+class SkippedStretch(_Frozen):
+    """The stretch of regular route a detour skips (tier B).
+
+    From where it leaves the route (``start_point``) to where it gets back
+    on (``rejoin_point``), cut from one affected shape
+    (``match/skipped.py``).
+
+    Attributes:
+        shape_id: The shape it was cut from.
+        line: ``(lon, lat)`` points (GeoJSON order), in the shape's travel
+            order; at least 2. Bounded like ``StartPoint``'s coordinates
+            (which also rejects NaN and infinity).
+    """
+
+    shape_id: CleanText
+    line: Annotated[tuple[tuple[Longitude, Latitude], ...], Field(min_length=2)]
+
+
 class RouteMatch(_Frozen):
     """A notice tied to the GTFS network.
 
@@ -263,6 +285,10 @@ class RouteMatch(_Frozen):
             when unknown: best effort, and normal for stop closures and
             layovers. Defaults to ``None`` (unlike ``start_point``) so
             detours files written before tier B still read.
+        skipped: The route between the start and rejoin points (tier B),
+            or ``None`` with no issue (either point unknown, or no
+            affected shape gives a believable stretch). Defaults to
+            ``None`` like ``rejoin_point``.
 
     The detoured path itself (coordinates or street segments) is not here
     yet; add it when ``match/`` can produce one.
@@ -273,6 +299,7 @@ class RouteMatch(_Frozen):
     shapes: tuple[AffectedShape, ...] = ()
     start_point: StartPoint | None
     rejoin_point: StartPoint | None = None
+    skipped: SkippedStretch | None = None
 
 
 class Detour(_Frozen):
