@@ -285,3 +285,23 @@ export function choiceText(choice, route, detail) {
   const detour = detail.detours.find((d) => d.source_key === choice.detour);
   return detour === undefined ? "Detour not found" : detourHeadline(detour, detail.directions);
 }
+
+/**
+ * What a screen reader hears when the focused route changes.
+ *
+ * "Route 21 Chestnut-Walnut: 3 now, 1 later." for a route (counts as on
+ * its sidebar row), ": no detours." without any; "All routes." when
+ * `route` is null (back to the overview).
+ *
+ * @param {object | null} route the focused routes.json entry, or null
+ * @param {{active: number, upcoming: number, ended: number, unknown: number}} [counts]
+ *   from `timingCounts`; needed with a route
+ * @returns {string}
+ */
+export function focusAnnouncement(route, counts) {
+  if (route === null) {
+    return "All routes.";
+  }
+  const summary = timingSummary(counts);
+  return `${routeLabel(route)}: ${summary === "" ? "no detours" : summary}.`;
+}

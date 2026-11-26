@@ -13,6 +13,7 @@ import {
   detourPlaces,
   directionLabel,
   directionSummary,
+  focusAnnouncement,
   formatTime,
   modeLabel,
   plural,
@@ -382,4 +383,23 @@ test("choiceText: a detour choice is its headline once the detail loads", () => 
     choiceText({ ...choice, detour: "gone" }, ROUTE_2, detail),
     "Detour not found",
   );
+});
+
+// --- focusAnnouncement ------------------------------------------------------------
+
+test("focusAnnouncement: the route and its counts, as on its row", () => {
+  const counts = { active: 3, upcoming: 1, ended: 2, unknown: 0 };
+  assert.equal(
+    focusAnnouncement(ROUTE_2, counts),
+    "Route 2 20-Johnston to Pulaski-Hunting Park: 3 now, 1 later, 2 ended.",
+  );
+});
+
+test("focusAnnouncement: no detours, and back to the overview", () => {
+  const none = { active: 0, upcoming: 0, ended: 0, unknown: 0 };
+  assert.equal(
+    focusAnnouncement({ ...ROUTE_2, short_name: "K", long_name: null }, none),
+    "Route K: no detours.",
+  );
+  assert.equal(focusAnnouncement(null), "All routes.");
 });
