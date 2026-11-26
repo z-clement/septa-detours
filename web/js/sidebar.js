@@ -80,18 +80,22 @@ function routeSection(title, routes, now) {
  * Draw the route list into `container`, replacing what was there.
  *
  * "Detoured now" first (left out when no detour is active), then every
- * route grouped by mode. A route in "Detoured now" is also in its group.
- * Rebuilt whole on every call: 181 rows is cheap, and it avoids patching.
- * Draws whatever routes it's given: filtering (search) is the caller's.
- * No routes (nothing matched) shows a short message instead.
+ * route grouped by mode, groups in `modeOrder`. A route in "Detoured now"
+ * is also in its group. Rebuilt whole on every call: 181 rows is cheap,
+ * and it avoids patching. Draws whatever routes it's given, in their
+ * order: filtering and ranking are the caller's. No routes shows
+ * `emptyText` instead.
  *
  * @param {HTMLElement} container
- * @param {object[]} routes routes.json entries to show, in catalog order
- * @param {Date} now
+ * @param {object} view
+ * @param {object[]} view.routes routes.json entries to show, in order
+ * @param {Date} view.now
+ * @param {string[]} view.modeOrder the catalog's mode order
+ * @param {string} view.emptyText shown when `routes` is empty
  */
-export function renderRouteList(container, routes, now) {
+export function renderRouteList(container, { routes, now, modeOrder, emptyText }) {
   if (routes.length === 0) {
-    container.replaceChildren(element("p", "route-list-empty", "No routes match."));
+    container.replaceChildren(element("p", "route-list-empty", emptyText));
     return;
   }
   const sections = [];
@@ -99,8 +103,38 @@ export function renderRouteList(container, routes, now) {
   if (active.length > 0) {
     sections.push(routeSection("Detoured now", active.map((row) => row.route), now));
   }
-  for (const group of groupByMode(routes)) {
+  for (const group of groupByMode(routes, modeOrder)) {
     sections.push(routeSection(modeLabel(group.mode), group.routes, now));
   }
   container.replaceChildren(...sections);
+}
+
+/**
+ * Build the mode chips once; returns the function that updates them.
+ *
+ * One toggle `<button>` per mode, in `modeOrder`. Built once and then
+ * only updated (not rebuilt) so a chip toggled from the keyboard keeps
+ * its focus. `aria-pressed` says whether a chip is on; an "unavailable"
+ * chip (the search has no routes of that mode) is greyed but still
+ * toggles.
+ *
+ * @param {HTMLElement} container
+ * @param {string[]} modeOrder
+ * @param {(mode: string) => void} onToggle called with the clicked chip's mode
+ * @returns {(on: Set<string>, available: Set<string>) => void}
+ */
+export function createModeChips(container, modeOrder, onToggle) {
+  const chips = modeOrder.map((mode) => {
+    const chip = element("button", "chip", modeLabel(mode));
+    chip.type = "button";
+    chip.addEventListener("click", () => onToggle(mode));
+    return { mode, chip };
+  });
+  container.replaceChildren(...chips.map(({ chip }) => chip));
+  return (on, available) => {
+    for (const { mode, chip } of chips) {
+      chip.setAttribute("aria-pressed", String(on.has(mode)));
+      chip.classList.toggle("unavailable", !available.has(mode));
+    }
+  };
 }

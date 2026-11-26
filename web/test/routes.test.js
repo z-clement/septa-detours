@@ -212,6 +212,35 @@ test("groupByMode: keeps the route objects themselves", () => {
   assert.equal(group.routes[0], BUS_K);
 });
 
+const CATALOG_MODES = ["metro", "trolley", "trackless", "bus", "rail"];
+
+test("groupByMode: a mode order puts the groups in it, routes keep their order", () => {
+  // Ranked search results ("k" puts K first): groups still in catalog
+  // order, but K stays first among the buses.
+  assert.deepEqual(groupByMode([BUS_K, L1, BUS_2_MODED, AIR_MODED, T1], CATALOG_MODES), [
+    { mode: "metro", routes: [L1] },
+    { mode: "trolley", routes: [T1] },
+    { mode: "bus", routes: [BUS_K, BUS_2_MODED] },
+    { mode: "rail", routes: [AIR_MODED] },
+  ]);
+});
+
+test("groupByMode: modes in the order without routes get no group", () => {
+  assert.deepEqual(groupByMode([BUS_K], CATALOG_MODES), [{ mode: "bus", routes: [BUS_K] }]);
+  assert.deepEqual(groupByMode([], CATALOG_MODES), []);
+});
+
+test("groupByMode: a mode missing from the order comes after, by first route", () => {
+  const ferry = moded("bus-FERRY", "ferry");
+  const tram = moded("bus-TRAM", "tram");
+  assert.deepEqual(groupByMode([tram, BUS_K, ferry, L1], ["metro", "bus"]), [
+    { mode: "metro", routes: [L1] },
+    { mode: "bus", routes: [BUS_K] },
+    { mode: "tram", routes: [tram] },
+    { mode: "ferry", routes: [ferry] },
+  ]);
+});
+
 // --- searchRoutes -----------------------------------------------------------
 
 /** A routes.json entry with just its key and names. */
@@ -281,6 +310,27 @@ test("searchRoutes: a route with no long name matches on its short name only", (
   const noLong = named("bus-X9", "X9", null);
   assert.deepEqual(searchRoutes([noLong, N_K], "x9"), [noLong]);
   assert.deepEqual(searchRoutes([noLong, N_K], "null"), []); // not the text "null"
+});
+
+test("searchRoutes: a short name starting with the text comes first", () => {
+  // Route K, then every "k" inside a name (Frankford, Hunting Park, Dock).
+  assert.deepEqual(searchRoutes(NAMED, "k"), [N_K, N_L1, N_2, N_5, N_12, N_21]);
+});
+
+test("searchRoutes: both parts keep catalog order", () => {
+  // Starting with "l": L1, L1 OWL. Then the rest with an "l" anywhere
+  // (Pulaski, Columbus, Paoli, owl, Midvale, Line), in catalog order.
+  assert.deepEqual(searchRoutes(NAMED, "l"), [
+    N_L1,
+    N_L1_OWL,
+    N_2,
+    N_12,
+    N_21,
+    N_204,
+    N_B1_OWL,
+    N_K,
+    N_AIR,
+  ]);
 });
 
 /** A routes.json entry with its key, names and mode. */

@@ -6,8 +6,14 @@
 import { loadSite, routeDetailLoader } from "./data.js";
 import { statusLine } from "./format.js";
 import { addOverviewLayers, addPopups, createMap } from "./mapview.js";
-import { detouredRoutes, routesBounds, searchRoutes } from "./routes.js";
-import { renderRouteList } from "./sidebar.js";
+import {
+  detouredRoutes,
+  groupByMode,
+  routesBounds,
+  searchRoutes,
+  visibleRoutes,
+} from "./routes.js";
+import { createModeChips, renderRouteList } from "./sidebar.js";
 
 /** How often `now` moves on, so detours become active/ended on screen. */
 const NOW_REFRESH_MS = 60_000;
@@ -46,11 +52,37 @@ async function main() {
   addPopups(map, site.routes, routeDetailLoader());
   showStatus(statusLine(site.status));
 
-  // Page state; moves to state.js in W4. Every change re-renders the list.
-  const state = { now: new Date(), search: "" };
+  // The catalog's mode order (D8, as Python wrote it), for the chips and
+  // the list's groups: search ranking must not reorder the groups.
+  const modeOrder = groupByMode(site.routes).map((group) => group.mode);
+
+  // Page state; moves to state.js in W4. Every change re-renders.
+  const state = { now: new Date(), search: "", modes: new Set(modeOrder) };
   const listElement = document.getElementById("route-list");
-  const render = () =>
-    renderRouteList(listElement, searchRoutes(site.routes, state.search), state.now);
+  const updateChips = createModeChips(
+    document.getElementById("mode-chips"),
+    modeOrder,
+    (mode) => {
+      if (state.modes.has(mode)) {
+        state.modes.delete(mode);
+      } else {
+        state.modes.add(mode);
+      }
+      render();
+    },
+  );
+  const render = () => {
+    // A chip is greyed when the search alone has none of its mode (the
+    // other chips don't count, or switching one off would grey it).
+    const searched = searchRoutes(site.routes, state.search);
+    updateChips(state.modes, new Set(searched.map((route) => route.mode)));
+    renderRouteList(listElement, {
+      routes: visibleRoutes(site.routes, state.search, state.modes),
+      now: state.now,
+      modeOrder,
+      emptyText: state.modes.size === 0 ? "No modes selected." : "No routes match.",
+    });
+  };
   render();
   // "input" fires on every keystroke, and on the clear button / Escape.
   document.getElementById("search").addEventListener("input", (event) => {

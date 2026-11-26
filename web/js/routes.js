@@ -85,29 +85,37 @@ export function detouredNow(routes, now) {
 }
 
 /**
- * The sidebar's mode groups: routes split by `mode`, catalog order kept.
+ * The sidebar's mode groups: routes split by `mode`, their order kept.
  *
- * Groups come in order of each mode's first route, so the mode order is
- * the one Python wrote into routes.json (not repeated here). Only modes
- * with routes get a group. A mode that appears in two runs is still one
- * group, its routes in catalog order.
+ * Groups come in `modeOrder`'s order, then any other mode in order of its
+ * first route. With the default (no order given) that's every mode by its
+ * first route, so grouping the whole catalog gives the order Python wrote
+ * into routes.json (not repeated here). Pass that catalog order when
+ * grouping search results: ranking puts route K first for "k", which
+ * mustn't move Buses above Metro. Only modes with routes get a group. A
+ * mode that appears in two runs is still one group, its routes in order.
  *
  * @param {object[]} routes routes.json (or any subset, e.g. search results)
+ * @param {string[]} [modeOrder] modes in display order, e.g.
+ *   `groupByMode(catalog).map((g) => g.mode)`
  * @returns {{mode: string, routes: object[]}[]}
  */
-export function groupByMode(routes) {
-  const groups = new Map(); // insertion order = first appearance
+export function groupByMode(routes, modeOrder = []) {
+  // Insertion order: modeOrder first, then other modes as they appear.
+  const groups = new Map(modeOrder.map((mode) => [mode, []]));
   for (const route of routes) {
     if (!groups.has(route.mode)) {
       groups.set(route.mode, []);
     }
     groups.get(route.mode).push(route);
   }
-  return [...groups].map(([mode, members]) => ({ mode, routes: members }));
+  return [...groups]
+    .filter(([, members]) => members.length > 0)
+    .map(([mode, members]) => ({ mode, routes: members }));
 }
 
 /**
- * The sidebar search: routes whose names match `query`, catalog order kept.
+ * The sidebar search: routes whose names match `query`, best matches first.
  *
  * Case is ignored and the query is trimmed; a blank query keeps every
  * route. A number (digits only) is a route number: it matches only at the
@@ -116,6 +124,11 @@ export function groupByMode(routes) {
  * Anything else matches anywhere in `short_name` or `long_name`: "owl"
  * finds L1 OWL and B1 OWL, "chest" finds 23 (... to Chestnut Hill). A
  * `null` long name never matches.
+ *
+ * Order: routes whose `short_name` starts with the query first, then the
+ * other matches, each in catalog order. So "k" puts route K before the
+ * 61 routes with a "k" in their names (Frankford, Park, ...). Every
+ * number match starts with the query, so numbers stay in catalog order.
  *
  * @param {object[]} routes routes.json
  * @param {string} query what the user typed
@@ -130,7 +143,9 @@ export function searchRoutes(routes, query) {
     return routes.filter((route) => route.short_name.startsWith(needle)); // digits: no case
   }
   const contains = (name) => name !== null && name.toLowerCase().includes(needle);
-  return routes.filter((route) => contains(route.short_name) || contains(route.long_name));
+  const matches = routes.filter((route) => contains(route.short_name) || contains(route.long_name));
+  const startsWith = (route) => route.short_name.toLowerCase().startsWith(needle);
+  return [...matches.filter(startsWith), ...matches.filter((route) => !startsWith(route))];
 }
 
 /**

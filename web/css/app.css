@@ -72,6 +72,35 @@ body {
   font: inherit;
 }
 
+/* Mode chips: toggles that wrap onto a second line when needed. */
+#mode-chips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid #eee;
+}
+.chip {
+  padding: 2px 9px;
+  border: 1px solid #bbb;
+  border-radius: 999px; /* pill */
+  background: #fff;
+  color: #333;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] {
+  border-color: #1a4fd6;
+  background: #1a4fd6;
+  color: #fff;
+}
+/* The search has no routes of this mode: greyed, still clickable. */
+.chip.unavailable {
+  opacity: 0.4;
+}
+
 /* The scrolling part. `min-height: 0` lets a flex item shrink below its
    content's height; without it the list grows past the window instead
    of scrolling. */
