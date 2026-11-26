@@ -14,9 +14,6 @@ const FALLBACK_COLOR = "#555555";
 /** The faint whole-network lines (decided: one neutral grey, not route colors). */
 const NETWORK_COLOR = "#9aa0a6";
 
-/** Start dots of detours that have ended. */
-const ENDED_COLOR = "#9e9e9e";
-
 /** The ring around a rejoin dot: dark, so it reads as an end, unlike the
  * start dots' white ring. app.css's legend repeats it. */
 const REJOIN_RING_COLOR = "#333333";
@@ -102,7 +99,8 @@ export function createMap(container) {
  * @param {maplibregl.Map} map
  * @param {{routes: object[], network: object, starts: object, skipped: object, paths: object}} site
  * @returns {{
- *   showFocus: (focus: {key: string, detail: object | null} | null) => void,
+ *   showFocus: (focus: {key: string, detail: object | null, rejoins: object | null} | null) => void,
+ *   setInEffect: (keys: Set<string>) => void,
  *   setHoveredDot: (sourceKey: string | null) => void,
  *   setSelectedDot: (sourceKey: string | null) => void,
  * }} see each below
@@ -206,9 +204,9 @@ export function addOverviewLayers(map, site) {
   // as the route lines: a stretch is cut from its direction's shape, in
   // travel order, so it lands on that side.
   //
-  // Only detours in effect (active, or unknown like the dots): an upcoming
-  // or ended detour's stretch is served right now.
-  const inEffect = ["match", ["get", "timing"], ["upcoming", "ended"], false, true];
+  // Detour layers (stretches, paths, start dots) show only detours in
+  // effect: `setInEffect` sets which (nothing until it's first called).
+  let inEffect = sourceKeyIn(new Set());
   map.addLayer({
     id: SKIPPED_LAYER,
     type: "line",
@@ -288,23 +286,15 @@ export function addOverviewLayers(map, site) {
     },
   });
 
-  // Styled by `timing` (computed at export time; the page will recompute
-  // it in W3): active solid in the route color, upcoming hollow (white
-  // fill, route-color ring), ended grey. `unknown` looks like active.
+  // Start dots of detours in effect: the route's color, a white ring
+  // (dark when selected).
   map.addLayer({
     id: STARTS_LAYER,
     type: "circle",
     source: STARTS_SOURCE,
+    filter: inEffect,
     paint: {
-      "circle-color": [
-        "match",
-        ["get", "timing"],
-        "upcoming",
-        "#ffffff",
-        "ended",
-        ENDED_COLOR,
-        routeColor,
-      ],
+      "circle-color": routeColor,
       // `zoom` must be interpolate's input, so the state goes in each stop.
       "circle-radius": [
         "interpolate",
@@ -315,12 +305,7 @@ export function addOverviewLayers(map, site) {
         16,
         ["case", emphasized, 13, 9],
       ],
-      "circle-stroke-color": [
-        "case",
-        selected,
-        SELECTED_RING_COLOR,
-        ["match", ["get", "timing"], "upcoming", routeColor, "#ffffff"],
-      ],
+      "circle-stroke-color": ["case", selected, SELECTED_RING_COLOR, "#ffffff"],
       "circle-stroke-width": ["case", selected, 3, 2],
     },
   });
@@ -330,15 +315,25 @@ export function addOverviewLayers(map, site) {
    *
    * Focused: the network fainter, other routes' colored lines and dots
    * hidden, the route's own dots kept, its rejoin dots shown
-   * (`rejoins`, built from `detail`). Its shapes come from `detail`;
+   * (`rejoins`, built from `detail`). Detour layers keep showing only
+   * detours in effect. Its shapes come from `detail`;
    * while that's loading (null), its network lines stay in color so the
    * route doesn't vanish meanwhile. Doesn't move the camera (`fitRoute`).
    *
    * @param {{key: string, detail: object | null, rejoins: object | null} | null} focus
    *   `rejoins`: `rejoinCollection`'s, null while the detail loads
    */
+  let only = null;
+  /** Detour layers: in effect, and on the focused route if one is. */
+  function applyDetourFilters() {
+    const filter = only === null ? inEffect : ["all", only, inEffect];
+    for (const layer of [STARTS_LAYER, SKIPPED_LAYER, PATH_CASING_LAYER, PATH_LAYER]) {
+      map.setFilter(layer, filter);
+    }
+  }
+
   function showFocus(focus) {
-    const only = focus === null ? null : ["==", ["get", "key"], focus.key];
+    only = focus === null ? null : ["==", ["get", "key"], focus.key];
     const detail = focus === null ? null : focus.detail;
     map.setPaintProperty(
       NETWORK_LAYER,
@@ -347,20 +342,38 @@ export function addOverviewLayers(map, site) {
     );
     map.setFilter(DETOURED_LAYER, only ?? detouredFilter);
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
-    map.setFilter(STARTS_LAYER, only);
-    const detourFilter = only === null ? inEffect : ["all", only, inEffect];
-    for (const layer of [SKIPPED_LAYER, PATH_CASING_LAYER, PATH_LAYER]) {
-      map.setFilter(layer, detourFilter);
-    }
+    applyDetourFilters();
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
     map.getSource(REJOINS_SOURCE).setData(focus?.rejoins ?? EMPTY_COLLECTION);
   }
 
+  /**
+   * Which detours the map draws: those whose `source_key` is in `keys`
+   * (`inEffectKeys`, recomputed by the caller as the clock moves).
+   *
+   * @param {Set<string>} keys
+   */
+  function setInEffect(keys) {
+    inEffect = sourceKeyIn(keys);
+    applyDetourFilters();
+  }
+
   return {
     showFocus,
+    setInEffect,
     setHoveredDot: dotStateSetter(map, "hover"),
     setSelectedDot: dotStateSetter(map, "selected"),
   };
+}
+
+/**
+ * A filter keeping features whose `source_key` is in `keys`.
+ *
+ * @param {Set<string>} keys
+ * @returns {Array} a MapLibre filter expression
+ */
+function sourceKeyIn(keys) {
+  return ["in", ["get", "source_key"], ["literal", [...keys]]];
 }
 
 /**

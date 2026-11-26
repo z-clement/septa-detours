@@ -156,7 +156,8 @@ Phone (DevTools device mode, ~390 x 844):
 Small steps, each tested (pure JS where possible), committed, then
 checked by eye with your screenshots. Rough sizes in brackets.
 
-- **U1. Time (E1, first half)** [small, JS]: every layer timed by the
+- **U1. Time (E1, first half)** (done 2026-11-26: contract 6, features
+  carry start/end; not yet checked by eye) [small, JS]: every layer timed by the
   page's clock (`detourTiming` per `source_key`, applied as a filter);
   the map shows only detours in effect; upcoming and ended stay in the
   panel.

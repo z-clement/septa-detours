@@ -669,3 +669,11 @@ Tests: 125 JS.
   for `start`/`end` (`site._detour_properties`, ISO as the detour
   object); the collections lose `now`; Python `detour_timing` is gone
   (the page's `detourTiming` is now the only timing rule).
+- Page (U1): `detours.isInEffect` / `inEffectKeys`; `mapview` filters
+  starts, stretches and paths by `source_key in <keys>` (`setInEffect`,
+  combined with the focus filter in `applyDetourFilters`); start dots
+  lose their timing styles (hollow / grey): only detours in effect are
+  drawn, upcoming and ended stay in the panel. `main.js` recomputes the
+  keys on every clock tick (1 min). Real `145719Z` at 15:45 UTC: all 80
+  placed detours are active (the snapshot lists current alerts only), so
+  nothing changes yet; route 124's detours end at 4 pm and 7 pm.

@@ -5,7 +5,7 @@
 // `maplibregl` exists for mapview.js).
 
 import { loadSite, routeDetailLoader } from "./data.js";
-import { rejoinCollection } from "./detours.js";
+import { inEffectKeys, rejoinCollection } from "./detours.js";
 import { focusAnnouncement, statusLine } from "./format.js";
 import {
   addClickHandler,
@@ -66,7 +66,10 @@ async function main() {
   const routesByKey = new Map(site.routes.map((route) => [route.key, route]));
   const loadDetail = routeDetailLoader();
 
-  const { showFocus, setHoveredDot, setSelectedDot } = addOverviewLayers(map, site);
+  const { showFocus, setInEffect, setHoveredDot, setSelectedDot } = addOverviewLayers(
+    map,
+    site,
+  );
   addLegend(map);
   showStatus(statusLine(site.status));
 
@@ -74,6 +77,16 @@ async function main() {
   // the list's groups: search ranking must not reorder the groups.
   const modeOrder = groupByMode(site.routes).map((group) => group.mode);
   const store = createState({ modes: modeOrder, now: new Date() });
+
+  // The map draws only detours in effect, by the page's clock (U1): every
+  // detour feature carries its start and end.
+  const detourFeatures = [
+    ...site.starts.features,
+    ...site.skipped.features,
+    ...site.paths.features,
+  ];
+  const showInEffect = (now) => setInEffect(inEffectKeys(detourFeatures, now));
+  showInEffect(store.get().now);
 
   // --- The mobile sheet -----------------------------------------------------
 
@@ -293,6 +306,9 @@ async function main() {
     }
     if (["focus", "selectedDetour", "now"].some((key) => changed.has(key))) {
       renderFocus(state);
+    }
+    if (changed.has("now")) {
+      showInEffect(state.now);
     }
     if (changed.has("focus")) {
       const route = state.focus === null ? null : routesByKey.get(state.focus);
