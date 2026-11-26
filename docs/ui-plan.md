@@ -169,7 +169,9 @@ checked by eye with your screenshots. Rough sizes in brackets.
   eye: threshold, crowding in Center City) [medium, JS]: below ~zoom 13 one
   labelled marker per detour (a MapLibre symbol layer: the basemap's
   fonts); lines from zoom 13. Check the threshold by eye.
-- **U4. Focus frames detours (C1)** [small-medium, JS]: fit the focused
+- **U4. Focus frames detours (C1)** (done 2026-11-26; focused, detour
+  layers at every zoom, no markers; not yet checked by eye)
+  [small-medium, JS]: fit the focused
   route's detours in effect; a selected card zooms to its detour; a
   "Whole route" control.
 - **U5. Directions (D)** [small-medium, JS]. Asked for (yours,

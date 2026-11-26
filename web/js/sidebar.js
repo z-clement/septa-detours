@@ -265,19 +265,32 @@ function detourCard(detour, directions, selected) {
 }
 
 /**
- * The panel's header: Back button, badge and names, directions.
+ * The panel's header: Back and "Whole route" buttons, badge and names,
+ * directions. "Whole route" only for a route with map lines.
  *
  * @param {object} route a routes.json entry
  * @param {object | null} detail its route detail, once loaded
  * @param {() => void} onBack
+ * @param {() => void} onWholeRoute
  * @returns {HTMLElement}
  */
-function panelHeader(route, detail, onBack) {
+function panelHeader(route, detail, onBack, onWholeRoute) {
   const header = element("header", "panel-header");
   const back = element("button", "back", "\u2190 All routes");
   back.type = "button";
   back.dataset.focusId = "back";
   back.addEventListener("click", onBack);
+  const actions = element("div", "panel-actions");
+  actions.append(back);
+  if (route.has_shapes) {
+    // The camera frames the route's detours (UI plan C1); this shows all
+    // of it.
+    const whole = element("button", "whole-route", "Whole route");
+    whole.type = "button";
+    whole.dataset.focusId = "whole-route";
+    whole.addEventListener("click", onWholeRoute);
+    actions.append(whole);
+  }
   // The panel's label (index.html's aria-labelledby), and where keyboard
   // focus lands when a route is focused (tabindex -1: focusable from
   // script, not a Tab stop).
@@ -287,7 +300,7 @@ function panelHeader(route, detail, onBack) {
   title.dataset.focusId = "title";
   title.append(routeBadge(route), element("span", "name", route.long_name ?? ""));
   title.title = routeLabel(route);
-  header.append(back, title);
+  header.append(actions, title);
   if (detail !== null && detail.directions.length > 0) {
     const directions = element("ul", "directions");
     directions.append(
@@ -319,8 +332,12 @@ function panelHeader(route, detail, onBack) {
  * @param {Date} view.now
  * @param {string | null} view.selectedDetour a detour's `source_key`
  * @param {() => void} view.onBack
+ * @param {() => void} view.onWholeRoute show the whole route on the map
  */
-export function renderRoutePanel(container, { route, detail, error, now, selectedDetour, onBack }) {
+export function renderRoutePanel(
+  container,
+  { route, detail, error, now, selectedDetour, onBack, onWholeRoute },
+) {
   const endedWasOpen =
     container.dataset.key === route.key &&
     container.querySelector("details.timing-ended")?.open === true;
@@ -356,7 +373,7 @@ export function renderRoutePanel(container, { route, detail, error, now, selecte
       body.append(group);
     }
   }
-  container.replaceChildren(panelHeader(route, detail, onBack), body);
+  container.replaceChildren(panelHeader(route, detail, onBack, onWholeRoute), body);
   if (focusId !== undefined) {
     container
       .querySelector(`[data-focus-id="${CSS.escape(focusId)}"]`)

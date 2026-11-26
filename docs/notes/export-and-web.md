@@ -694,3 +694,13 @@ Tests: 125 JS.
   dots, stretches and paths have `minzoom` 13. Markers share the starts
   source, so in-effect/focus filters, hover/select and clicks match.
   Legend row added. Map side not checked by eye (threshold, crowding).
+- U4, focus frames detours (2026-11-26): `detours.detourBounds` (pure,
+  tested: start/rejoin points, skipped, path); `main.frameFocus` runs
+  when the focused route's detail arrives: the selected detour (shared
+  link), else the detours in effect (`isInEffect`), else the whole
+  route; a new selection on the same route zooms to it
+  (`zoomToSelected`; an unplaced one leaves the camera); `fitDetours`
+  caps at zoom 16. `panToDot` removed. Focused, detour layers show at
+  every zoom and the markers are off (`showFocus`: one route has nothing
+  to untangle). Panel header: a "Whole route" button (routes with
+  shapes; harness screenshot checked). Map side not checked by eye.

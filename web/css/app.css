@@ -439,6 +439,21 @@ body {
   padding: 8px 12px;
   border-bottom: 1px solid #eee;
 }
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-header .whole-route {
+  padding: 2px 8px;
+  border: 1px solid #c8ccd2;
+  border-radius: 4px;
+  background: #fff;
+  color: #1a4fd6;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
 .panel-header .back {
   padding: 2px 0;
   border: none;

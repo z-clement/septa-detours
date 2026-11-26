@@ -5,7 +5,7 @@
 // `maplibregl` exists for mapview.js).
 
 import { loadSite, routeDetailLoader } from "./data.js";
-import { inEffectKeys, rejoinCollection } from "./detours.js";
+import { detourBounds, inEffectKeys, isInEffect, rejoinCollection } from "./detours.js";
 import { focusAnnouncement, statusLine } from "./format.js";
 import {
   addClickHandler,
@@ -13,8 +13,8 @@ import {
   addOverviewLayers,
   createMap,
   fitPadding,
+  fitDetours,
   fitRoute,
-  panToDot,
 } from "./mapview.js";
 import {
   detouredRoutes,
@@ -183,6 +183,7 @@ async function main() {
         now: state.now,
         selectedDetour: state.selectedDetour,
         onBack: () => store.focus(null),
+        onWholeRoute: () => fitRoute(map, routesByKey.get(store.get().focus), coverBottom()),
       });
     }
   };
@@ -199,6 +200,7 @@ async function main() {
         // Dropped if the user has moved on to another route meanwhile.
         if (store.get().focus === key) {
           renderFocus(store.get());
+          frameFocus(store.get());
           scrollToSelected(store.get()); // a shared link's detour
         }
       });
@@ -213,13 +215,31 @@ async function main() {
         ?.scrollIntoView({ block: "nearest" });
     }
   };
-  // The map to the selected detour's dot, if it has one and it's off
-  // screen. Needs the detail file (dots carry no detour data).
-  const panToSelected = ({ focus, selectedDetour }) => {
-    const detail = loaded.key === focus ? loaded.detail : null;
-    const detour = detail?.detours.find((d) => d.source_key === selectedDetour);
-    if (detour?.start_point != null) {
-      panToDot(map, detour.start_point, coverBottom());
+  // The focused route's detours, from its detail file (dots carry no
+  // detour data); [] while it loads. Twins share a source_key: both count.
+  const focusedDetours = (focus) => (loaded.key === focus ? loaded.detail : null)?.detours ?? [];
+  const selectedDetours = ({ focus, selectedDetour }) =>
+    focusedDetours(focus).filter((d) => d.source_key === selectedDetour);
+  // The camera when a route's detail arrives (UI plan C1): the selected
+  // detour (a shared link), else the detours in effect, else the whole
+  // route (none in effect, none placed, or the detail didn't load).
+  const frameFocus = (state) => {
+    const inEffect = focusedDetours(state.focus).filter((d) =>
+      isInEffect(d.start, d.end, state.now),
+    );
+    const bounds = detourBounds(selectedDetours(state)) ?? detourBounds(inEffect);
+    if (bounds !== null) {
+      fitDetours(map, bounds, coverBottom());
+    } else {
+      fitRoute(map, routesByKey.get(state.focus), coverBottom());
+    }
+  };
+  // A new selection on the same route: the camera to that detour. An
+  // unplaced one (no geometry) leaves the camera where it is.
+  const zoomToSelected = (state) => {
+    const bounds = detourBounds(selectedDetours(state));
+    if (bounds !== null) {
+      fitDetours(map, bounds, coverBottom());
     }
   };
   // Cards: one listener each for the whole panel (cards are rebuilt on
@@ -292,9 +312,8 @@ async function main() {
       // The hovered card is gone (removed cards fire no mouseleave).
       setHoveredDot(null);
       if (state.focus !== null) {
+        // The camera moves when the detail arrives (frameFocus).
         startLoading(state.focus);
-        // The sheet was raised in the same update, so coverBottom is current.
-        fitRoute(map, routesByKey.get(state.focus), coverBottom());
       }
     }
     // The list only while it's shown; returning to it redraws it.
@@ -338,10 +357,9 @@ async function main() {
     if (changed.has("selectedDetour")) {
       setSelectedDot(state.selectedDetour);
       scrollToSelected(state);
-      // A new route was just fitted (fitRoute), and its dots are in its
-      // bounds: pan only for a new selection on the same route.
-      if (!changed.has("focus")) {
-        panToSelected(state);
+      // A new route frames itself when its detail arrives (frameFocus).
+      if (!changed.has("focus") && state.selectedDetour !== null) {
+        zoomToSelected(state);
       }
     }
   });

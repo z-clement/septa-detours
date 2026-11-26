@@ -377,7 +377,9 @@ export function addOverviewLayers(map, site) {
    * (`rejoins`, built from `detail`). Detour layers keep showing only
    * detours in effect. Its shapes come from `detail`;
    * while that's loading (null), its network lines stay in color so the
-   * route doesn't vanish meanwhile. Doesn't move the camera (`fitRoute`).
+   * route doesn't vanish meanwhile. Focused, the detour layers show at
+   * every zoom and the markers are off. Doesn't move the camera
+   * (`fitDetours`, `fitRoute`).
    *
    * @param {{key: string, detail: object | null, rejoins: object | null} | null} focus
    *   `rejoins`: `rejoinCollection`'s, null while the detail loads
@@ -420,6 +422,16 @@ export function addOverviewLayers(map, site) {
     );
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
     applyDetourFilters();
+    // Focused, one route has nothing to untangle: its dots, stretches and
+    // paths at every zoom, no markers. The overview: markers below
+    // MARKER_ZOOM, the rest from it (B1).
+    const detailed = focus === null ? MARKER_ZOOM : 0;
+    for (const layer of [STARTS_LAYER, SKIPPED_LAYER, PATH_CASING_LAYER, PATH_LAYER]) {
+      map.setLayerZoomRange(layer, detailed, 24);
+    }
+    for (const layer of [MARKER_LAYER, MARKER_LABEL_LAYER]) {
+      map.setLayoutProperty(layer, "visibility", focus === null ? "visible" : "none");
+    }
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
     map.getSource(REJOINS_SOURCE).setData(focus?.rejoins ?? EMPTY_COLLECTION);
   }
@@ -479,25 +491,6 @@ function dotStateSetter(map, name) {
   };
 }
 
-/**
- * Pan the map to a detour's start point if it isn't visible; no zoom.
- *
- * Visible means inside the map and above the bottom `coverBottom` pixels
- * (the mobile sheet). The pan centres the dot in that visible part: the
- * offset moves it up by half the cover.
- *
- * @param {maplibregl.Map} map
- * @param {{lon: number, lat: number}} point a detour's `start_point`
- * @param {number} [coverBottom] pixels hidden at the map's bottom
- */
-export function panToDot(map, { lon, lat }, coverBottom = 0) {
-  const { x, y } = map.project([lon, lat]);
-  const { clientWidth: width, clientHeight: height } = map.getContainer();
-  if (x < 0 || x > width || y < 0 || y > height - coverBottom) {
-    map.panTo([lon, lat], { offset: [0, -coverBottom / 2] });
-  }
-}
-
 /** Room left around fitted lines, in CSS pixels. */
 const FIT_PADDING_PX = 40;
 
@@ -511,6 +504,22 @@ const FIT_PADDING_PX = 40;
 export function fitPadding(coverBottom) {
   const p = FIT_PADDING_PX;
   return { top: p, right: p, bottom: p + coverBottom, left: p };
+}
+
+/** The closest the camera zooms when framing detours: a short detour
+ * (or one point) would otherwise fill the screen. */
+const DETOUR_MAX_ZOOM = 16;
+
+/**
+ * Move the camera to some detours (animated), clear of the sheet, no
+ * closer than `DETOUR_MAX_ZOOM` (UI plan C1).
+ *
+ * @param {maplibregl.Map} map
+ * @param {[[number, number], [number, number]]} bounds from `detourBounds`
+ * @param {number} [coverBottom] pixels hidden at the map's bottom
+ */
+export function fitDetours(map, bounds, coverBottom = 0) {
+  map.fitBounds(bounds, { padding: fitPadding(coverBottom), maxZoom: DETOUR_MAX_ZOOM });
 }
 
 /**
