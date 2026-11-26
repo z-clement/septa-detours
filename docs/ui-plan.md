@@ -63,7 +63,74 @@ dots, small end dots (rejoins), and a panel of cards grouped by timing
 6. **Unplaced detours** (24 of 104) exist only in lists.
 7. **Timing mismatch** between layers (above).
 
-## Screenshots wanted
+## By eye (your screenshots, 2026-11-26, snapshot `145719Z`)
+
+1. **Overview, region:** a tangle of near-black lines over the whole
+   region; the 48 detoured routes, drawn whole, *are* the picture. Start
+   dots (small, mostly black with a white ring) vanish among them. The
+   list on the left answers "which" well; the map doesn't answer
+   "where".
+2. **Overview, Center City:** readable here: dashed paths and dots stand
+   out, the fade shows (pale pink/blue). But every detoured route is a
+   double line (two directions offset), crossing others; three dot
+   styles (solid, hollow = upcoming, grey = ended) mean three things;
+   the legend lists "Back on route here", which the overview never
+   draws.
+3. **Route 19 focused:** route solid, paths dashed, clear. But the
+   start dot (black, white ring) and the rejoin dot (black, dark ring)
+   look the same at this size; NB/SB twin detours sit on top of each
+   other; the fade on a black double line barely shows.
+4. **Route 124 focused:** the camera fits the *whole route* (King of
+   Prussia to Center City), so its two detours are specks at either
+   end; selecting a card highlights it but the map doesn't go there.
+5. **Phone overview:** the same tangle in a small map; the legend
+   covers about a fifth of it.
+6. **Phone, route 31 focused:** the detours are a few pixels in the
+   middle; the legend covers the route's west end.
+
+## Design directions (proposals; decisions are yours)
+
+Each answers one or more problems above. **Recommended** marked.
+
+A. **Overview: detours, not routes** (problems 1, 2, by-eye 1, 2, 5).
+   - A1 **(recommended)** Routes recede (detoured routes thin and grey,
+     like the network); each detour in effect is drawn in **one accent
+     color** (a color no SEPTA route uses): its path, the fade, its
+     start marker. Route identity comes from a label on the marker
+     and from the list.
+   - A2 Keep route colors; only the detour's stretch and path in
+     color, the rest of each detoured route grey.
+   - A3 Keep today's look; only thin the lines and enlarge the dots.
+B. **Zoomed out: markers, not lines** (by-eye 1, 5).
+   - B1 **(recommended)** Below ~zoom 13 the map shows one marker per
+     detour (a pin with the route number); lines appear from zoom 13.
+     Answers "where" *and* "which" on the map itself.
+   - B2 Lines at every zoom (today), markers just bigger.
+C. **Focusing frames the detours** (by-eye 4, 6).
+   - C1 **(recommended)** Focusing a route fits its detours in effect
+     (paths, stretches, dots), not the whole route; selecting a card
+     zooms to that detour. "Whole route" stays one tap away.
+   - C2 Keep fitting the whole route; selecting a card zooms in.
+D. **One line per route, not two** (by-eye 2, 3).
+   - D1 **(recommended)** No direction offset on the overview (one
+     centreline per route). Focused: both directions drawn, but a
+     selected detour's direction emphasized and the other dimmed.
+   - D2 Keep the offsets everywhere (today).
+E. **Time, as a rider means it** (problem 3, 7, by-eye 2).
+   - E1 **(recommended)** The map shows only detours in effect now
+     (upcoming and ended stay in the panel), all layers timed by the
+     page's clock; then parse daily hours ("7am - 4pm Mon thru Fri")
+     so "in effect" means *running now*, and cards say the hours.
+   - E2 Map timing only (no hours parsing yet).
+F. **Cards for riders** (problem 5, by-eye 3): the detour as steps
+   ("Left on Rhawn St, Right on Verree Rd, ..."), hours, "Back on route
+   at ...", the raw message collapsed; start and rejoin as distinct
+   markers (e.g. lettered **A** / **B**, matching the card). Later:
+   closed stops and where to wait (tier A step 4).
+G. **Legend** (by-eye 2, 5, 6): only rows for what's drawn; on phones a
+   small "Key" button that opens it.
+
+## Screenshots wanted (done)
 
 Desktop, a normal window:
 1. The overview at the default view.
