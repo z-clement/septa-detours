@@ -434,13 +434,15 @@ Web (plain JS):
    - Step 2 (done): the pure logic: `detourTiming` (`detours.js`),
      `timingCounts`, `detouredNow`, `groupByMode`, `searchRoutes`
      (`routes.js`), `modeLabel` (`format.js`). 60 JS tests.
-   - Step 3 (next): the sidebar DOM (`sidebar.js`, HTML, CSS). **Confirm
-     first** (proposals, not yet discussed): (a) layout: a fixed left
-     panel ~320 px, map fills the rest, the status line moves to the top
-     of the panel; (b) mode chips toggle modes and combine with search;
-     a chip with no matching routes is greyed, not hidden; (c) state
-     stays in `main.js` until `state.js` (W4); `now` refreshes every
-     minute and re-renders "Detoured now"; (d) clicking a row does
+   - Step 3 (next): the sidebar DOM (`sidebar.js`, HTML, CSS). Decided
+     2026-11-25: (a) layout: a fixed left panel ~320 px, map fills the
+     rest, the status line moves to the top of the panel (rejected: a
+     panel floating over the map); (b) mode chips toggle modes (all on
+     by default) and combine with search (a route must pass both); a
+     chip with no matching routes is greyed, not hidden; chips filter
+     the sidebar only, not the map (for now); (c) state stays in
+     `main.js` until `state.js` (W4); `now` refreshes every minute and
+     re-renders the sidebar; (d) rows are `<button>`s but clicking does
      nothing yet (focus is W4).
 10. **W4** Focus: detail fetch + cache, map focus, panel with detour
     cards, URL hash, Back/Escape.

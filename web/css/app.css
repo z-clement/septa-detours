@@ -1,17 +1,33 @@
 /* Styles for the detours map page (web/index.html). */
 
 /* MapLibre needs its container to have a real height; a div with no
-   height renders as a 0px-tall (invisible) map. Making html/body full
-   height and positioning the map absolutely fills the window. */
+   height renders as a 0px-tall (invisible) map. html/body fill the
+   window, and body is a flex row: the sidebar a fixed width, the map
+   the rest. Flex items stretch to the row's height by default, which
+   gives the map its height. */
 html,
 body {
   height: 100%;
   margin: 0;
 }
 
+body {
+  display: flex;
+}
+
+/* The route sidebar: fixed width, scrolls on its own (not the page). */
+#sidebar {
+  flex: none; /* don't grow or shrink: always 320px */
+  width: 320px;
+  overflow-y: auto;
+  border-right: 1px solid #ccc;
+  background: #fff;
+  color: #222;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
 #map {
-  position: absolute;
-  inset: 0; /* top/right/bottom/left all 0 */
+  flex: 1; /* everything the sidebar doesn't use */
 }
 
 /* Error banner over the map. `:empty` hides it until showError()
@@ -33,18 +49,13 @@ body {
   display: none;
 }
 
-/* Status line (what's drawn), bottom-left so it stays clear of the
-   zoom buttons and popups. Hidden while empty, like #error. */
+/* Status line (what's drawn), at the top of the sidebar. Hidden while
+   empty, like #error. */
 #status {
-  position: absolute;
-  bottom: 28px; /* above the basemap attribution */
-  left: 12px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #222;
-  font: 13px/1.4 system-ui, sans-serif;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  color: #555;
+  font-size: 13px;
 }
 #status:empty {
   display: none;

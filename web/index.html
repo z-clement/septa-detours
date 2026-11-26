@@ -19,9 +19,11 @@
     <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
+    <aside id="sidebar">
+      <div id="status" role="status"></div>
+    </aside>
     <div id="map"></div>
     <div id="error" role="alert"></div>
-    <div id="status" role="status"></div>
 
     <!-- type="module": strict mode, own scope (no accidental globals), and
          deferred until the HTML is parsed, so #map exists when it runs.
