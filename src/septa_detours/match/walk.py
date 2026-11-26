@@ -11,6 +11,7 @@ carry their ``length_m``.
 """
 
 import math
+from collections.abc import Iterable
 
 import networkx as nx
 import polars as pl
@@ -47,6 +48,40 @@ def street_graph(ways: pl.DataFrame, selected: pl.DataFrame) -> nx.Graph:
         ):
             graph.add_edge(a, b, length_m=_metres_between(a_point, b_point))
     return graph
+
+
+def walk_street(
+    graph: nx.Graph, sources: Iterable[int], targets: Iterable[int]
+) -> tuple[int, ...] | None:
+    """The shortest walk along ``graph`` from any source to the nearest target.
+
+    ``sources`` is where the bus is (the nodes of the crossing it turned
+    onto this street at); ``targets`` is where it may turn off (the nodes
+    of every crossing with the next street). The nearest target by
+    ``length_m`` is the turn: "Left on Washington, Right on Broad" means
+    the first Broad.
+
+    Args:
+        graph: One street, from ``street_graph``.
+        sources: Node IDs; those not on the street are ignored.
+        targets: Node IDs; those not on the street are ignored.
+
+    Returns:
+        The walk's node IDs, source first, target last. One node when a
+        source is itself a target (the next turn is at the same corner).
+        ``None`` when no source is on the street, no target can be reached
+        from one, or two targets are exactly as near (never guessed).
+    """
+    starts = {node for node in sources if node in graph}
+    if not starts:
+        return None
+    lengths, paths = nx.multi_source_dijkstra(graph, starts, weight="length_m")
+    reached = sorted((lengths[node], node) for node in set(targets) if node in lengths)
+    if not reached:
+        return None
+    if len(reached) > 1 and reached[0][0] == reached[1][0]:
+        return None
+    return tuple(paths[reached[0][1]])
 
 
 def _metres_between(p: list[float], q: list[float]) -> float:

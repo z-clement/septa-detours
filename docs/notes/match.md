@@ -271,3 +271,19 @@ The mutation runner is now a scratch script taking a mutations file
   distance, not from the two segments at the node: `South Penn Square`
   leaves 15th St almost straight south for ~45 m before curving east.
   Read 30-200 m out, all 185 checkable turns agree with the message.
+
+## Walking a street (tier C step 2, 2026-11-26)
+
+- networkx added (your choice over ~25 hand-written lines).
+- `walk.street_graph(ways, selected)`: one street's ways as an
+  undirected `nx.Graph` (no one-way tags in the cache; the message picks
+  the streets). Nodes = OSM node IDs with `lon`/`lat`; edges = a way's
+  consecutive nodes, `length_m` (equirectangular, mean latitude: a
+  0.1-degree diagonal test pins both). `_metres_between` duplicates
+  `crossings._metres_between`: a candidate for `geo.py`.
+- `walk.walk_street(graph, sources, targets)`: `multi_source_dijkstra`
+  by `length_m` from the sources on the street to the nearest target;
+  a source that is a target -> one-node walk; `None` when nothing is on
+  the street or reachable, or two targets tie exactly (a binary-exact
+  test: lon -75.5 / -75.0 / -74.5). Weight by metres, not hops, is
+  pinned (a 1-edge far target vs a 2-edge near one).

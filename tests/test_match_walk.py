@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 
 from septa_detours.geo import EARTH_RADIUS_M
-from septa_detours.match.walk import street_graph
+from septa_detours.match.walk import street_graph, walk_street
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
 LON, LAT = -75.1716, 39.9385
@@ -137,3 +137,87 @@ def test_diagonal_length_uses_the_mean_latitude() -> None:
     assert edges(street_graph(ways, selected(1))) == {
         (10, 11): pytest.approx(expected, rel=1e-9)
     }
+
+
+# walk_street: the street is ways 1 + 2 (10-11-12-13, east along LAT).
+STREET = street_graph(WAYS, selected(1, 2))
+
+
+@pytest.mark.parametrize(
+    ("sources", "targets", "expected"),
+    [
+        # Along the street to the target, through the nodes between.
+        ({10}, {12}, (10, 11, 12)),
+        # Either way along it (undirected).
+        ({13}, {10}, (13, 12, 11, 10)),
+        # The nearest target: the first crossing, not a later one.
+        ({10}, {13, 12}, (10, 11, 12)),
+        # The nearest source: a wide crossing's other nodes are further.
+        ({13, 10}, {11}, (10, 11)),
+        # A source that's a target: the next turn is at the same corner.
+        ({11}, {11, 13}, (11,)),
+        # Nodes off the street are ignored, on either side.
+        ({10, 30}, {31, 12}, (10, 11, 12)),
+    ],
+)
+def test_walk_street(sources: set[int], targets: set[int], expected: tuple) -> None:
+    assert walk_street(STREET, sources, targets) == expected
+
+
+@pytest.mark.parametrize(
+    ("sources", "targets"),
+    [
+        ({30, 31}, {12}),  # no source on the street
+        ({10}, {30, 40}),  # no target on it
+        ({10}, set()),
+        (set(), {12}),
+    ],
+)
+def test_walk_street_off_the_street(sources: set[int], targets: set[int]) -> None:
+    assert walk_street(STREET, sources, targets) is None
+
+
+def test_walk_street_unreachable_target() -> None:
+    # Way 4 is in the graph but not connected to ways 1-2.
+    graph = street_graph(WAYS, selected(1, 2, 4))
+    assert walk_street(graph, {10}, {40}) is None
+    assert walk_street(graph, {10}, {40, 13}) == (10, 11, 12, 13)
+
+
+def test_walk_street_empty_graph() -> None:
+    assert walk_street(street_graph(WAYS, selected()), {10}, {12}) is None
+
+
+def test_walk_street_nearest_by_metres_not_by_nodes() -> None:
+    # From 10: target 9 is one edge west but 5 steps away; target 12 is two
+    # edges east but 2 steps away.
+    ways = make_ways(
+        [
+            (1, [(9, LON - 5 * STEP, LAT), (10, LON, LAT)]),
+            (2, [(10, LON, LAT), (11, LON + STEP, LAT), (12, LON + 2 * STEP, LAT)]),
+        ]
+    )
+    assert walk_street(street_graph(ways, selected(1, 2)), {10}, {9, 12}) == (
+        10,
+        11,
+        12,
+    )
+
+
+# Binary-exact halves: both edges from the middle node are exactly as long.
+TIE_WAYS = make_ways([(1, [(1, -75.5, 40.0), (2, -75.0, 40.0), (3, -74.5, 40.0)])])
+
+
+def test_walk_street_tie_is_not_guessed() -> None:
+    graph = street_graph(TIE_WAYS, selected(1))
+    assert walk_street(graph, {2}, {1, 3}) is None
+    # Not a tie: one target only, or one nearer.
+    assert walk_street(graph, {2}, {3}) == (2, 3)
+    nearer = make_ways([(1, [(1, -75.5, 40.0), (2, -75.0, 40.0), (3, -74.25, 40.0)])])
+    assert walk_street(street_graph(nearer, selected(1)), {2}, {1, 3}) == (2, 1)
+
+
+def test_walk_street_takes_any_iterables() -> None:
+    sources = (node for node in [10])
+    targets = (node for node in [12, 12])
+    assert walk_street(STREET, sources, targets) == (10, 11, 12)
