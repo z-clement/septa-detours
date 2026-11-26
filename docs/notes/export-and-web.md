@@ -677,3 +677,12 @@ Tests: 125 JS.
   keys on every clock tick (1 min). Real `145719Z` at 15:45 UTC: all 80
   placed detours are active (the snapshot lists current alerts only), so
   nothing changes yet; route 124's detours end at 4 pm and 7 pm.
+- U2, accent overview (2026-11-26): `DETOUR_COLOR` `#D500F9` (magenta:
+  no SEPTA route color near it; one constant to change) for paths,
+  start dots (solid) and rejoin dots (hollow ring, so start and end read
+  apart); overview detoured routes `#7d838a`, 1-3 px (grey like the
+  network, a bit darker); the skipped stretch is a 35% accent band on
+  the overview and the white fade over the route color when focused
+  (`showFocus` switches it and the detoured layer's color). Legend in
+  the same look (`--detour-color`; harness screenshot checked). Map side
+  not checked by eye.

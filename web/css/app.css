@@ -358,33 +358,42 @@ body {
   flex: none;
   width: 24px;
 }
-/* A solid route line; a route line with its middle faded (mapview.js's
-   white wash at SKIPPED_FADE_OPACITY: 35% of the color shows); a start dot
-   (white ring, as drawn). */
+/* The legend draws the overview's look (mapview.js, UI plan A1): grey
+   detoured routes, everything detour in the accent. */
+.legend {
+  --detour-color: #d500f9; /* mapview.js's DETOUR_COLOR */
+  --route-grey: #7d838a; /* mapview.js's DETOURED_ROUTE_COLOR */
+}
+/* A detoured route: a thin grey line. */
 .legend-route {
-  border-top: 4px solid #333;
+  border-top: 3px solid var(--route-grey);
 }
+/* Skipped: the grey route with a light accent band (35%) in its middle. */
 .legend-skipped {
-  height: 4px;
-  background: linear-gradient(
-    to right,
-    #333 0 6px,
-    rgb(51 51 51 / 35%) 6px 18px,
-    #333 18px
-  );
+  height: 6px;
+  background:
+    linear-gradient(to bottom, transparent 1.5px, var(--route-grey) 1.5px 4.5px, transparent 4.5px)
+      0 0 / 100% 100% no-repeat,
+    linear-gradient(
+      to right,
+      transparent 0 6px,
+      color-mix(in srgb, var(--detour-color) 35%, transparent) 6px 18px,
+      transparent 18px
+    );
 }
-/* The detour path: route-color dashes (#333 here) over white, outlined so
-   the white gaps show on the legend's white too. */
+/* The detour path: accent dashes over white, outlined so the white gaps
+   show on the legend's white too. */
 .legend-path {
   box-sizing: border-box;
   height: 6px;
   border: 1px solid #ccc;
   background: repeating-linear-gradient(
     to right,
-    #333 0 6px,
+    var(--detour-color) 0 6px,
     #fff 6px 10px
   );
 }
+/* A start: a solid accent dot, white ring (as drawn). */
 .legend-start {
   box-sizing: border-box; /* 14 px with its border; + margins = 24 px */
   width: 14px;
@@ -392,17 +401,18 @@ body {
   margin: 0 5px;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: #333;
+  background: var(--detour-color);
   box-shadow: 0 0 0 1px #999;
 }
+/* Back on route: a hollow accent ring (as drawn). */
 .legend-rejoin {
   box-sizing: border-box; /* 10 px with its border; + margins = 24 px */
   width: 10px;
   height: 10px;
   margin: 0 7px;
-  border: 2px solid #333; /* mapview.js's REJOIN_RING_COLOR */
+  border: 2.5px solid var(--detour-color);
   border-radius: 50%;
-  background: #888; /* stands for the route color; lighter, so the ring shows */
+  background: #fff;
 }
 
 /* --- The route panel ---------------------------------------------------- */

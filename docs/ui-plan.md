@@ -161,7 +161,8 @@ checked by eye with your screenshots. Rough sizes in brackets.
   page's clock (`detourTiming` per `source_key`, applied as a filter);
   the map shows only detours in effect; upcoming and ended stay in the
   panel.
-- **U2. Accent overview (A1)** [medium, JS + CSS]: detoured routes thin
+- **U2. Accent overview (A1)** (done 2026-11-26: magenta `#D500F9`; not
+  yet checked by eye) [medium, JS + CSS]: detoured routes thin
   grey like the network; paths, fades and start markers in one accent
   color (checked against every SEPTA route color); legend updated.
 - **U3. Route-number markers (B1)** [medium, JS]: below ~zoom 13 one

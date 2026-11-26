@@ -14,9 +14,18 @@ const FALLBACK_COLOR = "#555555";
 /** The faint whole-network lines (decided: one neutral grey, not route colors). */
 const NETWORK_COLOR = "#9aa0a6";
 
-/** The ring around a rejoin dot: dark, so it reads as an end, unlike the
- * start dots' white ring. app.css's legend repeats it. */
-const REJOIN_RING_COLOR = "#333333";
+/** Every detour mark (path, skipped stretch on the overview, start and
+ * rejoin dots) in one accent color no SEPTA route uses (UI plan A1), so
+ * detours stand out from routes. app.css repeats it (`--detour-color`). */
+const DETOUR_COLOR = "#D500F9";
+
+/** Detoured routes on the overview: grey like the network (A1), a little
+ * darker and wider, so the affected routes still show. */
+const DETOURED_ROUTE_COLOR = "#7d838a";
+
+/** The skipped stretch on the overview, where routes are grey: a light
+ * band of the accent. (Focused, it's a white fade over the route color.) */
+const SKIPPED_OVERVIEW_OPACITY = 0.35;
 
 /** The ring around the selected detour's dot. */
 const SELECTED_RING_COLOR = "#111111";
@@ -151,7 +160,9 @@ export function addOverviewLayers(map, site) {
     },
   });
 
-  // The same lines again, only for detoured routes, in their own color.
+  // The same lines again, only for detoured routes: grey and a little
+  // darker on the overview (A1); in the route's own color while a focused
+  // route's detail loads (`showFocus`).
   // `["literal", [...]]` marks the array as data, not an expression.
   const detouredFilter = ["in", ["get", "key"], ["literal", detouredKeys(site.routes)]];
   map.addLayer({
@@ -161,8 +172,8 @@ export function addOverviewLayers(map, site) {
     filter: detouredFilter,
     layout: lineLayout,
     paint: {
-      "line-color": routeColor,
-      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 5],
+      "line-color": DETOURED_ROUTE_COLOR,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 16, 3],
       "line-offset": offset,
     },
   });
@@ -197,10 +208,12 @@ export function addOverviewLayers(map, site) {
   const selected = ["boolean", ["feature-state", "selected"], false];
   const emphasized = ["any", hovered, selected];
 
-  // The stretch of regular route each detour skips (tier B), faded out:
-  // a semi-transparent white line over the route (still drawn whole
-  // underneath), a little wider than it so its edges fade too. Butt caps,
-  // so the fade ends exactly at the start and rejoin points. Same offset
+  // The stretch of regular route each detour skips (tier B). On the
+  // overview (routes grey): a light band of the accent. Focused (route in
+  // its color): faded out, a semi-transparent white line over the route
+  // (still drawn whole underneath). Either is a little wider than the
+  // route so its edges show too (`showFocus` switches them). Butt caps,
+  // so it ends exactly at the start and rejoin points. Same offset
   // as the route lines: a stretch is cut from its direction's shape, in
   // travel order, so it lands on that side.
   //
@@ -214,16 +227,15 @@ export function addOverviewLayers(map, site) {
     filter: inEffect,
     layout: { "line-cap": "butt", "line-join": "round" },
     paint: {
-      "line-color": "#ffffff",
-      "line-opacity": SKIPPED_FADE_OPACITY,
+      "line-color": DETOUR_COLOR,
+      "line-opacity": SKIPPED_OVERVIEW_OPACITY,
       "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 16, 8],
       "line-offset": offset,
     },
   });
 
-  // Where each detour in effect goes instead (tier C): dashes in the
-  // route's color over a white casing, so the gaps show white: "this
-  // route, for now", unlike its solid regular line. Wider when hovered or
+  // Where each detour in effect goes instead (tier C): accent dashes over
+  // a white casing, so the gaps show white, unlike any solid route line. Wider when hovered or
   // selected. Same offset: a path's points run in travel order.
   const pathWidth = (narrow, wide) => [
     "interpolate",
@@ -254,7 +266,7 @@ export function addOverviewLayers(map, site) {
     // Dashes need butt caps: round caps would fill the gaps in.
     layout: { "line-cap": "butt", "line-join": "round" },
     paint: {
-      "line-color": routeColor,
+      "line-color": DETOUR_COLOR,
       "line-width": pathWidth(2, 5),
       // In line widths: dash 2, gap 1.5.
       "line-dasharray": [2, 1.5],
@@ -263,15 +275,15 @@ export function addOverviewLayers(map, site) {
   });
 
   // Where each of the focused route's detours in effect is back on route
-  // (`rejoinCollection`; empty on the overview): smaller than a start dot,
-  // route color with a dark ring, so start and end read apart. Bigger
-  // when hovered or selected, like its start dot.
+  // (`rejoinCollection`; empty on the overview): a hollow accent ring,
+  // smaller than a start dot (a solid accent dot), so start and end read
+  // apart. Bigger when hovered or selected, like its start dot.
   map.addLayer({
     id: REJOIN_LAYER,
     type: "circle",
     source: REJOINS_SOURCE,
     paint: {
-      "circle-color": routeColor,
+      "circle-color": "#ffffff",
       "circle-radius": [
         "interpolate",
         ["linear"],
@@ -281,20 +293,20 @@ export function addOverviewLayers(map, site) {
         16,
         ["case", emphasized, 9, 6],
       ],
-      "circle-stroke-color": REJOIN_RING_COLOR,
-      "circle-stroke-width": 2,
+      "circle-stroke-color": DETOUR_COLOR,
+      "circle-stroke-width": 2.5,
     },
   });
 
-  // Start dots of detours in effect: the route's color, a white ring
-  // (dark when selected).
+  // Start dots of detours in effect: solid accent, a white ring (dark
+  // when selected).
   map.addLayer({
     id: STARTS_LAYER,
     type: "circle",
     source: STARTS_SOURCE,
     filter: inEffect,
     paint: {
-      "circle-color": routeColor,
+      "circle-color": DETOUR_COLOR,
       // `zoom` must be interpolate's input, so the state goes in each stop.
       "circle-radius": [
         "interpolate",
@@ -341,6 +353,17 @@ export function addOverviewLayers(map, site) {
       focus === null ? NETWORK_OPACITY : NETWORK_OPACITY_FOCUSED,
     );
     map.setFilter(DETOURED_LAYER, only ?? detouredFilter);
+    map.setPaintProperty(
+      DETOURED_LAYER,
+      "line-color",
+      focus === null ? DETOURED_ROUTE_COLOR : routeColor,
+    );
+    map.setPaintProperty(SKIPPED_LAYER, "line-color", focus === null ? DETOUR_COLOR : "#ffffff");
+    map.setPaintProperty(
+      SKIPPED_LAYER,
+      "line-opacity",
+      focus === null ? SKIPPED_OVERVIEW_OPACITY : SKIPPED_FADE_OPACITY,
+    );
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
     applyDetourFilters();
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
