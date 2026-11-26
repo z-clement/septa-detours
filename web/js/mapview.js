@@ -3,7 +3,7 @@
 // in index.html).
 
 import { element, routeBadge } from "./dom.js";
-import { choiceText } from "./format.js";
+import { choiceText, legendRows } from "./format.js";
 import { clickChoices, detouredKeys, withRouteLabels } from "./routes.js";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
@@ -582,29 +582,49 @@ export function fitDetours(map, bounds, coverBottom = 0) {
 }
 
 /**
- * A small key to the map's line styles, top left (a MapLibre control, so
- * the map places it on every screen size).
+ * The map key, top left (a MapLibre control, so the map places it on
+ * every screen size): only rows for what the current view draws
+ * (`legendRows`), redrawn as the map zooms and when a route is focused.
+ * A `<details>`: its "Map key" summary opens and closes it; `open` says
+ * how it starts (open on wide screens, closed on phones, where it would
+ * cover much of the map).
  *
  * @param {maplibregl.Map} map
+ * @param {{open: boolean}} options
+ * @returns {{showLegendFor: (route: object | null) => void}}
+ *   `showLegendFor`: the focused route's routes.json entry, or null
  */
-export function addLegend(map) {
-  const legend = element("div", "maplibregl-ctrl legend");
-  legend.setAttribute("aria-label", "Map key");
-  const row = (swatchClass, text) => {
-    const item = element("div", "legend-row");
-    const swatch = element("span", `legend-swatch ${swatchClass}`);
-    swatch.setAttribute("aria-hidden", "true");
-    item.append(swatch, element("span", undefined, text));
-    return item;
+export function addLegend(map, { open }) {
+  const legend = element("details", "maplibregl-ctrl legend");
+  legend.open = open;
+  legend.append(element("summary", undefined, "Map key"));
+  const rows = element("div", "legend-rows");
+  legend.append(rows);
+  let focused = null;
+  const render = () => {
+    const view = { focused: focused !== null, zoom: map.getZoom(), detailZoom: MARKER_ZOOM };
+    rows.replaceChildren(
+      ...legendRows(view).map(({ kind, text }) => {
+        const item = element("div", "legend-row");
+        const swatch = element("span", `legend-swatch legend-${kind}`);
+        swatch.setAttribute("aria-hidden", "true");
+        item.append(swatch, element("span", undefined, text));
+        return item;
+      }),
+    );
+    // The focused route's swatches take its color (app.css).
+    legend.style.setProperty("--route-color", focused?.color ?? FALLBACK_COLOR);
   };
-  legend.append(
-    row("legend-route", "Detoured route"),
-    row("legend-skipped", "Skipped by a detour"),
-    row("legend-path", "Detour path"),
-    row("legend-marker", "Detour, zoomed out (route no.)"),
-    row("legend-start", "Detour starts here"),
-    row("legend-rejoin", "Back on route here"),
-  );
+  // Only when the rows can change: crossing the zoom threshold.
+  let detailed = null;
+  map.on("zoom", () => {
+    const now = map.getZoom() >= MARKER_ZOOM;
+    if (now !== detailed) {
+      detailed = now;
+      render();
+    }
+  });
+  render();
   map.addControl(
     {
       onAdd: () => legend,
@@ -612,6 +632,12 @@ export function addLegend(map) {
     },
     "top-left",
   );
+  return {
+    showLegendFor(route) {
+      focused = route;
+      render();
+    },
+  };
 }
 
 /**

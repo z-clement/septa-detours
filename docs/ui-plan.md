@@ -181,8 +181,8 @@ checked by eye with your screenshots. Rough sizes in brackets.
   to tell apart (route 47 NB vs SB): show direction (arrows along the
   line?) and/or fade the direction that isn't the focused detour's.
   Confirm the exact form when we get here.
-- **U6. Legend (G)** (confirmed 2026-11-26: rows for what's drawn, a
-  'Key' button on phones) [small, JS + CSS].
+- **U6. Legend (G)** (done 2026-11-26: rows for what's drawn, a 'Map
+  key' button closed on phones) [small, JS + CSS].
 - **U7. Rider cards (F)** (confirmed 2026-11-26: turn-by-turn steps and
   the raw message collapsed; no A/B markers) [medium: contract gains the
   steps, schema bump].

@@ -364,6 +364,14 @@ body {
   --detour-color: #d500f9; /* mapview.js's DETOUR_COLOR */
   --route-grey: #7d838a; /* mapview.js's DETOURED_ROUTE_COLOR */
 }
+/* "Map key": opens and closes the rows (closed by default on phones). */
+.legend summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.legend[open] summary {
+  margin-bottom: 2px;
+}
 /* A detoured route: a thin grey line. */
 .legend-route {
   border-top: 3px solid var(--route-grey);
@@ -380,6 +388,35 @@ body {
       color-mix(in srgb, var(--detour-color) 35%, transparent) 6px 18px,
       transparent 18px
     );
+}
+/* Focused: the route in its own color (--route-color, set by mapview.js),
+   its skipped part faded white (SKIPPED_FADE_OPACITY 0.65: 35% of the
+   color shows), and the direction arrows on it. */
+.legend-route-focused {
+  border-top: 4px solid var(--route-color);
+}
+.legend-skipped-focused {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--route-color) 0 6px,
+    color-mix(in srgb, var(--route-color) 35%, #fff) 6px 18px,
+    var(--route-color) 18px
+  );
+}
+.legend-arrows {
+  position: relative;
+  height: 6px;
+  background: var(--route-color);
+}
+.legend-arrows::after {
+  content: "\203A  \203A"; /* two chevrons (›), white like the map's */
+  position: absolute;
+  inset: -6px 0 0;
+  color: #fff;
+  font: bold 12px/1 system-ui, sans-serif;
+  text-align: center;
+  white-space: pre;
 }
 /* The detour path: accent dashes over white, outlined so the white gaps
    show on the legend's white too. */

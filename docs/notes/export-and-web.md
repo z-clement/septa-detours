@@ -711,3 +711,13 @@ Tests: 125 JS.
   `icon-offset` 2.5-4 px to the right of travel, so each arrow sits on
   its own direction's line. Not on detour paths (yet). Map-only: no pure
   logic to test; check by eye.
+- U6, legend (2026-11-26; confirmed: rows for what's drawn, a Key
+  button on phones): `format.legendRows({focused, zoom, detailZoom})`
+  (pure, tested; the threshold is a parameter, a test pins it); the
+  legend is a `<details>` ("Map key" summary), open on wide screens,
+  closed on phones (`addLegend(map, {open})`), redrawn when the zoom
+  crosses `MARKER_ZOOM` and on focus (`showLegendFor(route)`: the
+  route's color in `--route-color` for the focused swatches). New
+  swatches: route-focused, skipped-focused, arrows. All five states
+  screenshot-checked (a static page built in Node from `legendRows`: a
+  module-script harness page screenshotted blank this time).

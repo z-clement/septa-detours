@@ -70,7 +70,8 @@ async function main() {
     map,
     site,
   );
-  addLegend(map);
+  // Open on wide screens; a closed "Map key" button on phones (U6).
+  const { showLegendFor } = addLegend(map, { open: !NARROW.matches });
   showStatus(statusLine(site.status));
 
   // The catalog's mode order (D8, as Python wrote it), for the chips and
@@ -311,6 +312,7 @@ async function main() {
       panelElement.hidden = state.focus === null;
       // The hovered card is gone (removed cards fire no mouseleave).
       setHoveredDot(null);
+      showLegendFor(state.focus === null ? null : routesByKey.get(state.focus));
       if (state.focus !== null) {
         // The camera moves when the detail arrives (frameFocus).
         startLoading(state.focus);
