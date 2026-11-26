@@ -34,16 +34,19 @@ const NETWORK_OPACITY_FOCUSED = 0.3;
 const NETWORK_SOURCE = "network";
 const STARTS_SOURCE = "starts";
 const SKIPPED_SOURCE = "skipped";
+const PATHS_SOURCE = "paths";
 const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
 const FOCUS_LAYER = "focus-lines";
 const SKIPPED_LAYER = "skipped-fade";
+const PATH_CASING_LAYER = "path-casing";
+const PATH_LAYER = "path-dashes";
 const STARTS_LAYER = "start-dots";
 
 /** Sources whose features are detours (`key` + `source_key`): their
  * hover/selected feature-state goes on both. */
-const DETOUR_SOURCES = [STARTS_SOURCE, SKIPPED_SOURCE];
+const DETOUR_SOURCES = [STARTS_SOURCE, SKIPPED_SOURCE, PATHS_SOURCE];
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
@@ -66,15 +69,16 @@ export function createMap(container) {
 
 /**
  * Draw the overview: the whole network faintly, detoured routes in color,
- * the stretch each detour in effect skips faded out, and every placed
- * detour's start point on top. Returns the functions
+ * the stretch each detour in effect skips faded out, the streets it takes
+ * instead dashed, and every placed detour's start point on top. Returns
+ * the functions
  * that change it afterwards: `showFocus` (the overview or one focused
  * route) and the dot highlights `setHoveredDot` / `setSelectedDot`.
  *
  * Must run after the style has loaded (adding a source before then throws).
  * Layers draw in the order they're added: network, detoured, the focused
  * route (empty until one is focused), the fade over skipped stretches,
- * dots.
+ * detour paths, dots.
  *
  * Expressions: MapLibre styles are small programs written as JSON arrays,
  * evaluated per feature. `["get", "color"]` reads a property; `coalesce`
@@ -90,7 +94,7 @@ export function createMap(container) {
  * the offset can't separate its two lines.
  *
  * @param {maplibregl.Map} map
- * @param {{routes: object[], network: object, starts: object, skipped: object}} site
+ * @param {{routes: object[], network: object, starts: object, skipped: object, paths: object}} site
  * @returns {{
  *   showFocus: (focus: {key: string, detail: object | null} | null) => void,
  *   setHoveredDot: (sourceKey: string | null) => void,
@@ -110,6 +114,11 @@ export function addOverviewLayers(map, site) {
   map.addSource(SKIPPED_SOURCE, {
     type: "geojson",
     data: site.skipped,
+    promoteId: "source_key",
+  });
+  map.addSource(PATHS_SOURCE, {
+    type: "geojson",
+    data: site.paths,
     promoteId: "source_key",
   });
   map.addSource(FOCUS_SOURCE, { type: "geojson", data: EMPTY_COLLECTION });
@@ -174,7 +183,7 @@ export function addOverviewLayers(map, site) {
 
   // Hovered (a card under the pointer) or selected: bigger, and selected
   // gets a dark ring. `feature-state` is set per detour by the setters
-  // below, on its dot and its stretch alike (the fade doesn't use it).
+  // below, on its dot, stretch and path alike (the fade doesn't use it).
   const hovered = ["boolean", ["feature-state", "hover"], false];
   const selected = ["boolean", ["feature-state", "selected"], false];
   const emphasized = ["any", hovered, selected];
@@ -188,17 +197,58 @@ export function addOverviewLayers(map, site) {
   //
   // Only detours in effect (active, or unknown like the dots): an upcoming
   // or ended detour's stretch is served right now.
-  const skippedFilter = ["match", ["get", "timing"], ["upcoming", "ended"], false, true];
+  const inEffect = ["match", ["get", "timing"], ["upcoming", "ended"], false, true];
   map.addLayer({
     id: SKIPPED_LAYER,
     type: "line",
     source: SKIPPED_SOURCE,
-    filter: skippedFilter,
+    filter: inEffect,
     layout: { "line-cap": "butt", "line-join": "round" },
     paint: {
       "line-color": "#ffffff",
       "line-opacity": SKIPPED_FADE_OPACITY,
       "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 16, 8],
+      "line-offset": offset,
+    },
+  });
+
+  // Where each detour in effect goes instead (tier C): dashes in the
+  // route's color over a white casing, so the gaps show white: "this
+  // route, for now", unlike its solid regular line. Wider when hovered or
+  // selected. Same offset: a path's points run in travel order.
+  const pathWidth = (narrow, wide) => [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    10,
+    ["case", emphasized, narrow * 1.5, narrow],
+    16,
+    ["case", emphasized, wide * 1.5, wide],
+  ];
+  map.addLayer({
+    id: PATH_CASING_LAYER,
+    type: "line",
+    source: PATHS_SOURCE,
+    filter: inEffect,
+    layout: lineLayout,
+    paint: {
+      "line-color": "#ffffff",
+      "line-width": pathWidth(3, 8),
+      "line-offset": offset,
+    },
+  });
+  map.addLayer({
+    id: PATH_LAYER,
+    type: "line",
+    source: PATHS_SOURCE,
+    filter: inEffect,
+    // Dashes need butt caps: round caps would fill the gaps in.
+    layout: { "line-cap": "butt", "line-join": "round" },
+    paint: {
+      "line-color": routeColor,
+      "line-width": pathWidth(2, 5),
+      // In line widths: dash 2, gap 1.5.
+      "line-dasharray": [2, 1.5],
       "line-offset": offset,
     },
   });
@@ -261,7 +311,10 @@ export function addOverviewLayers(map, site) {
     map.setFilter(DETOURED_LAYER, only ?? detouredFilter);
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
     map.setFilter(STARTS_LAYER, only);
-    map.setFilter(SKIPPED_LAYER, only === null ? skippedFilter : ["all", only, skippedFilter]);
+    const detourFilter = only === null ? inEffect : ["all", only, inEffect];
+    for (const layer of [SKIPPED_LAYER, PATH_CASING_LAYER, PATH_LAYER]) {
+      map.setFilter(layer, detourFilter);
+    }
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
   }
 
@@ -274,7 +327,7 @@ export function addOverviewLayers(map, site) {
 
 /**
  * A setter that puts feature-state `name` on one detour at a time: its
- * start dot and its skipped stretch (`DETOUR_SOURCES`).
+ * start dot, skipped stretch and path (`DETOUR_SOURCES`).
  *
  * Each call clears it from the previous detour. A key with no dot or no
  * stretch just clears: feature-state on a missing id is ignored.
@@ -351,6 +404,7 @@ export function addLegend(map) {
   legend.append(
     row("legend-route", "Detoured route"),
     row("legend-skipped", "Skipped by a detour"),
+    row("legend-path", "Detour path"),
     row("legend-start", "Detour starts here"),
   );
   map.addControl(
@@ -436,10 +490,10 @@ export function addClickHandler(map, routes, loadDetail, onFocus) {
 
   map.on("click", (event) => {
     popup?.remove();
-    // A skipped stretch is a detour too (key + source_key): it counts as
-    // a dot, selecting its detour.
+    // A skipped stretch or a path is a detour too (key + source_key): it
+    // counts as a dot, selecting its detour.
     const dots = map.queryRenderedFeatures(event.point, {
-      layers: [STARTS_LAYER, SKIPPED_LAYER],
+      layers: [STARTS_LAYER, SKIPPED_LAYER, PATH_LAYER],
     });
     const lines =
       dots.length > 0
@@ -463,7 +517,7 @@ export function addClickHandler(map, routes, loadDetail, onFocus) {
       .addTo(map);
   });
 
-  for (const layerId of [NETWORK_LAYER, DETOURED_LAYER, SKIPPED_LAYER, STARTS_LAYER]) {
+  for (const layerId of [NETWORK_LAYER, DETOURED_LAYER, SKIPPED_LAYER, PATH_LAYER, STARTS_LAYER]) {
     map.on("mouseenter", layerId, () => {
       map.getCanvas().style.cursor = "pointer";
     });

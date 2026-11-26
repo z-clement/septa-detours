@@ -373,6 +373,18 @@ body {
     #333 18px
   );
 }
+/* The detour path: route-color dashes (#333 here) over white, outlined so
+   the white gaps show on the legend's white too. */
+.legend-path {
+  box-sizing: border-box;
+  height: 6px;
+  border: 1px solid #ccc;
+  background: repeating-linear-gradient(
+    to right,
+    #333 0 6px,
+    #fff 6px 10px
+  );
+}
 .legend-start {
   box-sizing: border-box; /* 14 px with its border; + margins = 24 px */
   width: 14px;

@@ -159,4 +159,6 @@ Steps (each committed; model and contract changes flagged):
    a path's rejoin fills `rejoin_point`; real `121123Z` stretches 53 -> 75).
 5. ~~Contract schema 4: the detour object's `path`, a `paths.geojson`~~
    (done; `data.js` loads it, nothing draws it yet).
-6. web: draw the path in its own style (ask which).
+6. ~~web: draw the path in its own style~~ (done; your choices: dashed
+   in the route's color over a white casing; only detours in effect, as
+   the fade). Map side not yet checked by eye.

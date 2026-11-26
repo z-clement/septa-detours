@@ -215,7 +215,14 @@ Then **tier B** (geography plan): parse reads the message's path
 the affected shapes) and cuts the skipped stretch (`RouteMatch.skipped`,
 `match/skipped.py`), the contract is schema 3 (`rejoin_point`,
 `skipped`, `skipped.geojson`), and the map fades the skipped stretch
-out of the (still drawn) route, with a legend. Real `121123Z`: 107 of 157 messages
+out of the (still drawn) route, with a legend.
+
+Then **tier C** (geography plan): `match/walk.py` + `match/path.py`
+walk the message street by street along OSM ways (networkx), checking
+each turn's left/right; `RouteMatch.path` (and rejoins tier B missed),
+contract schema 4 (`path`, `paths.geojson`), drawn as route-color dashes
+over white for detours in effect. Real `121123Z`: 63 paths of 97
+candidates, stretches 53 -> 75. Map side not yet checked by eye. Real `121123Z`: 107 of 157 messages
 give a path, 65 rejoins, 51 stretches. Map side not yet checked by eye.
 
 ## Next

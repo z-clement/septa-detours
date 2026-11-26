@@ -634,3 +634,11 @@ Tests: 125 JS.
   line). `write.SITE_FILES` lists it; `data.js` reads 4 and loads it
   (the "newer route file" test now uses 5). Real `141550Z`: 36 paths,
   12 KB (skipped 11 KB); 187 files, 3.6 MB.
+- `mapview.js` (step 6): `paths` source (`promoteId: source_key`, in
+  `DETOUR_SOURCES`), `path-casing` (white, round caps) + `path-dashes`
+  (route color, `line-dasharray [2, 1.5]`, butt caps), widths x1.5 when
+  hovered/selected, same offset; both share the fade's `inEffect`
+  filter (and the focus filter). A path click selects its detour
+  (`clickChoices` dedupes dot + stretch + path). Legend row "Detour
+  path" (`.legend-path`; harness screenshot checked). Map side not
+  checked by eye.
