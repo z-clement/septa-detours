@@ -493,7 +493,20 @@ Web (plain JS):
     - Step 3 (done): dot states (hover, selected) on the map.
     - Step 4 (done): cards: hover/click/keyboard, scroll to the selected card,
       pan to its dot.
-12. **W6** (next) Mobile bottom sheet, keyboard/a11y pass.
+12. **W6** (next) Mobile bottom sheet, keyboard/a11y pass. Decided
+    2026-11-25: below 700 px the sidebar is a bottom sheet with three
+    heights (peek: handle + status line; half ~50%; full ~90%); tapping
+    the handle steps peek -> half -> full -> peek; no dragging (rejected:
+    drag + snap, more code, untestable headless; 2 heights). Focusing a
+    route or clicking a dot raises it to at least half; focusing the
+    search box raises it to full. Mine: it starts at half (the list
+    shows on first load); the map's fit/pan leave room for the sheet.
+    - Step 1: `sheet.js` (pure): heights, next, raise, pixel height;
+      `sheet` in the store.
+    - Step 2: the sheet's CSS, handle and wiring.
+    - Step 3: keyboard and screen readers: focus moves into the panel
+      and back to the row, an `aria-live` announcement on focus change,
+      visible focus rings, contrast, labels.
 
 ## Decisions to confirm (with recommendations)
 
