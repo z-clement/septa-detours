@@ -209,3 +209,36 @@ checked by eye with your screenshots. Rough sizes in brackets.
   message (`parse/`), model + contract changes (flagged), "running now"
   on the page]. Its own short plan first: the message formats seen,
   measured on the snapshots.
+
+## U8 plan: daily hours (measured 2026-11-26)
+
+All 163 distinct messages in the 4 snapshots, by how they state time:
+
+| kind | messages | example | handled today? |
+|---|---|---|---|
+| recurring hours + days | 39 | "7am - 4pm, Mon - Fri until 11/30/26" | **no** |
+| recurring hours, every day | 5 | "7am - 4pm until 1/1/27" | **no** |
+| hours on one date / one range | 27 | "2am - 10pm on 11-26-26" | yes: parse's start/end already are 02:00-22:00 |
+| until a time/date | 44 | "Until 2am on Thurs 11/26/26" | yes |
+| 24/7 | 24 | "24/7 until 12-26-26" | yes |
+| other / none | 24 | stop closures, "Until Further Notice" | yes |
+
+So **44 of 163 (27%) need daily hours**. Forms seen: hours before or
+after the days; `Mon - Fri`, `Mon thru Fri`, `Mon - Friday`,
+`Weekdays`, `Weekdays only`, `Mon & Tues`, `Mon - Tues`,
+`Monday thru Wednesday`; times `7am`, `8:30am`, `-330pm` (no colon),
+`7:00PM`, `11:59` (no am/pm); an overnight window ("7:00PM to 5:00AM");
+a range split by a comma ("7:40 am -, 6:00 pm"). The API's end time can
+disagree with the message ("7am - 6pm" ends 16:00): a known mismatch
+(backlog).
+
+Proposed design:
+1. `parse/hours.py` (pure): `parse_daily_hours(message)` -> `DailyHours`
+   (`days`: weekdays it runs; `start`, `end`: local times; `end` before
+   `start` = overnight, counted on the start's day) or `None`.
+2. `DetourNotice.daily_hours` (model change, flagged; default `None`).
+3. Contract (schema bump): the detour object and detour features carry
+   `hours` (`{days, start, end}` or null).
+4. Page: `isInEffect` also needs the current local time (SEPTA's zone,
+   via `Intl`) inside the hours; cards say the hours ("Weekdays 7am -
+   4pm") and whether it's running now.
