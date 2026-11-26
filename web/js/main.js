@@ -52,7 +52,7 @@ async function main() {
   const routesByKey = new Map(site.routes.map((route) => [route.key, route]));
   const loadDetail = routeDetailLoader();
 
-  const showFocus = addOverviewLayers(map, site);
+  const { showFocus, setHoveredDot, setSelectedDot } = addOverviewLayers(map, site);
   showStatus(statusLine(site.status));
 
   // The catalog's mode order (D8, as Python wrote it), for the chips and

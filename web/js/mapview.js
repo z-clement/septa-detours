@@ -17,6 +17,9 @@ const NETWORK_COLOR = "#9aa0a6";
 /** Start dots of detours that have ended. */
 const ENDED_COLOR = "#9e9e9e";
 
+/** The ring around the selected detour's dot. */
+const SELECTED_RING_COLOR = "#111111";
+
 /** Rough centre of Philadelphia, [lon, lat], shown before the data arrives. */
 const PHILLY_CENTER = [-75.16, 39.95];
 
@@ -53,8 +56,9 @@ export function createMap(container) {
 
 /**
  * Draw the overview: the whole network faintly, detoured routes in color,
- * and every placed detour's start point on top. Returns `showFocus`,
- * which switches between the overview and one focused route.
+ * and every placed detour's start point on top. Returns the functions
+ * that change it afterwards: `showFocus` (the overview or one focused
+ * route) and the dot highlights `setHoveredDot` / `setSelectedDot`.
  *
  * Must run after the style has loaded (adding a source before then throws).
  * Layers draw in the order they're added: network, detoured, the focused
@@ -75,12 +79,22 @@ export function createMap(container) {
  *
  * @param {maplibregl.Map} map
  * @param {{routes: object[], network: object, starts: object}} site
- * @returns {(focus: {key: string, detail: object | null} | null) => void}
- *   see `showFocus` below
+ * @returns {{
+ *   showFocus: (focus: {key: string, detail: object | null} | null) => void,
+ *   setHoveredDot: (sourceKey: string | null) => void,
+ *   setSelectedDot: (sourceKey: string | null) => void,
+ * }} see each below
  */
 export function addOverviewLayers(map, site) {
   map.addSource(NETWORK_SOURCE, { type: "geojson", data: site.network });
-  map.addSource(STARTS_SOURCE, { type: "geojson", data: site.starts });
+  // promoteId: each dot's id is its detour's source_key, so a dot can be
+  // found again for feature-state (hover/selected). Direction twins share
+  // a key, and a dot: both light up together.
+  map.addSource(STARTS_SOURCE, {
+    type: "geojson",
+    data: site.starts,
+    promoteId: "source_key",
+  });
   map.addSource(FOCUS_SOURCE, { type: "geojson", data: EMPTY_COLLECTION });
 
   const routeColor = ["coalesce", ["get", "color"], FALLBACK_COLOR];
@@ -141,6 +155,12 @@ export function addOverviewLayers(map, site) {
     },
   });
 
+  // Hovered (a card under the pointer) or selected: bigger, and selected
+  // gets a dark ring. `feature-state` is set per dot by the setters below.
+  const hovered = ["boolean", ["feature-state", "hover"], false];
+  const selected = ["boolean", ["feature-state", "selected"], false];
+  const emphasized = ["any", hovered, selected];
+
   // Styled by `timing` (computed at export time; the page will recompute
   // it in W3): active solid in the route color, upcoming hollow (white
   // fill, route-color ring), ended grey. `unknown` looks like active.
@@ -158,9 +178,23 @@ export function addOverviewLayers(map, site) {
         ENDED_COLOR,
         routeColor,
       ],
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 16, 9],
-      "circle-stroke-color": ["match", ["get", "timing"], "upcoming", routeColor, "#ffffff"],
-      "circle-stroke-width": 2,
+      // `zoom` must be interpolate's input, so the state goes in each stop.
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        ["case", emphasized, 7, 4],
+        16,
+        ["case", emphasized, 13, 9],
+      ],
+      "circle-stroke-color": [
+        "case",
+        selected,
+        SELECTED_RING_COLOR,
+        ["match", ["get", "timing"], "upcoming", routeColor, "#ffffff"],
+      ],
+      "circle-stroke-width": ["case", selected, 3, 2],
     },
   });
 
@@ -174,7 +208,7 @@ export function addOverviewLayers(map, site) {
    *
    * @param {{key: string, detail: object | null} | null} focus
    */
-  return function showFocus(focus) {
+  function showFocus(focus) {
     const only = focus === null ? null : ["==", ["get", "key"], focus.key];
     const detail = focus === null ? null : focus.detail;
     map.setPaintProperty(
@@ -186,7 +220,48 @@ export function addOverviewLayers(map, site) {
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
     map.setFilter(STARTS_LAYER, only);
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
+  }
+
+  return {
+    showFocus,
+    setHoveredDot: dotStateSetter(map, "hover"),
+    setSelectedDot: dotStateSetter(map, "selected"),
   };
+}
+
+/**
+ * A setter that puts feature-state `name` on one start dot at a time.
+ *
+ * Each call clears it from the previous dot. A key with no dot (an
+ * unplaced detour) just clears: feature-state on a missing id is ignored.
+ *
+ * @param {maplibregl.Map} map
+ * @param {string} name the feature-state key ("hover", "selected")
+ * @returns {(sourceKey: string | null) => void}
+ */
+function dotStateSetter(map, name) {
+  let current = null;
+  return (sourceKey) => {
+    if (current !== null) {
+      map.setFeatureState({ source: STARTS_SOURCE, id: current }, { [name]: false });
+    }
+    current = sourceKey;
+    if (sourceKey !== null) {
+      map.setFeatureState({ source: STARTS_SOURCE, id: sourceKey }, { [name]: true });
+    }
+  };
+}
+
+/**
+ * Pan the map to a detour's start point if it's off screen; no zoom.
+ *
+ * @param {maplibregl.Map} map
+ * @param {{lon: number, lat: number}} point a detour's `start_point`
+ */
+export function panToDot(map, { lon, lat }) {
+  if (!map.getBounds().contains([lon, lat])) {
+    map.panTo([lon, lat]);
+  }
 }
 
 /**
