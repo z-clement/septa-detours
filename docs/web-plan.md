@@ -398,6 +398,9 @@ that then notify subscribers (sidebar and map re-render from state):
 
 ### Later in the web part
 
+- Detoured lines in a different line style (yours, 2026-11-25), so
+  they're easier to pick out on the map than by color and width alone
+  (e.g. a casing/halo, or a dashed overlay; pick when it's built).
 - Mobile (< ~700 px): the sidebar becomes a bottom sheet.
 - Keyboard and screen readers: rows and cards are real `<button>`s,
   visible focus, `aria-live` status.
@@ -476,6 +479,20 @@ Web (plain JS):
     - Step 5 (done): wiring (`main.js`): row/line/dot clicks focus, hash,
       Back/Escape, the W3 gaps.
 11. **W5** (next) Card <-> dot linking, the multi-route click chooser.
+    Decided 2026-11-25: (a) hovering a card highlights its dot; clicking
+    a card selects it (highlighted card, selected dot style, URL hash)
+    and pans the map to its dot only if it's off screen, no zoom
+    (unplaced cards are just selected); a dot click selects and scrolls
+    its card into view; (b) the chooser, when a click hits several
+    routes: dots under the click give one button per detour (route
+    badge + headline, from the route files); only lines give one button
+    per route (badge + name); a button focuses that route (and selects
+    that detour). Every hit on one route focuses it directly (as W4).
+    - Step 1: `clickChoices` (pure, `routes.js`).
+    - Step 2: the chooser popup (DOM), replacing the text popups.
+    - Step 3: dot states (hover, selected) on the map.
+    - Step 4: cards: hover/click/keyboard, scroll to the selected card,
+      pan to its dot.
 12. **W6** Mobile bottom sheet, keyboard/a11y pass.
 
 ## Decisions to confirm (with recommendations)

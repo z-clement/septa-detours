@@ -15,6 +15,15 @@ Other options, for later:
   Detecting either means parsing message text, which `parse/` doesn't do
   yet. And a `kind` field (reroute / stop closure / relocation; route 6,
   9, BSO findings): changes `model.py`, so flag it first.
+- **`source_key` collides for direction twins** (found in W5,
+  2026-11-25; my decision): it hashes `(route_id, location_start,
+  start)`, so route L1 OWL's EB and WB stop closures at 5th & Market
+  (same place, same start) share `a08563ebaa011c5d` (1 pair in 134
+  placed dots). The page tolerates it (selecting one highlights both;
+  they share a dot), but the URL hash and card selection can't tell them
+  apart. Options: add the raw direction to the hash (changes the pinned
+  key `661b7024a25d2bbd` and every key across snapshots), or a
+  page-side id (`source_key` + index). Parse stage + `model.py`: flag.
 - **Keep collecting snapshots** (`uv run python -m septa_detours.ingest`);
   run parse + match over each and add fixtures for new quirks (then
   update all the pins listed above).
