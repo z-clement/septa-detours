@@ -15,6 +15,7 @@ from septa_detours.export.contract import (
     Bounds,
     DetourObject,
     DirectionEntry,
+    HoursObject,
     Mode,
     RouteDetail,
     RouteEntry,
@@ -31,7 +32,7 @@ from septa_detours.export.geojson import (
 )
 from septa_detours.export.simplify import covering_shapes, round_line, simplify_line
 from septa_detours.gtfs.load import Feed
-from septa_detours.model import Detour, StartPoint
+from septa_detours.model import DailyHours, Detour, StartPoint
 
 MODE_ORDER: Final[tuple[Mode, ...]] = ("metro", "trolley", "trackless", "bus", "rail")
 """The sidebar's mode order (decided: the user's), fewest routes first."""
@@ -238,6 +239,7 @@ def detour_object(detour: Detour) -> DetourObject:
         "rejoin_streets": rejoin_streets(detour),
         "skipped": skipped_line(detour),
         "path": path_line(detour),
+        "hours": hours_object(notice.daily_hours),
         "route_steps": [
             {"turn": step.turn, "street": step.street} for step in notice.route_steps
         ],
@@ -622,20 +624,36 @@ def _detour_lines(
     return {"type": "FeatureCollection", "features": features}
 
 
+def hours_object(hours: DailyHours | None) -> HoursObject | None:
+    """Daily hours as the page reads them (``HoursObject``), or ``None``."""
+    if hours is None:
+        return None
+    return {
+        "days": list(hours.days),
+        "start": hours.start.strftime("%H:%M"),
+        "end": hours.end.strftime("%H:%M"),
+    }
+
+
 def _detour_properties(key: str, detour: Detour, color: str | None) -> Properties:
     """A detour feature's properties (``START_PROPERTIES``).
 
     Its route, its ``source_key`` (the page's feature id), the route's
-    color, and its overall ``start``/``end`` as in ``DetourObject``: the
-    page decides, with its own clock, which detours are in effect.
+    color, its overall ``start``/``end`` as in ``DetourObject``, and its
+    daily hours flattened (``hours_*``): the page decides, with its own
+    clock, which detours are in effect.
     """
     notice = detour.notice
+    hours = hours_object(notice.daily_hours)
     return {
         "key": key,
         "source_key": notice.source_key,
         "color": color,
         "start": _iso(notice.start),
         "end": _iso(notice.end),
+        "hours_days": None if hours is None else "".join(map(str, hours["days"])),
+        "hours_start": None if hours is None else hours["start"],
+        "hours_end": None if hours is None else hours["end"],
     }
 
 

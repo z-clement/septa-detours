@@ -471,6 +471,8 @@ def test_detour_object_matched_and_placed(notices) -> None:
         "rejoin_streets": ["Passyunk", "17th"],
         "skipped": [[-75.17158, 39.93846], [-75.17461, 39.92456]],
         "path": [[-75.1716, 39.9385], [-75.1696, 39.9385], [-75.16963, 39.937]],
+        # "7am - 4pm Mon thru Fri, 11/27/26, ..."
+        "hours": {"days": [0, 1, 2, 3, 4], "start": "07:00", "end": "16:00"},
         "route_steps": [
             {"turn": "via", "street": "17th"},
             {"turn": "left", "street": "Washington"},
@@ -504,6 +506,7 @@ def test_detour_object_unmatched(notices) -> None:
         "rejoin_streets": None,
         "skipped": None,
         "path": None,
+        "hours": None,
         "route_steps": [],
         "shape_ids": [],
     }
@@ -640,7 +643,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 7,
+        "schema_version": 8,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1091,7 +1094,9 @@ PHILLY = ZoneInfo("America/New_York")
 
 # --- starts_collection -------------------------------------------------------------
 
-# Route 2 #0, #2 and #4's real overall windows, as features carry them.
+# Route 2 #0, #2 and #4's real overall windows, as features carry them,
+# and #0's daily hours ("7am - 4pm Mon thru Fri"; #2 and #4 have none).
+HOURS_0 = ("01234", "07:00", "16:00")
 WINDOW_0 = ("2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00")
 WINDOW_2 = ("2026-11-25T15:00:00-05:00", "2026-11-26T02:00:00-05:00")
 WINDOW_4 = ("2026-11-24T19:33:00-05:00", "2026-11-25T08:00:00-05:00")
@@ -1118,6 +1123,7 @@ def dot(
     source_key: str,
     color: str | None,
     window: tuple[str | None, str | None],
+    hours: tuple[str | None, str | None, str | None] = (None, None, None),
 ):
     return {
         "type": "Feature",
@@ -1128,6 +1134,9 @@ def dot(
             "color": color,
             "start": window[0],
             "end": window[1],
+            "hours_days": hours[0],
+            "hours_start": hours[1],
+            "hours_end": hours[2],
         },
     }
 
@@ -1147,7 +1156,15 @@ def test_starts_whole_output(notices) -> None:
         "features": [
             dot(-75.1690, 39.9620, "bus-2", "f92dcfe1cd1904c8", "#00A1DE", WINDOW_2),
             dot(-75.2345, 39.8765, "rail-AIR", "ff53152c4c7f9011", "#5A6F7B", WINDOW_4),
-            dot(-75.1716, 39.9385, "bus-2", "5d0d22dfe7d86935", "#00A1DE", WINDOW_0),
+            dot(
+                -75.1716,
+                39.9385,
+                "bus-2",
+                "5d0d22dfe7d86935",
+                "#00A1DE",
+                WINDOW_0,
+                HOURS_0,
+            ),
         ],
     }
 
@@ -1208,6 +1225,7 @@ def stretch_feature(
     source_key: str,
     color: str | None,
     window: tuple[str | None, str | None],
+    hours: tuple[str | None, str | None, str | None] = (None, None, None),
 ):
     return {
         "type": "Feature",
@@ -1218,6 +1236,9 @@ def stretch_feature(
             "color": color,
             "start": window[0],
             "end": window[1],
+            "hours_days": hours[0],
+            "hours_start": hours[1],
+            "hours_end": hours[2],
         },
     }
 
@@ -1250,6 +1271,7 @@ def test_skipped_whole_output(notices) -> None:
                 "5d0d22dfe7d86935",
                 "#00A1DE",
                 WINDOW_0,
+                HOURS_0,
             ),
         ],
     }
@@ -1325,6 +1347,7 @@ def test_paths_whole_output(notices) -> None:
                 "5d0d22dfe7d86935",
                 "#00A1DE",
                 WINDOW_0,
+                HOURS_0,
             ),
         ],
     }
@@ -1363,7 +1386,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 7,
+        "schema_version": 8,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",

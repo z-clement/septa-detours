@@ -733,3 +733,9 @@ Tests: 125 JS.
   in view. Page reads 7. Harness screenshot (route 79) checked. Known
   gap until U8: daily hours ("7am - 3pm weekdays") now sit in the
   collapsed alert.
+- U8, contract 8 (2026-11-26): the detour object gains `hours`
+  (`HoursObject`: `days` list, `start`/`end` `"HH:MM"`, or null:
+  `site.hours_object`); detour features gain flat `hours_days`
+  (weekday digits, `"01234"`), `hours_start`, `hours_end` (null without
+  hours: GeoJSON properties stay scalars). `SKIPPED_PROPERTIES` and
+  `PATH_PROPERTIES` are now `START_PROPERTIES` itself.

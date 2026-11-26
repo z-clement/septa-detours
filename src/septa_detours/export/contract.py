@@ -32,7 +32,9 @@ and ``skipped``, and ``skipped.geojson`` is new (the page draws them);
 new; 5, the detour object gains ``rejoin_streets`` (the card names the
 rejoin); 6, detour features (starts, skipped, paths) trade ``timing``
 for ``start``/``end``: the page times them with its own clock; 7, the
-detour object gains ``route_steps`` (the card lists the turns).
+detour object gains ``route_steps`` (the card lists the turns); 8, daily
+hours: the detour object's ``hours``, the features' ``hours_*`` (the page
+hides a detour outside them).
 """
 
 from typing import Final, Literal, TypedDict
@@ -41,7 +43,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus, Turn
 
-SCHEMA_VERSION: Final = 7
+SCHEMA_VERSION: Final = 8
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -60,6 +62,17 @@ class StepObject(TypedDict):
     turn: Turn
     street: str
     """As written in the message: ``"Washington"``, ``"S Penn Sq"``."""
+
+
+class HoursObject(TypedDict):
+    """When a detour runs each day (``model.DailyHours``)."""
+
+    days: list[int]
+    """Weekdays it starts on, Monday = 0, ascending."""
+    start: str
+    """Local time, ``"HH:MM"`` (24-hour)."""
+    end: str
+    """As ``start``; earlier than ``start`` = overnight (ends next day)."""
 
 
 class StartPointObject(TypedDict):
@@ -107,6 +120,8 @@ class DetourObject(TypedDict):
     """Where the detour goes (tier C), start to rejoin, ``[lon, lat]`` in
     travel order (simplified and rounded as ``skipped``), or ``None``
     when unknown."""
+    hours: HoursObject | None
+    """Daily hours within ``start``/``end``, or ``None``: all day."""
     route_steps: list[StepObject]
     """The message's path, in order: ``via`` the route street, then each
     turn; ``[]`` when the message gives none (stop closures, layovers,
@@ -204,16 +219,28 @@ NETWORK_PROPERTIES: Final = ("key", "direction_id", "mode", "color")
 """Feature properties in ``network.geojson`` (LineStrings). The rest of a
 route's fields come from ``routes.json`` by ``key``."""
 
-START_PROPERTIES: Final = ("key", "source_key", "color", "start", "end")
+START_PROPERTIES: Final = (
+    "key",
+    "source_key",
+    "color",
+    "start",
+    "end",
+    "hours_days",
+    "hours_start",
+    "hours_end",
+)
 """Feature properties in ``starts.geojson`` (Points, one per placed
 detour). ``start``/``end`` as ``DetourObject``'s (ISO 8601 or null:
-MapLibre drops nulls, but the page reads them from the parsed file)."""
+MapLibre drops nulls, but the page reads them from the parsed file).
+``hours_*`` flatten ``HoursObject`` (GeoJSON properties stay scalars):
+``hours_days`` is its weekday digits (``"01234"``), ``hours_start`` and
+``hours_end`` its times; all three null without daily hours."""
 
-SKIPPED_PROPERTIES: Final = ("key", "source_key", "color", "start", "end")
+SKIPPED_PROPERTIES: Final = START_PROPERTIES
 """Feature properties in ``skipped.geojson`` (LineStrings, one per detour
 with a skipped stretch), as ``START_PROPERTIES``."""
 
-PATH_PROPERTIES: Final = ("key", "source_key", "color", "start", "end")
+PATH_PROPERTIES: Final = START_PROPERTIES
 """Feature properties in ``paths.geojson`` (LineStrings, one per detour
 with a path), as ``START_PROPERTIES``."""
 

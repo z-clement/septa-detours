@@ -161,7 +161,7 @@ def test_export_site_status(detours) -> None:
     export_site(DETOURS_FILE, now=NOW)
     result = read("status.json")
     assert {key: value for key, value in result.items() if key != "unmatched"} == {
-        "schema_version": 7,
+        "schema_version": 8,
         "generated_at": "2026-11-25T14:00:00Z",
         "snapshot": f"{STAMP}.json",
         "snapshot_fetched_at": "2026-11-25T02:53:44Z",
@@ -230,6 +230,9 @@ def test_export_site_network_and_starts(detours) -> None:
             "color": "#EF3340",
             "start": "2026-11-11T06:30:00-05:00",
             "end": "2026-11-27T16:00:00-05:00",
+            "hours_days": "01234",
+            "hours_start": "07:00",
+            "hours_end": "16:00",
         },
     }
 
