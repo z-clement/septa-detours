@@ -175,6 +175,9 @@ checked by eye with your screenshots. Rough sizes in brackets.
 - **U6. Legend (G, if confirmed)** [small, JS + CSS].
 - **U7. Rider cards (F, if confirmed)** [medium: contract gains the
   steps, schema bump; A/B markers on the map].
+- **Color pass (yours, 2026-11-26)** [small]: once the UI is settled,
+  one pass over every color (accent, greys, route colors, dots,
+  legend), together. Magenta is fine for now.
 - **Match follow-up (not UI, seen 2026-11-26 on route 79):** a path can
   start off the route; a lead-in from the route to the start point is
   logged in `geography-plan.md` (tier C follow-ups). Fit it in between
