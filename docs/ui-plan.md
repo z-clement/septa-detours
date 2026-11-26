@@ -181,9 +181,11 @@ checked by eye with your screenshots. Rough sizes in brackets.
   to tell apart (route 47 NB vs SB): show direction (arrows along the
   line?) and/or fade the direction that isn't the focused detour's.
   Confirm the exact form when we get here.
-- **U6. Legend (G, if confirmed)** [small, JS + CSS].
-- **U7. Rider cards (F, if confirmed)** [medium: contract gains the
-  steps, schema bump; A/B markers on the map].
+- **U6. Legend (G)** (confirmed 2026-11-26: rows for what's drawn, a
+  'Key' button on phones) [small, JS + CSS].
+- **U7. Rider cards (F)** (confirmed 2026-11-26: turn-by-turn steps and
+  the raw message collapsed; no A/B markers) [medium: contract gains the
+  steps, schema bump].
 - **Color pass (yours, 2026-11-26)** [small]: once the UI is settled,
   one pass over every color (accent, greys, route colors, dots,
   legend), together. Magenta is fine for now.
