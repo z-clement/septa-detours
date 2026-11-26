@@ -74,9 +74,16 @@ export function createState({ modes, now }) {
     },
     // Focus a route (null: back to the overview), optionally selecting one
     // of its detours. No route means no detour: a detour is only ever
-    // selected on its focused route.
+    // selected on its focused route. A route raises the mobile sheet to
+    // at least half, so its panel shows (decided); in the same update, so
+    // no listener ever sees the focus without the sheet. Back leaves the
+    // sheet as it is.
     focus(key, detour = null) {
-      update({ focus: key, selectedDetour: key === null ? null : detour });
+      if (key === null) {
+        update({ focus: null, selectedDetour: null });
+      } else {
+        update({ focus: key, selectedDetour: detour, sheet: raisedSheet(state.sheet, "half") });
+      }
     },
     setSearch(text) {
       update({ search: text });

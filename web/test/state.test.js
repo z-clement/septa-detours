@@ -124,6 +124,34 @@ test("raiseSheet raises, and a raise that doesn't change it notifies no one", ()
   assert.deepEqual(calls[0][0], ["sheet"]);
 });
 
+test("focus on a route raises the sheet to half in the same notification", () => {
+  const { store, calls } = recorded();
+  store.cycleSheet();
+  store.cycleSheet(); // peek
+  store.focus("bus-21");
+  assert.deepEqual(calls.at(-1)[0], ["focus", "sheet"]);
+  assert.equal(store.get().sheet, "half");
+});
+
+test("focus never lowers the sheet, and Back leaves it as it is", () => {
+  const { store } = recorded();
+  store.cycleSheet(); // full
+  store.focus("bus-21", "abc");
+  assert.equal(store.get().sheet, "full");
+  store.cycleSheet(); // peek
+  store.focus(null);
+  assert.equal(store.get().sheet, "peek");
+});
+
+test("selecting a detour on the focused route raises a peeking sheet", () => {
+  const { store, calls } = recorded();
+  store.focus("bus-21");
+  store.cycleSheet();
+  store.cycleSheet(); // half -> full -> peek
+  store.focus("bus-21", "abc");
+  assert.deepEqual(calls.at(-1)[0], ["selectedDetour", "sheet"]);
+});
+
 test("every snapshot is frozen and earlier ones don't change", () => {
   const { store } = recorded();
   const first = store.get();
