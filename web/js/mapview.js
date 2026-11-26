@@ -39,6 +39,7 @@ const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
 const FOCUS_LAYER = "focus-lines";
+const SKIPPED_CASING_LAYER = "skipped-casing";
 const SKIPPED_LAYER = "skipped-dashes";
 const STARTS_LAYER = "start-dots";
 
@@ -179,22 +180,31 @@ export function addOverviewLayers(map, site) {
   const selected = ["boolean", ["feature-state", "selected"], false];
   const emphasized = ["any", hovered, selected];
 
-  // The stretch of regular route each detour skips (tier B): dashes by
-  // timing (red now, orange later, grey ended) drawn *on* the route line
-  // and narrower than it, so the bypassed route stays visible along both
-  // edges and through the gaps. Same offset as the route lines: a stretch
-  // is cut from its direction's shape, in travel order, so it lands on
-  // that line. Widths are about half the detoured/focused route lines'
-  // (1.5-5, 2-6); hovered or selected, as wide as them.
+  // The stretch of regular route each detour skips (tier B): a white
+  // casing that knocks the route line out underneath, then dashes on top,
+  // by timing (red now, orange later, grey ended). Solid = served, dashed
+  // = skipped. Same offset as the route lines: a stretch is cut from its
+  // direction's shape, in travel order, so it lands on that side.
   const skippedWidth = (narrow, wide) => [
     "interpolate",
     ["linear"],
     ["zoom"],
     10,
-    ["case", emphasized, narrow * 2, narrow],
+    ["case", emphasized, narrow * 1.6, narrow],
     16,
-    ["case", emphasized, wide * 2, wide],
+    ["case", emphasized, wide * 1.6, wide],
   ];
+  map.addLayer({
+    id: SKIPPED_CASING_LAYER,
+    type: "line",
+    source: SKIPPED_SOURCE,
+    layout: lineLayout,
+    paint: {
+      "line-color": "#ffffff",
+      "line-width": skippedWidth(3.5, 9),
+      "line-offset": offset,
+    },
+  });
   map.addLayer({
     id: SKIPPED_LAYER,
     type: "line",
@@ -211,7 +221,7 @@ export function addOverviewLayers(map, site) {
         ENDED_COLOR,
         SKIPPED_ACTIVE_COLOR,
       ],
-      "line-width": skippedWidth(1, 3),
+      "line-width": skippedWidth(2, 5),
       // In line widths: dash 2, gap 1.2.
       "line-dasharray": [2, 1.2],
       "line-offset": offset,
@@ -276,6 +286,7 @@ export function addOverviewLayers(map, site) {
     map.setFilter(DETOURED_LAYER, only ?? detouredFilter);
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
     map.setFilter(STARTS_LAYER, only);
+    map.setFilter(SKIPPED_CASING_LAYER, only);
     map.setFilter(SKIPPED_LAYER, only);
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
   }

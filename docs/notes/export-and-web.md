@@ -609,12 +609,10 @@ Tests: 125 JS.
   `skipped.geojson` (LineStrings, properties as `starts.geojson`;
   `skipped_collection`); `write.SITE_FILES` lists it. `data.js` reads
   3 and loads it. Real: 51 stretches, 456 points, 18 KB.
-- `mapview.js`: `skipped` source (`promoteId: source_key`), dashes
-  (`line-dasharray [2, 1.2]`, butt caps so the gaps stay open) by
-  timing: red `#d32f2f` now, orange later, grey ended, drawn on the
-  route line at about half its width (1-3 px; doubled when
-  hovered/selected) so the bypassed route stays visible along the edges
-  and through the gaps (yours; the first version's white casing hid it). Same `line-offset` as the
+- `mapview.js`: `skipped` source (`promoteId: source_key`), a white
+  casing layer then dashes (`line-dasharray [2, 1.2]`, butt caps so the
+  gaps stay open) by timing: red `#d32f2f` now, orange later, grey
+  ended; widths grow when hovered/selected. Same `line-offset` as the
   route lines. Feature-state goes on dot and stretch alike
   (`DETOUR_SOURCES`); a stretch click counts as a dot (`clickChoices`
   dedupes a detour's dot + stretch). Focus filters stretches to the

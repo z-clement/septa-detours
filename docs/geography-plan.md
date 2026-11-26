@@ -85,9 +85,8 @@ Results and decisions made while building (tier B):
   3x its ends' distance + 100 m (drops route 97's 7.6 km for 1.9 km).
   First affected shape that gives one (lengths differ between shapes in
   5 of 51). 51 stretches, 2 m simplified: 456 points, 18 KB.
-- Map: dashes (red now, orange later, grey ended) on the solid route,
-  about half its width, same offset (yours: the bypassed route must stay
-  visible, so the first version's white casing was dropped); stretches act like dots (hover, select,
+- Map: white casing + dashes (red now, orange later, grey ended) over
+  the solid route, same offset; stretches act like dots (hover, select,
   click); legend top left.
 
 Tier B follow-ups (not built):

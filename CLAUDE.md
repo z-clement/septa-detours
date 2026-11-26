@@ -213,8 +213,8 @@ Then **tier B** (geography plan): parse reads the message's path
 (`RouteMatch.rejoin_point`: last two streets' crossing within 30 m of
 the affected shapes) and cuts the skipped stretch (`RouteMatch.skipped`,
 `match/skipped.py`), the contract is schema 3 (`rejoin_point`,
-`skipped`, `skipped.geojson`), and the map draws stretches as dashes
-down the middle of the (still visible) route line, with a legend. Real `121123Z`: 107 of 157 messages
+`skipped`, `skipped.geojson`), and the map draws stretches dashed over
+the solid route, with a legend. Real `121123Z`: 107 of 157 messages
 give a path, 65 rejoins, 51 stretches. Map side not yet checked by eye.
 
 ## Next
