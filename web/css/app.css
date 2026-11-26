@@ -167,7 +167,7 @@ body {
 }
 
 /* The defaults here are the fallback for a null color/text_color; the
-   route's own colors are set inline by sidebar.js when present. */
+   route's own colors are set inline by dom.js's routeBadge when present. */
 .badge {
   flex: none;
   min-width: 2.6em;
@@ -335,8 +335,28 @@ body {
   padding-left: 18px;
 }
 
-/* Popup text keeps its line breaks (describeStart joins with \n). */
-.maplibregl-popup-content {
-  white-space: pre-line;
+/* The map's chooser (several routes under a click): a column of buttons,
+   each a route badge and its text, like the sidebar's rows. */
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font: 13px/1.4 system-ui, sans-serif;
+}
+.chooser-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: #222;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chooser-choice:hover,
+.chooser-choice:focus-visible {
+  background: #f0f4ff;
 }

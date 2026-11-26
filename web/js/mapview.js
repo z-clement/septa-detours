@@ -2,8 +2,9 @@
 // The only module that uses the global `maplibregl` (from the UMD script
 // in index.html).
 
-import { describeDetour, describeRoute } from "./format.js";
-import { detouredKeys } from "./routes.js";
+import { element, routeBadge } from "./dom.js";
+import { choiceText } from "./format.js";
+import { clickChoices, detouredKeys } from "./routes.js";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
@@ -202,39 +203,53 @@ export function fitRoute(map, route) {
 }
 
 /**
- * Popup text for the start dots under a click: each detour's details.
+ * The chooser's content: one button per choice (route badge + text).
  *
- * Dots only carry `key` and `source_key`; the details are in the route's
- * detail file, fetched (once per route) with `loadDetail`.
+ * Route choices are labelled at once; detour choices say "Loading…"
+ * until their route's detail file arrives (one fetch per route, cached by
+ * `loadDetail`), then show the card headline.
  *
- * @param {object[]} features clicked start-dot features
+ * @param {{key: string, detour: string | null}[]} choices from `clickChoices`
  * @param {Map<string, object>} routesByKey routes.json by key
  * @param {(key: string) => Promise<object>} loadDetail
- * @returns {Promise<string[]>}
+ * @param {(choice: {key: string, detour: string | null}) => void} onPick
+ * @returns {HTMLElement}
  */
-async function describeDots(features, routesByKey, loadDetail) {
-  return Promise.all(
-    features.map(async ({ properties: { key, source_key: sourceKey } }) => {
-      const detail = await loadDetail(key);
-      const detour = detail.detours.find((d) => d.source_key === sourceKey);
-      return detour === undefined
-        ? `Detour ${sourceKey} is missing from data/routes/${key}.json`
-        : describeDetour(detour, routesByKey.get(key));
-    }),
-  );
+function chooserContent(choices, routesByKey, loadDetail, onPick) {
+  const list = element("div", "chooser");
+  for (const choice of choices) {
+    const route = routesByKey.get(choice.key);
+    const text = element("span", "name", choiceText(choice, route, null));
+    const button = element("button", "chooser-choice");
+    button.type = "button";
+    button.append(routeBadge(route), text);
+    button.addEventListener("click", () => onPick(choice));
+    list.append(button);
+    if (choice.detour !== null) {
+      loadDetail(choice.key)
+        .then((detail) => {
+          text.textContent = choiceText(choice, route, detail);
+        })
+        .catch((err) => {
+          text.textContent = err.message;
+        });
+    }
+  }
+  return list;
 }
 
 /**
- * Clicks on the map: focus the route clicked, or list the choices.
+ * Clicks on the map: focus the route clicked, or offer a chooser.
  *
  * One handler for the whole map instead of one per layer: a start dot
  * usually sits on its route line, and per-layer handlers would fire twice
  * for one click. `queryRenderedFeatures` returns every drawn feature
- * under the click; dots win, and lines count only when no dot was hit.
- * When every hit is on one route, that route is focused (with the first
- * dot's detour selected, if a dot was hit). Several routes under the
- * click get a popup describing each instead of a guess (a chooser is W5).
- * Also a pointer cursor over anything clickable.
+ * under the click; `clickChoices` turns them into choices (dots win over
+ * lines). When every choice is on one route, that route is focused
+ * directly (with the first choice's detour, if dots were hit). Several
+ * routes get a chooser popup instead of a guess: one button per detour
+ * (dots) or per route (lines). Also a pointer cursor over anything
+ * clickable.
  *
  * @param {maplibregl.Map} map
  * @param {object[]} routes routes.json
@@ -243,35 +258,31 @@ async function describeDots(features, routesByKey, loadDetail) {
  */
 export function addClickHandler(map, routes, loadDetail, onFocus) {
   const routesByKey = new Map(routes.map((route) => [route.key, route]));
+  let popup = null;
 
   map.on("click", (event) => {
+    popup?.remove();
     const dots = map.queryRenderedFeatures(event.point, { layers: [STARTS_LAYER] });
     const lines =
       dots.length > 0
         ? []
         : map.queryRenderedFeatures(event.point, { layers: [DETOURED_LAYER, NETWORK_LAYER] });
-    const hits = dots.length > 0 ? dots : lines;
-    const keys = [...new Set(hits.map((feature) => feature.properties.key))];
-    if (keys.length === 0) {
+    const choices = clickChoices(dots, lines);
+    if (choices.length === 0) {
       return;
     }
-    if (keys.length === 1) {
-      onFocus(keys[0], dots.length > 0 ? dots[0].properties.source_key : null);
+    if (new Set(choices.map((choice) => choice.key)).size === 1) {
+      onFocus(choices[0].key, choices[0].detour);
       return;
     }
-
-    const popup = new maplibregl.Popup({ maxWidth: "360px" })
+    const pick = (choice) => {
+      popup.remove();
+      onFocus(choice.key, choice.detour);
+    };
+    popup = new maplibregl.Popup({ maxWidth: "320px" })
       .setLngLat(event.lngLat)
-      // setText, not setHTML: the text is treated as text, never markup.
-      .setText(dots.length > 0 ? "Loading\u2026" : "")
+      .setDOMContent(chooserContent(choices, routesByKey, loadDetail, pick))
       .addTo(map);
-    if (dots.length === 0) {
-      popup.setText(keys.map((key) => describeRoute(routesByKey.get(key))).join("\n\n"));
-      return;
-    }
-    describeDots(dots, routesByKey, loadDetail)
-      .then((texts) => popup.setText(texts.join("\n\n----\n\n")))
-      .catch((err) => popup.setText(err.message));
   });
 
   for (const layerId of [NETWORK_LAYER, DETOURED_LAYER, STARTS_LAYER]) {

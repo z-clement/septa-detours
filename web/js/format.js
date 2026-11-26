@@ -108,35 +108,6 @@ export function statusLine(status) {
   return `Detours ${when}: ${parts.join(", ")}`;
 }
 
-/**
- * Popup text for one detour (a detour object from routes/<key>.json).
- *
- * Plain JSON keeps missing values as explicit `null` (unlike clicked
- * features), and `issues` is a list.
- *
- * @param {object} detour a detour object
- * @param {object} route its routes.json entry
- * @returns {string}
- */
-export function describeDetour(detour, route) {
-  const issues = detour.issues.length > 0 ? detour.issues.join("; ") : "(none)";
-  const node =
-    detour.start_point === null ? "not placed" : `OSM node ${detour.start_point.node_id}`;
-  return [
-    `${routeLabel(route)}, ${detour.direction ?? "(no direction)"}`,
-    `From: ${detour.location_start ?? "(unknown)"}`,
-    `To: ${detour.location_end ?? "(unknown)"}`,
-    `${formatTime(detour.start)} to ${formatTime(detour.end)}`,
-    `Reason: ${detour.reason ?? "(none given)"}`,
-    `Status: ${detour.status}`,
-    `Issues: ${issues}`,
-    "",
-    detour.message,
-    "",
-    `source_key ${detour.source_key}, ${node}`,
-  ].join("\n");
-}
-
 /** The sidebar's word for each `detourTiming` result. */
 export const TIMING_WORDS = Object.freeze({
   active: "now",
@@ -293,14 +264,24 @@ export function timingSummary(counts) {
 }
 
 /**
- * Popup text for a route line: its name and its detours.
+ * A map chooser button's text (the route badge sits beside it).
  *
- * @param {object} route a routes.json entry
+ * A route choice: its long name (its label without one). A detour choice:
+ * its card headline, "Loading…" until the route's detail file arrives
+ * (`detail` null), "Detour not found" if the file doesn't have it.
+ *
+ * @param {{key: string, detour: string | null}} choice from `clickChoices`
+ * @param {object} route the choice's routes.json entry
+ * @param {object | null} detail its routes/<key>.json, or null while loading
  * @returns {string}
  */
-export function describeRoute(route) {
-  const { total, placed } = route.detours;
-  const detours =
-    total === 0 ? "No detours" : `${plural(total, "detour")} (${placed} on the map)`;
-  return `${routeLabel(route)}\n${detours}`;
+export function choiceText(choice, route, detail) {
+  if (choice.detour === null) {
+    return route.long_name ?? routeLabel(route);
+  }
+  if (detail === null) {
+    return "Loading\u2026";
+  }
+  const detour = detail.detours.find((d) => d.source_key === choice.detour);
+  return detour === undefined ? "Detour not found" : detourHeadline(detour, detail.directions);
 }

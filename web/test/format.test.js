@@ -6,10 +6,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  choiceText,
   TIMING_WORDS,
   apiRouteName,
-  describeDetour,
-  describeRoute,
   detourHeadline,
   detourPlaces,
   directionLabel,
@@ -144,62 +143,6 @@ test("statusLine: no detours", () => {
 test("statusLine: a hand-named snapshot shows its name", () => {
   const mine = { ...STATUS, snapshot: "mine.json", snapshot_fetched_at: null };
   assert.equal(statusLine(mine).split(":")[0], "Detours in mine.json");
-});
-
-test("describeDetour: a real detour, whole text", () => {
-  assert.equal(
-    describeDetour(ROUTE_2_DETOUR, ROUTE_2),
-    [
-      "Route 2 20-Johnston to Pulaski-Hunting Park, SB",
-      "From: 17th & Washington",
-      "To: 17th & Mifflin",
-      "Nov 11, 2026, 6:30 AM to Nov 27, 2026, 4:00 PM",
-      "Reason: Contractor",
-      "Status: complete",
-      "Issues: (none)",
-      "",
-      ROUTE_2_MESSAGE,
-      "",
-      "source_key 5d0d22dfe7d86935, OSM node 110024066",
-    ].join("\n"),
-  );
-});
-
-test("describeDetour: nulls from plain JSON get fallbacks; issues are joined", () => {
-  const unknown = {
-    ...ROUTE_2_DETOUR,
-    status: "partial",
-    direction: null,
-    location_start: null,
-    location_end: null,
-    start: null,
-    end: null,
-    reason: null,
-    issues: ["direction: none found in message", "start: no crossing near the route"],
-    start_point: null,
-  };
-  const lines = describeDetour(unknown, ROUTE_2).split("\n");
-  assert.deepEqual(lines.slice(0, 7), [
-    "Route 2 20-Johnston to Pulaski-Hunting Park, (no direction)",
-    "From: (unknown)",
-    "To: (unknown)",
-    "(unknown) to (unknown)",
-    "Reason: (none given)",
-    "Status: partial",
-    "Issues: direction: none found in message; start: no crossing near the route",
-  ]);
-  assert.equal(lines.at(-1), "source_key 5d0d22dfe7d86935, not placed");
-});
-
-test("describeRoute: with detours, one detour, and none", () => {
-  assert.equal(
-    describeRoute(ROUTE_2),
-    "Route 2 20-Johnston to Pulaski-Hunting Park\n7 detours (7 on the map)",
-  );
-  const one = { ...ROUTE_2, detours: { total: 1, placed: 0 } };
-  assert.equal(describeRoute(one).split("\n")[1], "1 detour (0 on the map)");
-  const none = { ...ROUTE_2, detours: { total: 0, placed: 0 } };
-  assert.equal(describeRoute(none).split("\n")[1], "No detours");
 });
 
 // --- modeLabel --------------------------------------------------------------
@@ -411,4 +354,32 @@ test("directionSummary: name to destination; either may be missing", () => {
     "Direction 1 to Pulaski-Hunting Park",
   );
   assert.equal(directionSummary({ direction_id: 0, name: null, destination: null }), "Direction 0");
+});
+
+// --- choiceText (the map's chooser) ---------------------------------------------
+
+test("choiceText: a route choice is its long name, or its label without one", () => {
+  assert.equal(
+    choiceText({ key: "bus-2", detour: null }, ROUTE_2, null),
+    "20-Johnston to Pulaski-Hunting Park",
+  );
+  assert.equal(
+    choiceText({ key: "bus-K", detour: null }, { ...ROUTE_2, short_name: "K", long_name: null }, null),
+    "Route K",
+  );
+});
+
+test("choiceText: a detour choice is its headline once the detail loads", () => {
+  const choice = { key: "bus-2", detour: "5d0d22dfe7d86935" };
+  const other = { ...ROUTE_2_DETOUR, source_key: "c1", location_start: "Broad & Erie" };
+  const detail = { directions: BUS_2_DIRECTIONS, detours: [other, ROUTE_2_DETOUR] };
+  assert.equal(choiceText(choice, ROUTE_2, null), "Loading\u2026");
+  assert.equal(
+    choiceText(choice, ROUTE_2, detail),
+    "Southbound: 17th & Washington to 17th & Mifflin",
+  );
+  assert.equal(
+    choiceText({ ...choice, detour: "gone" }, ROUTE_2, detail),
+    "Detour not found",
+  );
 });
