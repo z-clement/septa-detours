@@ -409,3 +409,51 @@ Done (2026-11-25): **W3 step 2, the sidebar's pure logic** (no DOM yet).
   query branch (`includes("")` is always true); kept as stated intent.
 Tests: 60 JS (`format`, `data`, `routes`, `detours`). Suggested, not
 done: Python's `detour_timing` docstring could name `web/js/detours.js`.
+
+Done (2026-11-25): **W3 step 3, the sidebar DOM** (W3 complete). Decided
+(mine): (a) a fixed 320 px left panel, the map the rest, the status line
+at the top of the panel (rejected: a floating panel); (b) mode chips
+toggle (all on at start), AND the search, greyed (not hidden) when the
+search alone has none of their mode, sidebar only (the map isn't
+filtered); (c) state in `main.js` until `state.js` (W4), `now` refreshed
+every 60 s; (d) rows are `<button>`s with `data-key`, no click handler
+yet. Also mine: row counts by timing ("3 now, 4 later") rather than a
+total; search ranking (below); "Not on the map" only in the unfiltered
+list.
+- Layout: `body` a flex row; `#sidebar` a column (status, search, chips,
+  then `#route-list`, the only part that scrolls; it needs
+  `min-height: 0` or it grows past the window). Section headings
+  `position: sticky`.
+- `sidebar.js` (DOM only, no tests: `node --test` has no DOM; checked by
+  eye): `renderRouteList(container, {routes, now, modeOrder, emptyText,
+  unmatched})` rebuilds the list whole each call (181 rows is cheap);
+  `createModeChips(container, modeOrder, onToggle)` builds the chips
+  once and returns `update(on, available)`, so a chip toggled from the
+  keyboard keeps its focus (a rebuild would drop it). Text only via
+  `textContent`. Null `color`/`text_color` fall back in CSS (`#555` on
+  white), so `sidebar.js` doesn't copy `mapview.js`'s `FALLBACK_COLOR`.
+- `format.js`: `timingSummary(counts)` (zero parts left out, `""` for
+  none), `TIMING_WORDS` (frozen; shared by rows and unmatched items),
+  `apiRouteName` (`bus_route_L` -> `L`, `rr_route_mfo` -> `MFO`, unknown
+  ids unchanged), `unmatchedSummary` ("Route L, NB: A to B"; missing
+  halves dropped, "location not given").
+- `routes.js`: `visibleRoutes(routes, query, modes)` (search AND modes);
+  `searchRoutes` ranks text matches whose `short_name` starts with the
+  query first (`k` had route K 58th of 62 matches, behind "Frankford",
+  "Park", "Dock"); `groupByMode(routes, modeOrder = [])` so ranking
+  reorders routes within groups, never the groups (mine; rejected: the
+  best match's group moving to the top). `main.js` takes `modeOrder` once
+  from the whole catalog.
+- Real (`121123Z`, viewed Nov 25 evening): 52 routes detoured now (49
+  "6 now, 2 later" first); greyed rows D1 Bus, D2 Bus, MANN, NOR Bus,
+  T Bus, WTR Bus; `market` greys Trolleys/Trackless/Rail; the 5 unmatched
+  are routes L x2, R (now) and H x2 (ended); H NB really is "Mt Pleasant
+  & Creshem to Mt Pleasant & Creshem" in the API text.
+- Mutation checks: all caught except one true equivalent
+  (`TIMING_WORDS.ended` -> the literal `"ended"`). Patterns must be
+  unique: `.join(", ")` appears twice in `format.js`.
+- Known gaps: the per-minute rebuild closes any opened "Not on the map"
+  `<details>` and drops keyboard focus inside the list (fix with W4's
+  state, e.g. remember open `source_key`s); "Detoured now" is long (52
+  rows): revisit if it feels so in use.
+Tests: 81 JS.
