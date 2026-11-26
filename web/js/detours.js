@@ -45,3 +45,27 @@ export function detourTiming(start, end, now) {
   return "active";
 }
 
+
+/** The route panel's group order: in effect first, ended last (D6). */
+export const TIMING_ORDER = Object.freeze(["active", "upcoming", "unknown", "ended"]);
+
+/**
+ * A route's detours grouped by `detourTiming`, for the route panel.
+ *
+ * Groups come in `TIMING_ORDER`; a group with no detours is left out.
+ * Within a group, detours keep the order given (snapshot order).
+ *
+ * @param {object[]} detours detour objects (a route detail's `detours`)
+ * @param {Date} now
+ * @returns {{timing: string, detours: object[]}[]}
+ */
+export function groupByTiming(detours, now) {
+  const groups = new Map(TIMING_ORDER.map((timing) => [timing, []]));
+  for (const detour of detours) {
+    groups.get(detourTiming(detour.start, detour.end, now)).push(detour);
+  }
+  return TIMING_ORDER.filter((timing) => groups.get(timing).length > 0).map((timing) => ({
+    timing,
+    detours: groups.get(timing),
+  }));
+}

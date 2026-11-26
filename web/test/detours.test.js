@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { detourTiming } from "../js/detours.js";
+import { TIMING_ORDER, detourTiming, groupByTiming } from "../js/detours.js";
 
 // Route 2's real window (its first routes.json window), Philadelphia time;
 // the same cases as Python's test_detour_timing. "now" values are in UTC,
@@ -86,4 +86,50 @@ test("detourTiming: a now that isn't a valid Date throws", () => {
       message: /^now must be a valid Date, got /,
     });
   }
+});
+
+// --- groupByTiming ------------------------------------------------------------
+
+/** A detour object with just the fields groupByTiming reads. */
+function detour(sourceKey, start, end) {
+  return { source_key: sourceKey, start, end };
+}
+
+const NOW = new Date("2026-11-25T12:11:23Z"); // the real snapshot's time
+
+test("groupByTiming: active, upcoming, unknown, ended; snapshot order within", () => {
+  const detours = [
+    detour("ended-1", "2026-11-01T00:00:00-05:00", "2026-11-20T00:00:00-05:00"),
+    detour("unknown-1", START, null),
+    detour("active-1", START, END),
+    detour("upcoming-1", "2026-12-01T00:00:00-05:00", "2026-12-02T00:00:00-05:00"),
+    detour("active-2", "2026-11-25T00:00:00-05:00", END),
+    detour("ended-2", "2026-11-02T00:00:00-05:00", "2026-11-03T00:00:00-05:00"),
+  ];
+  const keys = (groups) => groups.map((g) => [g.timing, g.detours.map((d) => d.source_key)]);
+  assert.deepEqual(keys(groupByTiming(detours, NOW)), [
+    ["active", ["active-1", "active-2"]],
+    ["upcoming", ["upcoming-1"]],
+    ["unknown", ["unknown-1"]],
+    ["ended", ["ended-1", "ended-2"]],
+  ]);
+});
+
+test("groupByTiming: groups the same objects it was given", () => {
+  const only = detour("a", START, END);
+  assert.equal(groupByTiming([only], NOW)[0].detours[0], only);
+});
+
+test("groupByTiming: leaves out empty groups; none for no detours", () => {
+  const detours = [detour("ended-1", "2026-11-01T00:00:00-05:00", "2026-11-20T00:00:00-05:00")];
+  assert.deepEqual(
+    groupByTiming(detours, NOW).map((g) => g.timing),
+    ["ended"],
+  );
+  assert.deepEqual(groupByTiming([], NOW), []);
+});
+
+test("TIMING_ORDER covers every detourTiming result, ended last", () => {
+  assert.deepEqual(TIMING_ORDER, ["active", "upcoming", "unknown", "ended"]);
+  assert.ok(Object.isFrozen(TIMING_ORDER));
 });
