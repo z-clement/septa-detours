@@ -400,6 +400,14 @@ that then notify subscribers (sidebar and map re-render from state):
 
 ### Later in the web part
 
+- **UI/UX pass: the map must be readable at a glance** (yours,
+  2026-11-26, after tier C). Now that the map shows routes, detoured
+  routes, faded skipped stretches, dashed detour paths and start dots
+  (plus the network, focus dimming and direction offsets), it needs a
+  dedicated design pass so someone glancing at it can tell what's
+  detoured, where, and what to do. A big piece of work, not a tweak:
+  plan it (questions, sketches, by-eye checks on real data) before
+  building.
 - Detoured lines in a different line style (yours, 2026-11-25), so
   they're easier to pick out on the map than by color and width alone
   (e.g. a casing/halo, or a dashed overlay; pick when it's built).
