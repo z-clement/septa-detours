@@ -1,20 +1,29 @@
-// Everything that touches MapLibre: the map, its layers, popups, bounds.
+// Everything that touches MapLibre: the map, its layers, popups.
 // The only module that uses the global `maplibregl` (from the UMD script
 // in index.html).
 
-import { describeLine, describeStart } from "./format.js";
+import { describeDetour, describeRoute } from "./format.js";
+import { detouredKeys } from "./routes.js";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
-/** Used when a feature's `route_color` is null (export emits null, never junk). */
+/** Used when a route's `color` is null (export emits null, never junk). */
 const FALLBACK_COLOR = "#555555";
+
+/** The faint whole-network lines (decided: one neutral grey, not route colors). */
+const NETWORK_COLOR = "#9aa0a6";
+
+/** Start dots of detours that have ended. */
+const ENDED_COLOR = "#9e9e9e";
 
 /** Rough centre of Philadelphia, [lon, lat], shown before the data arrives. */
 const PHILLY_CENTER = [-75.16, 39.95];
 
-const SOURCE_ID = "detours";
-const LINES_LAYER_ID = "detour-lines";
-const STARTS_LAYER_ID = "detour-starts";
+const NETWORK_SOURCE = "network";
+const STARTS_SOURCE = "starts";
+const NETWORK_LAYER = "network-lines";
+const DETOURED_LAYER = "detoured-lines";
+const STARTS_LAYER = "start-dots";
 
 /**
  * Create the map in the element with id `container`, with zoom buttons.
@@ -34,162 +43,157 @@ export function createMap(container) {
 }
 
 /**
- * Every [lon, lat] position of one feature, whatever its geometry type.
- *
- * A Point's `coordinates` is a single position; a LineString's is a list of
- * them. Returning a list either way lets callers loop without caring.
- *
- * @param {object} feature
- * @returns {Array<[number, number]>}
- */
-function featurePositions(feature) {
-  const { type, coordinates } = feature.geometry;
-  return type === "Point" ? [coordinates] : coordinates;
-}
-
-/**
- * Bounding box of every position in the collection, lines and points.
- *
- * Returned in the shape `map.fitBounds` accepts: [[west, south], [east, north]].
- * Coordinates are [lon, lat], so lon is x (west/east) and lat is y.
- *
- * @param {object} collection a FeatureCollection
- * @returns {[[number, number], [number, number]] | null} null when there
- *   are no positions at all (an empty collection has no bounds)
- */
-export function collectionBounds(collection) {
-  let west = Infinity;
-  let south = Infinity;
-  let east = -Infinity;
-  let north = -Infinity;
-
-  for (const feature of collection.features) {
-    // Destructuring: unpacks [lon, lat] like Python's `for lon, lat in ...`.
-    for (const [lon, lat] of featurePositions(feature)) {
-      west = Math.min(west, lon);
-      east = Math.max(east, lon);
-      south = Math.min(south, lat);
-      north = Math.max(north, lat);
-    }
-  }
-
-  // Still Infinity means the loop never saw a position.
-  if (west === Infinity) {
-    return null;
-  }
-  return [
-    [west, south],
-    [east, north],
-  ];
-}
-
-/**
- * Add the collection as one GeoJSON source and two layers on top of it.
+ * Draw the overview: the whole network faintly, detoured routes in color,
+ * and every placed detour's start point on top.
  *
  * Must run after the style has loaded (adding a source before then throws).
+ * Layers draw in the order they're added.
  *
- * Each layer has a `filter`: an expression that must be true for a feature
- * to be drawn by that layer. `["geometry-type"]` is the feature's type, so
- * the line layer only sees LineStrings and the circle layer only Points.
- * Layers draw in the order they're added, so the circles end up on top.
- *
- * Color: a MapLibre *expression*, i.e. a small program written as JSON
- * arrays and evaluated per feature on the GPU side. `["get", "route_color"]`
- * reads the property; `coalesce` takes the first non-null value, so a null
- * color falls back to FALLBACK_COLOR.
+ * Expressions: MapLibre styles are small programs written as JSON arrays,
+ * evaluated per feature. `["get", "color"]` reads a property; `coalesce`
+ * takes the first non-null value; `match` picks a value by a property's
+ * value, with the last item as the default.
  *
  * Directions: `line-offset` shifts a line sideways relative to the order its
  * vertices are drawn in (positive = to the right of travel). A route's two
  * directions are drawn in opposite orders, so the *same* positive offset
  * puts each one on its own side of the street (US right-hand traffic, like
- * the real buses), and they stop hiding each other.
- *
- * Known gap: a shape used by both directions gives two features with
- * identical geometry *and* vertex order, so the offset can't separate them;
- * they draw on top of each other. The click popup still lists both.
+ * the real buses), and they stop hiding each other. Known gap: a shape
+ * used by both directions has identical geometry *and* vertex order, so
+ * the offset can't separate its two lines.
  *
  * @param {maplibregl.Map} map
- * @param {object} collection
+ * @param {{routes: object[], network: object, starts: object}} site
  */
-export function addDetourLayers(map, collection) {
-  map.addSource(SOURCE_ID, { type: "geojson", data: collection });
+export function addOverviewLayers(map, site) {
+  map.addSource(NETWORK_SOURCE, { type: "geojson", data: site.network });
+  map.addSource(STARTS_SOURCE, { type: "geojson", data: site.starts });
 
-  const routeColor = ["coalesce", ["get", "route_color"], FALLBACK_COLOR];
+  const routeColor = ["coalesce", ["get", "color"], FALLBACK_COLOR];
+  const offset = ["interpolate", ["linear"], ["zoom"], 10, 1, 16, 4];
+  const lineLayout = { "line-cap": "round", "line-join": "round" };
 
   map.addLayer({
-    id: LINES_LAYER_ID,
+    id: NETWORK_LAYER,
     type: "line",
-    source: SOURCE_ID,
-    filter: ["==", ["geometry-type"], "LineString"],
-    layout: {
-      "line-cap": "round",
-      "line-join": "round",
-    },
+    source: NETWORK_SOURCE,
+    layout: lineLayout,
     paint: {
-      "line-color": routeColor,
-      // `interpolate` over `zoom`: thin and close together when zoomed out,
-      // wider and further apart when zoomed in (pairs are zoom, value).
-      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 5],
-      "line-offset": ["interpolate", ["linear"], ["zoom"], 10, 1, 16, 4],
+      "line-color": NETWORK_COLOR,
+      "line-opacity": 0.6,
+      // `interpolate` over `zoom`: thin when zoomed out, wider when zoomed
+      // in (pairs are zoom, value).
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.75, 16, 2.5],
+      "line-offset": offset,
     },
   });
 
+  // The same lines again, only for detoured routes, in their own color.
+  // `["literal", [...]]` marks the array as data, not an expression.
   map.addLayer({
-    id: STARTS_LAYER_ID,
-    type: "circle",
-    source: SOURCE_ID,
-    filter: ["==", ["geometry-type"], "Point"],
+    id: DETOURED_LAYER,
+    type: "line",
+    source: NETWORK_SOURCE,
+    filter: ["in", ["get", "key"], ["literal", detouredKeys(site.routes)]],
+    layout: lineLayout,
     paint: {
-      // Filled with the route's color; the white outline keeps a dot
-      // visible on top of its own (same-colored) route line.
-      "circle-color": routeColor,
+      "line-color": routeColor,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 5],
+      "line-offset": offset,
+    },
+  });
+
+  // Styled by `timing` (computed at export time; the page will recompute
+  // it in W3): active solid in the route color, upcoming hollow (white
+  // fill, route-color ring), ended grey. `unknown` looks like active.
+  map.addLayer({
+    id: STARTS_LAYER,
+    type: "circle",
+    source: STARTS_SOURCE,
+    paint: {
+      "circle-color": [
+        "match",
+        ["get", "timing"],
+        "upcoming",
+        "#ffffff",
+        "ended",
+        ENDED_COLOR,
+        routeColor,
+      ],
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 16, 9],
-      "circle-stroke-color": "#ffffff",
+      "circle-stroke-color": ["match", ["get", "timing"], "upcoming", routeColor, "#ffffff"],
       "circle-stroke-width": 2,
     },
   });
 }
 
 /**
+ * Popup text for the start dots under a click: each detour's details.
+ *
+ * Dots only carry `key` and `source_key`; the details are in the route's
+ * detail file, fetched (once per route) with `loadDetail`.
+ *
+ * @param {object[]} features clicked start-dot features
+ * @param {Map<string, object>} routesByKey routes.json by key
+ * @param {(key: string) => Promise<object>} loadDetail
+ * @returns {Promise<string[]>}
+ */
+async function describeDots(features, routesByKey, loadDetail) {
+  return Promise.all(
+    features.map(async ({ properties: { key, source_key: sourceKey } }) => {
+      const detail = await loadDetail(key);
+      const detour = detail.detours.find((d) => d.source_key === sourceKey);
+      return detour === undefined
+        ? `Detour ${sourceKey} is missing from data/routes/${key}.json`
+        : describeDetour(detour, routesByKey.get(key));
+    }),
+  );
+}
+
+/**
  * Show a popup for whatever was clicked, and a pointer cursor on hover.
  *
- * One handler for the whole map instead of one per layer: a start point
+ * One handler for the whole map instead of one per layer: a start dot
  * usually sits on its route line, and per-layer handlers would then open
  * two popups for one click. `queryRenderedFeatures` returns every drawn
- * feature under the click; start points win, and lines are listed only
- * when no start point was hit. Every feature is listed, so overlapping
- * ones (several detours at one corner, a shape in both directions) all
- * show up.
+ * feature under the click; dots win, and lines are listed only when no
+ * dot was hit. Overlapping dots are all listed; for lines, each route
+ * once (a route's directions and shapes overlap).
  *
  * @param {maplibregl.Map} map
+ * @param {object[]} routes routes.json
+ * @param {(key: string) => Promise<object>} loadDetail
  */
-export function addPopups(map) {
+export function addPopups(map, routes, loadDetail) {
+  const routesByKey = new Map(routes.map((route) => [route.key, route]));
+
   map.on("click", (event) => {
-    const starts = map.queryRenderedFeatures(event.point, {
-      layers: [STARTS_LAYER_ID],
-    });
-    const features =
-      starts.length > 0
-        ? starts
-        : map.queryRenderedFeatures(event.point, { layers: [LINES_LAYER_ID] });
-    if (features.length === 0) {
+    const dots = map.queryRenderedFeatures(event.point, { layers: [STARTS_LAYER] });
+    const lines =
+      dots.length > 0
+        ? []
+        : map.queryRenderedFeatures(event.point, { layers: [DETOURED_LAYER, NETWORK_LAYER] });
+    if (dots.length === 0 && lines.length === 0) {
       return;
     }
 
-    const texts = features.map((feature) =>
-      feature.layer.id === STARTS_LAYER_ID
-        ? describeStart(feature.properties)
-        : describeLine(feature.properties),
-    );
-
-    new maplibregl.Popup({ maxWidth: "360px" })
+    const popup = new maplibregl.Popup({ maxWidth: "360px" })
       .setLngLat(event.lngLat)
       // setText, not setHTML: the text is treated as text, never markup.
-      .setText(texts.join("\n\n----\n\n"))
+      .setText(dots.length > 0 ? "Loading…" : "")
       .addTo(map);
+
+    if (dots.length === 0) {
+      const keys = [...new Set(lines.map((feature) => feature.properties.key))];
+      popup.setText(keys.map((key) => describeRoute(routesByKey.get(key))).join("\n\n"));
+      return;
+    }
+    describeDots(dots, routesByKey, loadDetail)
+      .then((texts) => popup.setText(texts.join("\n\n----\n\n")))
+      .catch((err) => popup.setText(err.message));
   });
 
-  for (const layerId of [LINES_LAYER_ID, STARTS_LAYER_ID]) {
+  for (const layerId of [NETWORK_LAYER, DETOURED_LAYER, STARTS_LAYER]) {
     map.on("mouseenter", layerId, () => {
       map.getCanvas().style.cursor = "pointer";
     });
@@ -198,4 +202,3 @@ export function addPopups(map) {
     });
   }
 }
-

@@ -132,7 +132,7 @@ docs/            plans (web-plan.md = current, geography-plan.md,
   `uv run python -m septa_detours.export route bus 21` ->
   `web/data/bus-21.geojson`
 - Serve the map: `python -m http.server -d web`, then open
-  http://localhost:8000 (it reads `web/data/detours.geojson`)
+  http://localhost:8000 (it reads the files `export site` writes)
 
 ## Data notes
 
