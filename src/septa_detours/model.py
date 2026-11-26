@@ -26,9 +26,17 @@ input format.
 """
 
 from collections.abc import Sequence
-from typing import Annotated, Literal
+from datetime import time
+from typing import Annotated, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    model_validator,
+)
 
 from septa_detours.gtfs.load import Feed
 
@@ -143,6 +151,37 @@ class Step(_Frozen):
     street: CleanText
 
 
+type Weekday = Annotated[int, Field(ge=0, le=6)]
+"""Monday = 0 ... Sunday = 6, as ``datetime.weekday()``."""
+
+
+class DailyHours(_Frozen):
+    """When a detour runs within its dates: "7am - 4pm Mon - Fri".
+
+    Attributes:
+        days: The weekdays it starts on, ascending, no repeats (all seven
+            for "every day").
+        start: Local time (America/New_York) it starts each day.
+        end: Local time it ends. Earlier than ``start`` means overnight
+            ("7:00PM to 5:00AM"): it ends the next morning, and ``days``
+            are the evenings it starts on.
+
+    ``start == end`` is rejected: it could mean nothing or all day.
+    """
+
+    days: Annotated[tuple[Weekday, ...], Field(min_length=1, max_length=7)]
+    start: time
+    end: time
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if list(self.days) != sorted(set(self.days)):
+            raise ValueError(f"days must be ascending with no repeats: {self.days}")
+        if self.start == self.end:
+            raise ValueError(f"start and end are both {self.start}")
+        return self
+
+
 class DetourNotice(_Frozen):
     """What can be learned from one API detour entry, without GTFS.
 
@@ -168,13 +207,15 @@ class DetourNotice(_Frozen):
             when the message has no such path (a stop closure, a layover)
             or it isn't in a recognized form, with no issue: messages
             aren't modeled yet, and an issue would make it ``partial``.
+        daily_hours: When it runs within ``start``/``end``, from the
+            message ("7am - 4pm Mon - Fri"), or ``None``: all day (no hours
+            given, e.g. "24/7"), or hours parse can't read (with an issue).
         issues: Why fields are ``None`` or doubtful, one string each, e.g.
             ``"end: unparseable '12/1/2026  11:5 PM'"``.
 
-    Note: ``start``/``end`` bound the detour, but the message may narrow it
-    further (e.g. "7am - 4pm Mon thru Fri"). That schedule is not modeled
-    yet; it stays in ``source.message``. Whether ``end`` is after ``start``
-    is checked by ``parse/`` (as an issue), not rejected here.
+    Note: ``start``/``end`` bound the detour; ``daily_hours`` narrows it
+    within them. Whether ``end`` is after ``start`` is checked by
+    ``parse/`` (as an issue), not rejected here.
     """
 
     source: SourceText
@@ -188,6 +229,7 @@ class DetourNotice(_Frozen):
     reason: CleanText | None
     direction: Direction | None
     route_steps: tuple[Step, ...] = ()
+    daily_hours: DailyHours | None = None
     issues: tuple[CleanText, ...] = ()
 
     @property

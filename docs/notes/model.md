@@ -62,3 +62,12 @@ rejoin tier B couldn't find).
 `RejoinBy` = `"crossing"` (tier B) | `"walk"` (tier C found it); `None`
 without a rejoin and in older files (not checked against
 `rejoin_point`, so those still read).
+
+## Daily hours (UI plan U8, 2026-11-26)
+
+`DailyHours` (`days`: weekdays 0-6, Monday = 0, ascending, no repeats,
+1-7 of them; `start`/`end`: local `time`s; `end` before `start` =
+overnight, `days` are the starting evenings; `start == end` rejected:
+nothing or all day?) and `DetourNotice.daily_hours` (default `None`: no
+hours given, or unreadable with an issue; a pre-U8 file reads). ty
+baseline 47 (the `make_notice` helper, one per new notice field).

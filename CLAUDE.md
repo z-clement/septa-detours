@@ -265,7 +265,7 @@ Details and their origins are in `docs/notes/`; the short version:
   RUF001 flags literal en dashes / NBSPs (write `"\u2013"`, `"\u00a0"`;
   Claude has typed literal NBSPs before: `sed -i
   's/\xc2\xa0/\\u00a0/g' <file>`).
-- ty: 46 pre-existing diagnostics (45, plus one per new `DetourNotice`
+- ty: 47 pre-existing diagnostics (45, plus one per new `DetourNotice`
   field from `test_model.py`'s untyped `make_notice` helper) (mostly `**dict` test helpers and
   `dict` invariance vs `Properties`); don't add more.
 - JS: `node --test web/test/` for pure modules (no DOM, no

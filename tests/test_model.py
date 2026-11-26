@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -7,6 +7,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from septa_detours.model import (
     AffectedShape,
+    DailyHours,
     Detour,
     DetourNotice,
     Intersection,
@@ -360,6 +361,54 @@ def test_rejoin_by_defaults_to_none_and_rejects_others():
     assert RouteMatch.model_validate_json(old).rejoin_by is None
     with pytest.raises(ValidationError, match="rejoin_by"):
         make_route_match(rejoin_by="guess")
+
+
+# --- daily hours ----------------------------------------------------------------
+
+WEEKDAYS_7_TO_4 = DailyHours(days=(0, 1, 2, 3, 4), start=time(7), end=time(16))
+
+
+def test_daily_hours_round_trip_through_json():
+    data = json.loads(WEEKDAYS_7_TO_4.model_dump_json())
+    assert data == {"days": [0, 1, 2, 3, 4], "start": "07:00:00", "end": "16:00:00"}
+    assert DailyHours.model_validate_json(WEEKDAYS_7_TO_4.model_dump_json()) == (
+        WEEKDAYS_7_TO_4
+    )
+
+
+def test_daily_hours_overnight_is_allowed():
+    # "Monday thru Wednesday, 7:00PM to 5:00AM" (a real message).
+    hours = DailyHours(days=(0, 1, 2), start=time(19), end=time(5))
+    assert hours.end < hours.start
+
+
+@pytest.mark.parametrize(
+    ("fields", "error"),
+    [
+        ({"days": ()}, "days"),
+        ({"days": (0, 7)}, "days"),
+        ({"days": (-1,)}, "days"),
+        ({"days": (2, 1)}, "ascending"),
+        ({"days": (1, 1)}, "ascending"),
+        ({"start": time(9), "end": time(9)}, "both 09:00"),
+    ],
+)
+def test_daily_hours_rejects(fields, error):
+    values = {"days": (0,), "start": time(7), "end": time(16), **fields}
+    with pytest.raises(ValidationError, match=error):
+        DailyHours(**values)
+
+
+def test_notice_daily_hours_default_and_round_trip():
+    assert make_notice().daily_hours is None
+    notice = make_notice(daily_hours=WEEKDAYS_7_TO_4)
+    assert DetourNotice.model_validate_json(notice.model_dump_json()) == notice
+
+
+def test_notice_written_before_daily_hours_still_reads():
+    data = json.loads(make_notice().model_dump_json())
+    del data["daily_hours"]
+    assert DetourNotice.model_validate_json(json.dumps(data)).daily_hours is None
 
 
 LOCATION = TypeAdapter(Location)
