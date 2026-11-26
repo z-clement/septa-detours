@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  clickChoices,
   detouredKeys,
   detouredNow,
   detouredRoutes,
@@ -370,4 +371,50 @@ test("visibleRoutes: no modes on lists nothing", () => {
 
 test("visibleRoutes: a mode on but nothing of it matching lists nothing of it", () => {
   assert.deepEqual(visibleRoutes(FULL, "market", new Set(["rail", "trackless"])), []);
+});
+
+// --- clickChoices -------------------------------------------------------------
+
+/** A clicked feature with just the properties clickChoices reads. */
+function hit(key, sourceKey) {
+  return { properties: sourceKey === undefined ? { key } : { key, source_key: sourceKey } };
+}
+
+test("clickChoices: nothing under the click, no choices", () => {
+  assert.deepEqual(clickChoices([], []), []);
+});
+
+test("clickChoices: lines give one choice per route, first seen first", () => {
+  // A route's directions and shapes overlap, so its key repeats.
+  const lines = [hit("bus-21"), hit("bus-42"), hit("bus-21"), hit("bus-9"), hit("bus-42")];
+  assert.deepEqual(clickChoices([], lines), [
+    { key: "bus-21", detour: null },
+    { key: "bus-42", detour: null },
+    { key: "bus-9", detour: null },
+  ]);
+});
+
+test("clickChoices: dots give one choice per detour, and lines don't count", () => {
+  const dots = [hit("bus-2", "5d0d22dfe7d86935"), hit("bus-2", "c1"), hit("bus-49", "c2")];
+  assert.deepEqual(clickChoices(dots, [hit("bus-21")]), [
+    { key: "bus-2", detour: "5d0d22dfe7d86935" },
+    { key: "bus-2", detour: "c1" },
+    { key: "bus-49", detour: "c2" },
+  ]);
+});
+
+test("clickChoices: direction twins (same source_key, same dot) are one choice", () => {
+  // Route L1 OWL's real EB/WB stop closures at 5th & Market.
+  const twin = () => hit("bus-L1_OWL", "a08563ebaa011c5d");
+  assert.deepEqual(clickChoices([twin(), twin()], []), [
+    { key: "bus-L1_OWL", detour: "a08563ebaa011c5d" },
+  ]);
+});
+
+test("clickChoices: the same source_key on two routes is two choices", () => {
+  const dots = [hit("bus-2", "abc"), hit("bus-21", "abc")];
+  assert.deepEqual(
+    clickChoices(dots, []).map((c) => c.key),
+    ["bus-2", "bus-21"],
+  );
 });

@@ -162,3 +162,34 @@ export function searchRoutes(routes, query) {
 export function visibleRoutes(routes, query, modes) {
   return searchRoutes(routes, query).filter((route) => modes.has(route.mode));
 }
+
+/**
+ * What a map click could mean: one choice per detour or route under it.
+ *
+ * Dots win: when any start dot was hit, lines don't count (a dot sits on
+ * its route's line), and each distinct detour is a choice (direction
+ * twins sharing a `source_key` and a dot collapse into one). With no
+ * dots, each distinct route among the lines is a choice, with no detour.
+ * Choices keep the order first seen (MapLibre lists the topmost first).
+ *
+ * @param {{properties: {key: string, source_key?: string}}[]} dots
+ *   start-dot features under the click
+ * @param {{properties: {key: string}}[]} lines line features under the click
+ * @returns {{key: string, detour: string | null}[]}
+ */
+export function clickChoices(dots, lines) {
+  // Keyed by identity; setting a key again keeps its first position (and
+  // the value is the same), so a repeat changes nothing.
+  const choices = new Map();
+  if (dots.length > 0) {
+    for (const { properties: p } of dots) {
+      // JSON of both: a separator character could appear inside a value.
+      choices.set(JSON.stringify([p.key, p.source_key]), { key: p.key, detour: p.source_key });
+    }
+  } else {
+    for (const { properties: p } of lines) {
+      choices.set(p.key, { key: p.key, detour: null });
+    }
+  }
+  return [...choices.values()];
+}
