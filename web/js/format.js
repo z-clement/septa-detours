@@ -327,3 +327,39 @@ export function focusAnnouncement(route, counts) {
   const summary = timingSummary(counts);
   return `${routeLabel(route)}: ${summary === "" ? "no detours" : summary}.`;
 }
+
+/**
+ * The map key's rows for what the map draws in a view (UI plan G).
+ *
+ * Overview: the grey detoured routes, then markers below `detailZoom`
+ * (route numbers) or, from it, the detour marks (skipped band, path,
+ * start dot). Focused: the route in its color, the white fade, path,
+ * start and end dots, plus the direction arrows from `detailZoom`.
+ * `kind` names the swatch (app.css's `legend-<kind>`).
+ *
+ * @param {{focused: boolean, zoom: number, detailZoom: number}} view
+ * @returns {{kind: string, text: string}[]}
+ */
+export function legendRows({ focused, zoom, detailZoom }) {
+  const detailed = zoom >= detailZoom;
+  if (!focused) {
+    const route = { kind: "route", text: "Detoured route" };
+    if (!detailed) {
+      return [route, { kind: "marker", text: "Detour (route number)" }];
+    }
+    return [
+      route,
+      { kind: "skipped", text: "Skipped by a detour" },
+      { kind: "path", text: "Detour path" },
+      { kind: "start", text: "Detour starts here" },
+    ];
+  }
+  return [
+    { kind: "route-focused", text: "This route" },
+    ...(detailed ? [{ kind: "arrows", text: "Direction of travel" }] : []),
+    { kind: "skipped-focused", text: "Skipped by a detour" },
+    { kind: "path", text: "Detour path" },
+    { kind: "start", text: "Detour starts here" },
+    { kind: "rejoin", text: "Back on route here" },
+  ];
+}

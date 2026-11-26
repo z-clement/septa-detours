@@ -15,6 +15,7 @@ import {
   directionSummary,
   focusAnnouncement,
   formatTime,
+  legendRows,
   modeLabel,
   plural,
   rejoinText,
@@ -417,4 +418,63 @@ test("focusAnnouncement: no detours, and back to the overview", () => {
     "Route K: no detours.",
   );
   assert.equal(focusAnnouncement(null), "All routes.");
+});
+
+// --- legendRows ---------------------------------------------------------------
+
+const kinds = (rows) => rows.map((row) => row.kind);
+
+test("legendRows: the overview zoomed out shows routes and markers", () => {
+  assert.deepEqual(legendRows({ focused: false, zoom: 11, detailZoom: 13 }), [
+    { kind: "route", text: "Detoured route" },
+    { kind: "marker", text: "Detour (route number)" },
+  ]);
+});
+
+test("legendRows: the overview zoomed in shows the detour marks, from detailZoom", () => {
+  const rows = [
+    { kind: "route", text: "Detoured route" },
+    { kind: "skipped", text: "Skipped by a detour" },
+    { kind: "path", text: "Detour path" },
+    { kind: "start", text: "Detour starts here" },
+  ];
+  assert.deepEqual(legendRows({ focused: false, zoom: 13, detailZoom: 13 }), rows);
+  assert.deepEqual(legendRows({ focused: false, zoom: 15.5, detailZoom: 13 }), rows);
+  assert.deepEqual(kinds(legendRows({ focused: false, zoom: 12.99, detailZoom: 13 })), [
+    "route",
+    "marker",
+  ]);
+});
+
+test("legendRows: focused shows the route, fade, path and both ends", () => {
+  assert.deepEqual(legendRows({ focused: true, zoom: 11, detailZoom: 13 }), [
+    { kind: "route-focused", text: "This route" },
+    { kind: "skipped-focused", text: "Skipped by a detour" },
+    { kind: "path", text: "Detour path" },
+    { kind: "start", text: "Detour starts here" },
+    { kind: "rejoin", text: "Back on route here" },
+  ]);
+});
+
+test("legendRows: focused and zoomed in adds the direction arrows", () => {
+  assert.deepEqual(kinds(legendRows({ focused: true, zoom: 13, detailZoom: 13 })), [
+    "route-focused",
+    "arrows",
+    "skipped-focused",
+    "path",
+    "start",
+    "rejoin",
+  ]);
+  assert.equal(
+    legendRows({ focused: true, zoom: 14, detailZoom: 13 })[1].text,
+    "Direction of travel",
+  );
+});
+
+test("legendRows: the threshold is the one given", () => {
+  assert.deepEqual(kinds(legendRows({ focused: false, zoom: 13.5, detailZoom: 14 })), [
+    "route",
+    "marker",
+  ]);
+  assert.equal(legendRows({ focused: false, zoom: 12, detailZoom: 11 }).length, 4);
 });
