@@ -393,6 +393,23 @@ body {
     #fff 6px 10px
   );
 }
+/* Zoomed out: an accent circle with the route number (as drawn). */
+.legend-marker {
+  box-sizing: border-box; /* 22 px with its border; + margins = 24 px */
+  width: 22px;
+  height: 22px;
+  margin: 0 1px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--detour-color);
+  box-shadow: 0 0 0 1px #999;
+  color: #fff;
+  font: bold 9px/18px system-ui, sans-serif;
+  text-align: center;
+}
+.legend-marker::after {
+  content: "49";
+}
 /* A start: a solid accent dot, white ring (as drawn). */
 .legend-start {
   box-sizing: border-box; /* 14 px with its border; + margins = 24 px */

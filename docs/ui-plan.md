@@ -165,7 +165,8 @@ checked by eye with your screenshots. Rough sizes in brackets.
   yet checked by eye) [medium, JS + CSS]: detoured routes thin
   grey like the network; paths, fades and start markers in one accent
   color (checked against every SEPTA route color); legend updated.
-- **U3. Route-number markers (B1)** [medium, JS]: below ~zoom 13 one
+- **U3. Route-number markers (B1)** (done 2026-11-26; not yet checked by
+  eye: threshold, crowding in Center City) [medium, JS]: below ~zoom 13 one
   labelled marker per detour (a MapLibre symbol layer: the basemap's
   fonts); lines from zoom 13. Check the threshold by eye.
 - **U4. Focus frames detours (C1)** [small-medium, JS]: fit the focused

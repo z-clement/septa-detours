@@ -686,3 +686,11 @@ Tests: 125 JS.
   (`showFocus` switches it and the detoured layer's color). Legend in
   the same look (`--detour-color`; harness screenshot checked). Map side
   not checked by eye.
+- U3, route-number markers (2026-11-26): `routes.withRouteLabels`
+  (pure, tested) adds each start dot's route short name as `label`;
+  below `MARKER_ZOOM` 13 the map draws `detour-markers` (accent circle,
+  11 px, 14 when emphasized) + `detour-marker-labels` (Noto Sans Bold,
+  the basemap's glyphs; overlapping labels hidden, circles kept); start
+  dots, stretches and paths have `minzoom` 13. Markers share the starts
+  source, so in-effect/focus filters, hover/select and clicks match.
+  Legend row added. Map side not checked by eye (threshold, crowding).

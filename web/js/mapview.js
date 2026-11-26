@@ -4,7 +4,7 @@
 
 import { element, routeBadge } from "./dom.js";
 import { choiceText } from "./format.js";
-import { clickChoices, detouredKeys } from "./routes.js";
+import { clickChoices, detouredKeys, withRouteLabels } from "./routes.js";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
@@ -55,6 +55,16 @@ const PATH_CASING_LAYER = "path-casing";
 const PATH_LAYER = "path-dashes";
 const REJOIN_LAYER = "rejoin-dots";
 const STARTS_LAYER = "start-dots";
+const MARKER_LAYER = "detour-markers";
+const MARKER_LABEL_LAYER = "detour-marker-labels";
+
+/** Zoomed out below this, each detour is a route-number marker; from it
+ * up, its start dot, skipped stretch and path (UI plan B1). Check by eye. */
+const MARKER_ZOOM = 13;
+
+/** The basemap's own bold font (OpenFreeMap Positron serves Noto Sans):
+ * MapLibre draws text with the style's glyphs only. */
+const LABEL_FONT = ["Noto Sans Bold"];
 
 /** Sources whose features are detours (`key` + `source_key`): their
  * hover/selected feature-state goes on both. */
@@ -121,7 +131,8 @@ export function addOverviewLayers(map, site) {
   // a key, and a dot: both light up together.
   map.addSource(STARTS_SOURCE, {
     type: "geojson",
-    data: site.starts,
+    // `label`: each dot's route number, for the zoomed-out markers.
+    data: withRouteLabels(site.starts, site.routes),
     promoteId: "source_key",
   });
   map.addSource(SKIPPED_SOURCE, {
@@ -224,6 +235,7 @@ export function addOverviewLayers(map, site) {
     id: SKIPPED_LAYER,
     type: "line",
     source: SKIPPED_SOURCE,
+    minzoom: MARKER_ZOOM,
     filter: inEffect,
     layout: { "line-cap": "butt", "line-join": "round" },
     paint: {
@@ -250,6 +262,7 @@ export function addOverviewLayers(map, site) {
     id: PATH_CASING_LAYER,
     type: "line",
     source: PATHS_SOURCE,
+    minzoom: MARKER_ZOOM,
     filter: inEffect,
     layout: lineLayout,
     paint: {
@@ -262,6 +275,7 @@ export function addOverviewLayers(map, site) {
     id: PATH_LAYER,
     type: "line",
     source: PATHS_SOURCE,
+    minzoom: MARKER_ZOOM,
     filter: inEffect,
     // Dashes need butt caps: round caps would fill the gaps in.
     layout: { "line-cap": "butt", "line-join": "round" },
@@ -304,6 +318,7 @@ export function addOverviewLayers(map, site) {
     id: STARTS_LAYER,
     type: "circle",
     source: STARTS_SOURCE,
+    minzoom: MARKER_ZOOM,
     filter: inEffect,
     paint: {
       "circle-color": DETOUR_COLOR,
@@ -320,6 +335,38 @@ export function addOverviewLayers(map, site) {
       "circle-stroke-color": ["case", selected, SELECTED_RING_COLOR, "#ffffff"],
       "circle-stroke-width": ["case", selected, 3, 2],
     },
+  });
+
+  // Zoomed out: one marker per detour in effect at its start, an accent
+  // circle with its route number (B1), on top of everything. Where
+  // markers crowd, MapLibre hides labels that would overlap; every circle
+  // stays. Same source as the start dots, so hover/select/click match.
+  map.addLayer({
+    id: MARKER_LAYER,
+    type: "circle",
+    source: STARTS_SOURCE,
+    maxzoom: MARKER_ZOOM,
+    filter: inEffect,
+    paint: {
+      "circle-color": DETOUR_COLOR,
+      "circle-radius": ["case", emphasized, 14, 11],
+      "circle-stroke-color": ["case", selected, SELECTED_RING_COLOR, "#ffffff"],
+      "circle-stroke-width": ["case", selected, 3, 2],
+    },
+  });
+  map.addLayer({
+    id: MARKER_LABEL_LAYER,
+    type: "symbol",
+    source: STARTS_SOURCE,
+    maxzoom: MARKER_ZOOM,
+    filter: inEffect,
+    layout: {
+      "text-field": ["get", "label"],
+      "text-font": LABEL_FONT,
+      "text-size": 11,
+      "text-allow-overlap": false,
+    },
+    paint: { "text-color": "#ffffff" },
   });
 
   /**
@@ -339,7 +386,14 @@ export function addOverviewLayers(map, site) {
   /** Detour layers: in effect, and on the focused route if one is. */
   function applyDetourFilters() {
     const filter = only === null ? inEffect : ["all", only, inEffect];
-    for (const layer of [STARTS_LAYER, SKIPPED_LAYER, PATH_CASING_LAYER, PATH_LAYER]) {
+    for (const layer of [
+      STARTS_LAYER,
+      MARKER_LAYER,
+      MARKER_LABEL_LAYER,
+      SKIPPED_LAYER,
+      PATH_CASING_LAYER,
+      PATH_LAYER,
+    ]) {
       map.setFilter(layer, filter);
     }
   }
@@ -479,6 +533,7 @@ export function addLegend(map) {
     row("legend-route", "Detoured route"),
     row("legend-skipped", "Skipped by a detour"),
     row("legend-path", "Detour path"),
+    row("legend-marker", "Detour, zoomed out (route no.)"),
     row("legend-start", "Detour starts here"),
     row("legend-rejoin", "Back on route here"),
   );
@@ -568,7 +623,7 @@ export function addClickHandler(map, routes, loadDetail, onFocus) {
     // A skipped stretch or a path is a detour too (key + source_key): it
     // counts as a dot, selecting its detour.
     const dots = map.queryRenderedFeatures(event.point, {
-      layers: [STARTS_LAYER, REJOIN_LAYER, SKIPPED_LAYER, PATH_LAYER],
+      layers: [MARKER_LAYER, STARTS_LAYER, REJOIN_LAYER, SKIPPED_LAYER, PATH_LAYER],
     });
     const lines =
       dots.length > 0
@@ -599,6 +654,7 @@ export function addClickHandler(map, routes, loadDetail, onFocus) {
     PATH_LAYER,
     REJOIN_LAYER,
     STARTS_LAYER,
+    MARKER_LAYER,
   ]) {
     map.on("mouseenter", layerId, () => {
       map.getCanvas().style.cursor = "pointer";
