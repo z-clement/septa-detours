@@ -235,6 +235,7 @@ function detourCard(detour, directions, selected) {
   const select = element("button", "card-select", detourHeadline(detour, directions));
   select.type = "button";
   select.setAttribute("aria-pressed", String(selected));
+  select.dataset.focusId = `card:${detour.source_key}`;
   headline.append(select);
   card.append(
     headline,
@@ -249,7 +250,9 @@ function detourCard(detour, directions, selected) {
     const notes = element("details", "issues");
     const list = element("ul");
     list.append(...detour.issues.map((issue) => element("li", undefined, issue)));
-    notes.append(element("summary", undefined, `Parser notes (${detour.issues.length})`), list);
+    const summary = element("summary", undefined, `Parser notes (${detour.issues.length})`);
+    summary.dataset.focusId = `issues:${detour.source_key}`;
+    notes.append(summary, list);
     card.append(notes);
   }
   return card;
@@ -267,8 +270,15 @@ function panelHeader(route, detail, onBack) {
   const header = element("header", "panel-header");
   const back = element("button", "back", "\u2190 All routes");
   back.type = "button";
+  back.dataset.focusId = "back";
   back.addEventListener("click", onBack);
+  // The panel's label (index.html's aria-labelledby), and where keyboard
+  // focus lands when a route is focused (tabindex -1: focusable from
+  // script, not a Tab stop).
   const title = element("h2");
+  title.id = "route-panel-title";
+  title.tabIndex = -1;
+  title.dataset.focusId = "title";
   title.append(routeBadge(route), element("span", "name", route.long_name ?? ""));
   title.title = routeLabel(route);
   header.append(back, title);
@@ -290,7 +300,8 @@ function panelHeader(route, detail, onBack) {
  *
  * Its detours grouped by timing (in effect, upcoming, dates unknown,
  * ended); "Ended" is a closed `<details>` (D6). Re-rendering the same
- * route (the per-minute refresh) keeps "Ended" open if it was. Before the
+ * route (the per-minute refresh) keeps "Ended" open if it was, and keeps
+ * keyboard focus on the same control (`data-focus-id`). Before the
  * detail file arrives, `detail` is null and the panel says it's loading;
  * a failed load shows `error` instead.
  *
@@ -307,6 +318,10 @@ export function renderRoutePanel(container, { route, detail, error, now, selecte
   const endedWasOpen =
     container.dataset.key === route.key &&
     container.querySelector("details.timing-ended")?.open === true;
+  const focusId =
+    container.dataset.key === route.key && container.contains(document.activeElement)
+      ? document.activeElement.dataset.focusId
+      : undefined;
   container.dataset.key = route.key;
 
   const body = element("div", "panel-body");
@@ -321,8 +336,10 @@ export function renderRoutePanel(container, { route, detail, error, now, selecte
       const ended = timing === "ended";
       const group = element(ended ? "details" : "section", `timing-group timing-${timing}`);
       const heading = timingHeading(timing, detours.length);
+      const summary = element("summary", undefined, heading);
+      summary.dataset.focusId = "ended";
       group.append(
-        ended ? element("summary", undefined, heading) : element("h3", "group-heading", heading),
+        ended ? summary : element("h3", "group-heading", heading),
         ...detours.map((d) =>
           detourCard(d, detail.directions, d.source_key === selectedDetour),
         ),
@@ -334,4 +351,9 @@ export function renderRoutePanel(container, { route, detail, error, now, selecte
     }
   }
   container.replaceChildren(panelHeader(route, detail, onBack), body);
+  if (focusId !== undefined) {
+    container
+      .querySelector(`[data-focus-id="${CSS.escape(focusId)}"]`)
+      ?.focus({ preventScroll: true });
+  }
 }

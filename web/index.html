@@ -36,8 +36,12 @@
         <div id="mode-chips" role="group" aria-label="Show modes"></div>
         <nav id="route-list" aria-label="Routes"></nav>
       </div>
-      <section id="route-panel" aria-label="Route" hidden></section>
+      <section id="route-panel" aria-labelledby="route-panel-title" hidden></section>
     </aside>
+    <!-- Read out by screen readers when the focused route changes (polite:
+         after what they're saying). Visually hidden, not display: none,
+         which would silence it. -->
+    <div id="announce" class="visually-hidden" aria-live="polite"></div>
     <div id="map"></div>
     <div id="error" role="alert"></div>
 

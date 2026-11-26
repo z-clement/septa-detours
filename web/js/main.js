@@ -5,7 +5,7 @@
 // `maplibregl` exists for mapview.js).
 
 import { loadSite, routeDetailLoader } from "./data.js";
-import { statusLine } from "./format.js";
+import { focusAnnouncement, statusLine } from "./format.js";
 import {
   addClickHandler,
   addOverviewLayers,
@@ -19,6 +19,7 @@ import {
   groupByMode,
   routesBounds,
   searchRoutes,
+  timingCounts,
   visibleRoutes,
 } from "./routes.js";
 import { SHEET_HEIGHTS, nextSheet, sheetHeightPx } from "./sheet.js";
@@ -251,7 +252,14 @@ async function main() {
 
   // --- State -> everything --------------------------------------------------
 
+  const announceElement = document.getElementById("announce");
+  // The route the panel showed before this change, to return keyboard
+  // focus to its row when leaving it.
+  let shownFocus = null;
+
   store.subscribe((state, changed) => {
+    // Before the panel is hidden: was the keyboard in it?
+    const keyboardInPanel = panelElement.contains(document.activeElement);
     if (changed.has("sheet")) {
       applySheet(state);
     }
@@ -278,6 +286,31 @@ async function main() {
     }
     if (["focus", "selectedDetour", "now"].some((key) => changed.has(key))) {
       renderFocus(state);
+    }
+    if (changed.has("focus")) {
+      const route = state.focus === null ? null : routesByKey.get(state.focus);
+      announceElement.textContent = focusAnnouncement(
+        route,
+        route === null ? undefined : timingCounts(route, state.now),
+      );
+      if (state.focus !== null) {
+        // Keyboard users land at the panel's start; the title isn't a
+        // Tab stop, so Tab then reaches Back and the cards.
+        document.getElementById("route-panel-title").focus({ preventScroll: true });
+      } else if (keyboardInPanel) {
+        // Back (button, Escape, or browser): to the route's row, or the
+        // search box when the filters hide it. Not the search box on a
+        // phone: focusing it raises the sheet to full.
+        const row = listElement.querySelector(
+          `.route-row[data-key="${CSS.escape(shownFocus)}"]`,
+        );
+        if (row !== null) {
+          row.focus();
+        } else if (!NARROW.matches) {
+          searchElement.focus();
+        }
+      }
+      shownFocus = state.focus;
     }
     if (changed.has("selectedDetour")) {
       setSelectedDot(state.selectedDetour);

@@ -32,6 +32,35 @@ body {
   flex: 1; /* everything the sidebar doesn't use */
 }
 
+/* Keyboard focus, visible on everything (only when using a keyboard:
+   :focus-visible skips mouse clicks). Full-width rows and cards draw it
+   inside, where it isn't cut off by the scrolling list. */
+:focus-visible {
+  outline: 2px solid #1a4fd6;
+  outline-offset: 2px;
+}
+.route-row:focus-visible,
+.card-select:focus-visible,
+.timing-group > summary:focus-visible,
+#sheet-handle:focus-visible {
+  outline-offset: -2px;
+}
+/* The panel title gets focus from script (on focusing a route); a ring
+   there would only say where reading starts. */
+#route-panel-title:focus {
+  outline: none;
+}
+
+/* Read by screen readers, not shown: the standard clip pattern. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The `hidden` attribute is only a browser default (display: none), which
    any `display` rule here would beat; make it always win. */
 [hidden] {
@@ -114,9 +143,16 @@ body {
   background: #1a4fd6;
   color: #fff;
 }
-/* The search has no routes of this mode: greyed, still clickable. */
+/* The search has no routes of this mode: muted and dashed, still
+   clickable. Not opacity, which made the text unreadably faint. */
 .chip.unavailable {
-  opacity: 0.4;
+  border-style: dashed;
+  color: #666;
+}
+.chip.unavailable[aria-pressed="true"] {
+  border-color: #1a4fd6;
+  background: #e8eefc;
+  color: #1a4fd6;
 }
 
 /* The scrolling part. `min-height: 0` lets a flex item shrink below its
@@ -130,7 +166,7 @@ body {
 
 .route-list-empty {
   margin: 12px;
-  color: #777;
+  color: #666;
 }
 
 /* Route list: one section per group, its heading stuck to the top of
@@ -196,7 +232,7 @@ body {
 /* "Not on the map": unmatched detours, each a <details>. */
 .unmatched-note {
   margin: 6px 12px;
-  color: #777;
+  color: #666;
   font-size: 12px;
 }
 .unmatched {
@@ -226,7 +262,7 @@ body {
 
 /* Routes without shapes (D4): listed, but greyed. */
 .route-row.no-shapes {
-  opacity: 0.5;
+  opacity: 0.65; /* #222 text stays above 4.5:1 contrast */
 }
 
 /* --- Mobile: the sidebar becomes a bottom sheet ---------------------------- */
@@ -342,7 +378,7 @@ body {
 }
 .panel-note {
   margin: 12px;
-  color: #777;
+  color: #666;
 }
 .panel-note.error {
   color: #b00020;
@@ -412,7 +448,7 @@ body {
 }
 .detour-card .issues {
   margin-top: 4px;
-  color: #777;
+  color: #666;
   font-size: 12px;
 }
 .detour-card .issues summary {
