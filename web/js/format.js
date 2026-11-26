@@ -159,6 +159,28 @@ export function detourPlaces(detour) {
 }
 
 /**
+ * Where a detour gets back on its route, for its card, from
+ * `rejoin_streets`: two streets are their crossing, one is the street
+ * that leads back.
+ *
+ * e.g. "Back on route at Passyunk & 17th", "Back on route via Francis St";
+ * `null` without a rejoin (the card then says nothing about it).
+ *
+ * @param {object} detour a detour object
+ * @returns {string | null}
+ */
+export function rejoinText(detour) {
+  const streets = detour.rejoin_streets;
+  if (streets === null || streets.length === 0) {
+    return null;
+  }
+  if (streets.length === 1) {
+    return `Back on route via ${streets[0]}`;
+  }
+  return `Back on route at ${streets.join(" & ")}`;
+}
+
+/**
  * One line for a detour not matched to a route ("Not on the map").
  *
  * e.g. "Route L, NB: Nedro & 20th St to Wister btwn Church & Spencer".

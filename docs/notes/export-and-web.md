@@ -647,3 +647,6 @@ Tests: 125 JS.
   rejoin, the last one for a `"walk"`, as written; `None` without a
   rejoin or steps to name it). Real `141550Z`: 40 named by a crossing, 8
   by a street, 53 without. `data.js` reads 5.
+- Card (2026-11-26): `format.rejoinText` ("Back on route at A & B" /
+  "via A" / `null`: no line) after the reason. Checked in the harness on
+  real route 124 (both kinds).

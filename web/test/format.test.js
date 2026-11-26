@@ -17,6 +17,7 @@ import {
   formatTime,
   modeLabel,
   plural,
+  rejoinText,
   routeLabel,
   statusLine,
   timingHeading,
@@ -288,6 +289,20 @@ test("detourPlaces: both, one, or neither location", () => {
     detourPlaces({ ...BUS_2_SB, location_start: null, location_end: null }),
     "location not given",
   );
+});
+
+test("rejoinText: a crossing, a street, or nothing", () => {
+  // Route 2 #0: "..., Right on Passyunk, Left on 17th, Reg Rt".
+  assert.equal(
+    rejoinText({ ...BUS_2_SB, rejoin_streets: ["Passyunk", "17th"] }),
+    "Back on route at Passyunk & 17th",
+  );
+  assert.equal(
+    rejoinText({ ...BUS_2_SB, rejoin_streets: ["Francis St"] }),
+    "Back on route via Francis St",
+  );
+  assert.equal(rejoinText({ ...BUS_2_SB, rejoin_streets: null }), null);
+  assert.equal(rejoinText({ ...BUS_2_SB, rejoin_streets: [] }), null);
 });
 
 test("detourPlaces: the same place at both ends is said once", () => {

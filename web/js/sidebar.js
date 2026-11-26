@@ -12,6 +12,7 @@ import {
   directionSummary,
   formatTime,
   modeLabel,
+  rejoinText,
   routeLabel,
   timingHeading,
   timingSummary,
@@ -214,7 +215,8 @@ export function createModeChips(container, modeOrder, onToggle) {
 }
 
 /**
- * One detour's card: where, when, why, the raw message.
+ * One detour's card: where, when, why, where it's back on route (when
+ * known), the raw message.
  *
  * The headline is a `<button>` (the keyboard's way to select the card;
  * main.js handles clicks on the whole card through the panel).
@@ -242,6 +244,10 @@ function detourCard(detour, directions, selected) {
     element("p", "when", `${formatTime(detour.start)} to ${formatTime(detour.end)}`),
     element("p", undefined, `Reason: ${detour.reason ?? "(none given)"}`),
   );
+  const rejoin = rejoinText(detour);
+  if (rejoin !== null) {
+    card.append(element("p", "rejoin", rejoin));
+  }
   if (detour.start_point === null) {
     card.append(element("p", "unplaced", "Location not found on the map"));
   }
