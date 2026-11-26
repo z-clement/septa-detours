@@ -72,7 +72,7 @@ web/             map frontend (the detours map): index.html, css/app.css,
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
                  alerts/ holds API route entries + an annotated README
 notebooks/       exploration only, not production code
-docs/            plans (web-plan.md = current, geography-plan.md,
+docs/            plans (ui-plan.md = current, web-plan.md, geography-plan.md,
                  backlog.md) and notes/ (detailed per-area history)
 ```
 
@@ -233,7 +233,9 @@ made, facts measured, the contract's files, the JS module layout, the
 order of work, and **decisions still to confirm: ask before building
 those**). P1-P6 (Python) and W1-W6 are done (W6: check on a phone).
 Tiers B and C are built (check the stretches and paths by eye); their
-follow-ups are in `docs/geography-plan.md`. Next: pick from there, the web plan's
+follow-ups are in `docs/geography-plan.md`. **Current: the UI/UX pass**,
+`docs/ui-plan.md` (goal: riders, readable at a glance; decisions A1 B1
+C1 E1; order of work U1-U8, starting with U1). Next: pick from there, the web plan's
 "Later in the web part", or the backlog: ask which.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
