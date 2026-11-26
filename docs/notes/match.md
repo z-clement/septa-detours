@@ -279,8 +279,8 @@ The mutation runner is now a scratch script taking a mutations file
   undirected `nx.Graph` (no one-way tags in the cache; the message picks
   the streets). Nodes = OSM node IDs with `lon`/`lat`; edges = a way's
   consecutive nodes, `length_m` (equirectangular, mean latitude: a
-  0.1-degree diagonal test pins both). `_metres_between` duplicates
-  `crossings._metres_between`: a candidate for `geo.py`.
+  0.1-degree diagonal test pins both). Its distance helper and
+  `crossings._metres_between` became `geo.metres_between` (2026-11-26).
 - `walk.walk_street(graph, sources, targets)`: `multi_source_dijkstra`
   by `length_m` from the sources on the street to the nearest target;
   a source that is a target -> one-node walk; `None` when nothing is on
