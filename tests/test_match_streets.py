@@ -3,11 +3,14 @@ import pytest
 
 from septa_detours.match import streets
 from septa_detours.match.streets import (
+    ALERT_DIRECTION_LETTERS,
+    DIRECTION_PREFIXES,
     STREET_KEYS_SCHEMA,
     STREET_MATCH_SCHEMA,
     STREET_TYPES,
     WORD_ALIASES,
     StreetName,
+    alert_street_name,
     osm_street_keys,
     split_shared_ways,
     split_street_type,
@@ -31,6 +34,8 @@ from septa_detours.streets.load import STREET_WAYS_SCHEMA
         ("Station Dr", ("station", "drive")),
         ("Queen Ln", ("queen", "lane")),
         ("Huntingdon Pk", ("huntingdon", "pike")),
+        ("S Penn Sq", ("s penn", "square")),
+        ("Rittenhouse Sq", ("rittenhouse", "square")),
         ("Spring Garden", ("spring garden", None)),
         ("MArket", ("market", None)),
         ("J.F.K. Blvd", ("john f kennedy", "boulevard")),
@@ -44,6 +49,8 @@ from septa_detours.streets.load import STREET_WAYS_SCHEMA
         ("Krewstown Road", ("krewstown", "road")),
         ("Health Sciences Drive", ("health sciences", "drive")),
         ("Loretto Avenue", ("loretto", "avenue")),
+        ("South Penn Square", ("south penn", "square")),
+        ("West Rittenhouse Square", ("west rittenhouse", "square")),
     ],
 )
 def test_split_street_type_real_names(name: str, expected: tuple) -> None:
@@ -60,7 +67,6 @@ def test_split_street_type_real_names(name: str, expected: tuple) -> None:
         ("Avenue of the States", ("avenue of the states", None)),
         # Name-like words are not types (see STREET_TYPES docstring).
         ("Hunting Park", ("hunting park", None)),
-        ("Penn Square", ("penn square", None)),
         ("Grays Ferry", ("grays ferry", None)),
         ("Ridge", ("ridge", None)),
         # Only a type word: it stays the base, never an empty base.
@@ -118,8 +124,9 @@ def test_street_types_keys_are_normalized() -> None:
         ),
         # A different real road comes out as a key too; the caller filters.
         ("West Chester Pike", [("west chester", "pike"), ("chester", "pike")]),
-        # Type not in STREET_TYPES: the prefix still comes off the base.
-        ("South Penn Square", [("south penn square", None), ("penn square", None)]),
+        ("South Penn Square", [("south penn", "square"), ("penn", "square")]),
+        # Hand-built, type not in STREET_TYPES: the prefix still comes off.
+        ("East Hunting Park", [("east hunting park", None), ("hunting park", None)]),
         # Case and dots are normalized before the prefix check.
         ("NORTH Broad St.", [("north broad", "street"), ("broad", "street")]),
     ],
@@ -383,6 +390,9 @@ def broad_keys() -> pl.DataFrame:
         ("BROAD street", [(1, 1), (3, 3), (4, 1)]),
         # Whole base only: "Broad" is not "Broadway".
         ("Broadway", [(5, 2)]),
+        # The alert's one-letter prefix is the full word (full-name match).
+        ("S Broad St", [(4, 3)]),
+        ("N. Broad", [(1, 2)]),
     ],
 )
 def test_street_matches(broad_keys, name: str, expected: list[tuple[int, int]]) -> None:
@@ -472,6 +482,38 @@ def test_split_shared_ways_same_street_leaves_second_empty(broad_keys) -> None:
     )
     assert first.rows() == [(8, 3)]
     assert second.is_empty()
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # Real alert spellings (route 2, 17, 44... messages).
+        ("S Penn Sq", ("south penn", "square")),
+        ("S. Penn Sq", ("south penn", "square")),
+        ("W Rittenhouse Sq", ("west rittenhouse", "square")),
+        ("N 5th St", ("north 5th", "street")),
+        ("e Passyunk", ("east passyunk", None)),
+        # A lone letter is a letter street, with or without a type.
+        ("E St", ("e", "street")),
+        ("W", ("w", None)),
+        # Only the first word, and only these four letters.
+        ("Avenue S", ("avenue s", None)),
+        ("X Penn Sq", ("x penn", "square")),
+        # Already spelled out: unchanged.
+        ("South Penn Square", ("south penn", "square")),
+    ],
+)
+def test_alert_street_name(name: str, expected: tuple) -> None:
+    assert alert_street_name(name) == StreetName(*expected)
+
+
+def test_alert_street_name_rejects_blank() -> None:
+    with pytest.raises(ValueError, match="blank street name"):
+        alert_street_name(" . ")
+
+
+def test_alert_direction_letters_are_osm_prefixes() -> None:
+    assert set(ALERT_DIRECTION_LETTERS.values()) == DIRECTION_PREFIXES
 
 
 def test_street_matches_typed_name_skips_typeless_way() -> None:

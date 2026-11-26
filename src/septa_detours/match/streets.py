@@ -26,12 +26,17 @@ STREET_TYPES: dict[str, str] = {
     "ln": "lane",
     "pike": "pike",
     "pk": "pike",
+    "square": "square",
+    "sq": "square",
 }
 """Final word (casefolded, dots removed) -> canonical street type.
 
 Only types the real data needs. Words that are often part of a name
-(Park, Square, Ferry, Ridge) are left out on purpose: with ``"park"`` here,
-alert ``"Hunting Park"`` would split as base ``"hunting"``.
+(Park, Ferry, Ridge) are left out on purpose: with ``"park"`` here,
+alert ``"Hunting Park"`` would split as base ``"hunting"``. Square is in:
+alerts abbreviate it (``"S Penn Sq"``, ``"Rittenhouse Sq"``), and OSM's
+streets around a square end in it (``"South Penn Square"``), so both
+sides split the same way.
 """
 
 
@@ -201,6 +206,38 @@ def street_key_table(ways: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+ALERT_DIRECTION_LETTERS: dict[str, str] = {
+    "n": "north",
+    "s": "south",
+    "e": "east",
+    "w": "west",
+}
+"""An alert name's one-letter first word -> the direction OSM spells out."""
+
+
+def alert_street_name(name: str) -> StreetName:
+    """Normalize an alert's street name: ``split_street_type``, plus letters.
+
+    Alerts abbreviate the Philly direction prefix (``"S Penn Sq"``, ``"W
+    Rittenhouse Sq"``); OSM spells it out (``"South Penn Square"``). A
+    first word in ``ALERT_DIRECTION_LETTERS`` becomes the full word when
+    more words follow it: ``"S Broad St"`` -> ``("south broad",
+    "street")``. Alert side only: in OSM a single letter is a letter
+    street (``"E Street"``), and so is an alert's lone ``"E St"`` (base
+    ``"e"``, nothing after it).
+
+    Raises:
+        ValueError: ``name`` has no words (see ``split_street_type``).
+    """
+    split = split_street_type(name)
+    first, *rest = split.base.split(" ")
+    if first not in ALERT_DIRECTION_LETTERS or not rest:
+        return split
+    return StreetName(
+        " ".join([ALERT_DIRECTION_LETTERS[first], *rest]), split.street_type
+    )
+
+
 STREET_MATCH_SCHEMA = pl.Schema({"way_id": pl.Int64, "specificity": pl.Int8})
 """Columns of ``street_matches``."""
 
@@ -223,10 +260,13 @@ def street_matches(keys: pl.DataFrame, name: str) -> pl.DataFrame:
         ``split_shared_ways``: 2 if it matched the way's full name (not the
         prefix-less key), plus 1 if ``name`` gave a type. So 0..3.
 
+    ``name`` goes through ``alert_street_name``: ``"S Broad St"`` matches
+    ``South Broad Street`` by its full name.
+
     Raises:
         ValueError: ``name`` is blank (see ``split_street_type``).
     """
-    wanted = split_street_type(name)
+    wanted = alert_street_name(name)
     condition = pl.col("base") == wanted.base
     if wanted.street_type is not None:
         condition &= pl.col("street_type") == wanted.street_type

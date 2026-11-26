@@ -137,12 +137,15 @@ Decided (2026-11-26):
   directions) first, in `match/streets.py`; it moves tier A's pins too.
 
 Doubt rules (proposed): nearest reachable crossing at each turn; a turn
-whose direction disagrees with the message -> no path; with a tier B
-rejoin, the path must end on it.
+whose direction disagrees with the message -> no path (read over ~100 m
+of each leg, not the segments at the node); with a tier B rejoin, the
+path must end on it.
 
 Steps (each committed; model and contract changes flagged):
-1. `match/streets.py`: `Sq` = Square, so `S Penn Sq` finds
-   `South Penn Square`. Review the moved pins.
+1. ~~`match/streets.py`: `Sq` = Square, and alert `S`/`N`/`E`/`W` =
+   the direction, so `S Penn Sq` finds `South Penn Square`~~ (done: no
+   pins moved, no start changed; walked 65 -> 80 on `121123Z`; turns
+   read over ~100 m all agree: see `notes/match.md`).
 2. Add networkx; `match/walk.py`: one street's graph and the walk
    between two node sets.
 3. The whole path from the steps (doubt rules), and the extension to

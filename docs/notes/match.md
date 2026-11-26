@@ -78,8 +78,9 @@ locations vs the 40,003 cache names).
   text and OSM names alike.
 - `STREET_TYPES`: only what the data needs (Street, Avenue, Road,
   Boulevard, Drive, Lane, Pike + `st ave av rd blvd dr ln pk`; `Pk` =
-  Pike). Park/Square/Ferry/Ridge left out on purpose: they're name words
-  (`Hunting Park`).
+  Pike). Park/Ferry/Ridge left out on purpose: they're name words
+  (`Hunting Park`). Square (+ `sq`) added 2026-11-26 for tier C: see
+  below.
 - `osm_street_keys(osm_name)`: full key first, plus the key without a
   leading North/South/East/West **if the base has more words** (`South
   Street` keeps one key). Decided: prefixes dropped **on the OSM side
@@ -251,3 +252,22 @@ The mutation runner is now a scratch script taking a mutations file
   detours files read. Real `121123Z`: 65 rejoins, 51 stretches.
 - Test data: a "Federal Street" way crosses the test 17th one block
   north of Washington, so a test path can rejoin away from its start.
+
+## Penn Square names (tier C step 1, 2026-11-26)
+
+- `STREET_TYPES` gains `square`/`sq`: alerts write `S Penn Sq`,
+  `Rittenhouse Sq`; OSM `South Penn Square`, `West Rittenhouse Square`.
+  Both sides split alike, so nothing that matched before stops matching.
+- `alert_street_name(name)` (used by `street_matches`): an alert's
+  one-letter first word `N`/`S`/`E`/`W` becomes the full direction when
+  more words follow (`S Broad St` -> `south broad street`, a full-name
+  match). Alert side only, like the OSM-only prefix drop: a lone letter
+  is a letter street (`E St`).
+- Real effect (`121123Z` / `141550Z`): no start point changed; +2
+  rejoins and stretches (route 44 `Broad` -> `S Penn Sq`, route 96
+  `W Fornance St` -> `Pine St`); the tier C walk measurement goes from 65
+  to 80 walked paths on `121123Z` (39 on `141550Z`).
+- Found while checking: a turn's left/right must be read over a
+  distance, not from the two segments at the node: `South Penn Square`
+  leaves 15th St almost straight south for ~45 m before curving east.
+  Read 30-200 m out, all 185 checkable turns agree with the message.
