@@ -1,9 +1,13 @@
 import polars as pl
 import pytest
 
-from septa_detours.match.place import find_start_point
+from septa_detours.match.place import (
+    REJOIN_RADIUS_M,
+    find_rejoin_point,
+    find_start_point,
+)
 from septa_detours.match.streets import street_key_table
-from septa_detours.model import Intersection, Segment, StartPoint
+from septa_detours.model import Intersection, Segment, StartPoint, Step
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
 # Near 17th & Washington. At this latitude 0.001 deg is ~111 m north-south
@@ -217,3 +221,89 @@ def test_several_crossings_near_route_are_not_guessed(count):
             " within 500 m of the route",
         ),
     )
+
+
+# --- Rejoin (tier B) --------------------------------------------------------------
+
+
+def rejoin(
+    streets: list[str], ways: pl.DataFrame, lines: list[list[list[float]]]
+) -> StartPoint | None:
+    """``find_rejoin_point`` for a path of these streets (turns don't matter)."""
+    steps = [
+        Step(turn="via" if index == 0 else "left", street=street)
+        for index, street in enumerate(streets)
+    ]
+    return find_rejoin_point(steps, ways, street_key_table(ways), lines)
+
+
+# 2 m west of 17th, inside the rejoin radius; 50 m west, outside it.
+# (0.001 deg of longitude is ~85 m here.)
+ROUTE_2M_WEST = [[LON - 0.0000235, LAT - 0.002], [LON - 0.0000235, LAT + 0.002]]
+ROUTE_50M_WEST = [[LON - 0.000588, LAT - 0.002], [LON - 0.000588, LAT + 0.002]]
+
+
+def test_rejoin_is_the_last_two_streets_crossing_on_the_route():
+    # Only the last two count: "Broad" isn't in the street data at all.
+    point = rejoin(
+        ["Broad", "Washington", "17th"], SEVENTEENTH_WASHINGTON, [ROUTE_ON_17TH]
+    )
+    assert point == StartPoint(node_id=11, lon=LON, lat=LAT)
+
+
+def test_rejoin_within_its_radius_counts():
+    assert REJOIN_RADIUS_M == 30.0
+    point = rejoin(["Washington", "17th"], SEVENTEENTH_WASHINGTON, [ROUTE_2M_WEST])
+    assert point == StartPoint(node_id=11, lon=LON, lat=LAT)
+
+
+def test_rejoin_outside_its_radius_is_none():
+    # 50 m is well inside the start radius (500 m), but not on the route.
+    assert (
+        rejoin(["Washington", "17th"], SEVENTEENTH_WASHINGTON, [ROUTE_50M_WEST]) is None
+    )
+
+
+def test_rejoin_checks_every_line():
+    lines = [ROUTE_FAR_EAST, ROUTE_ON_17TH]
+    point = rejoin(["Washington", "17th"], SEVENTEENTH_WASHINGTON, lines)
+    assert point == StartPoint(node_id=11, lon=LON, lat=LAT)
+
+
+@pytest.mark.parametrize(
+    ("streets", "lines"),
+    [
+        (["17th"], [ROUTE_ON_17TH]),  # one step: nothing to cross
+        ([], [ROUTE_ON_17TH]),
+        (["Washington", "17th"], []),  # no shapes to be on
+        (["Washington", "Broad"], [ROUTE_ON_17TH]),  # unknown street
+        (["17th", "17th"], [ROUTE_ON_17TH]),  # a street never crosses itself
+    ],
+)
+def test_no_rejoin(streets, lines):
+    assert rejoin(streets, SEVENTEENTH_WASHINGTON, lines) is None
+
+
+def test_several_rejoin_crossings_are_not_guessed():
+    # Washington meets 17th twice, both on the route (a made-up loop).
+    ways = make_ways(
+        [
+            (
+                1,
+                "South 17th Street",
+                [(10, LON, LAT - 0.001), (11, LON, LAT), (12, LON, LAT + 0.001)],
+            ),
+            (2, "Washington Avenue", [(20, LON - 0.001, LAT), (11, LON, LAT)]),
+            (3, "Washington Avenue", [(12, LON, LAT + 0.001), (30, LON + 0.001, LAT)]),
+        ]
+    )
+    assert rejoin(["Washington", "17th"], ways, [ROUTE_ON_17TH]) is None
+
+
+def test_rejoin_street_never_crosses_itself():
+    # A short way whose two nodes (~4 m apart) would group into one
+    # "crossing" if both names kept it.
+    ways = make_ways(
+        [(1, "South 17th Street", [(10, LON, LAT), (11, LON, LAT + 0.00004)])]
+    )
+    assert rejoin(["17th St", "17th"], ways, [ROUTE_ON_17TH]) is None

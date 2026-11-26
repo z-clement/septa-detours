@@ -33,6 +33,7 @@ from septa_detours.model import (
     RouteMatch,
     Segment,
     StartPoint,
+    Step,
 )
 from septa_detours.parse.notice import parse_snapshot
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
@@ -378,6 +379,61 @@ def test_start_point_is_placed(fixture_notices, reference: MatchReference):
         issues=(),
     )
     assert expected == match_notice(notice, reference)
+
+
+def ending_at_washington_17th(notice: DetourNotice) -> DetourNotice:
+    """``notice`` with a path whose last two streets cross at 17th & Washington.
+
+    Route 2 #0's real path ends at Passyunk & 17th, which the test streets
+    don't have.
+    """
+    steps = (
+        Step(turn="via", street="Broad"),
+        Step(turn="right", street="Washington"),
+        Step(turn="right", street="17th"),
+    )
+    return notice.model_copy(update={"route_steps": steps})
+
+
+def test_rejoin_point_is_placed(fixture_notices, reference: MatchReference):
+    notice = ending_at_washington_17th(fixture_notices(ROUTE_2)[0])
+    detour = match_notice(notice, reference)
+    lon, lat = WASHINGTON_17TH
+    assert detour.match is not None
+    assert detour.match.rejoin_point == StartPoint(node_id=11, lon=lon, lat=lat)
+    assert detour.issues == ()
+
+
+def test_real_path_ending_off_the_test_streets_has_no_rejoin(
+    fixture_notices, reference: MatchReference
+):
+    """Route 2 #0 ends at Passyunk & 17th: not found, and no issue."""
+    detour = match_notice(fixture_notices(ROUTE_2)[0], reference)
+    assert detour.match is not None
+    assert detour.match.rejoin_point is None
+    assert detour.issues == ()
+
+
+def test_rejoin_point_uses_only_the_affected_shapes(
+    fixture_notices, reference: MatchReference
+):
+    """Unlike the start: the NB shape on 17th doesn't count for an SB detour."""
+    (sb_shape,) = SHAPES["2"][0]
+    shape_lines = dict(reference.shape_lines)
+    shape_lines[("bus", sb_shape)] = [list(point) for point in PLACEHOLDER_LINE]
+    notice = ending_at_washington_17th(fixture_notices(ROUTE_2)[0])
+    detour = match_notice(notice, replace(reference, shape_lines=shape_lines))
+    assert detour.match is not None
+    assert detour.match.start_point is not None  # both directions
+    assert detour.match.rejoin_point is None
+
+
+def test_rejoin_point_needs_the_direction(fixture_notices, reference: MatchReference):
+    notice = ending_at_washington_17th(fixture_notices(ROUTE_2)[0])
+    notice = notice.model_copy(update={"direction": None})
+    detour = match_notice(notice, reference)
+    assert detour.match is not None
+    assert detour.match.rejoin_point is None
 
 
 def test_start_point_uses_shapes_of_both_directions(

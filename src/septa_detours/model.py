@@ -257,6 +257,12 @@ class RouteMatch(_Frozen):
             ``Detour.issues``, unless the notice has no start intersection
             at all). Required, so forgetting to look it up can't pass for
             "not found".
+        rejoin_point: Where the detour gets back on the route (tier B): the
+            crossing of the message's last two streets, on the affected
+            shapes (``place.find_rejoin_point``). ``None`` with no issue
+            when unknown: best effort, and normal for stop closures and
+            layovers. Defaults to ``None`` (unlike ``start_point``) so
+            detours files written before tier B still read.
 
     The detoured path itself (coordinates or street segments) is not here
     yet; add it when ``match/`` can produce one.
@@ -266,6 +272,7 @@ class RouteMatch(_Frozen):
     route_id: CleanText
     shapes: tuple[AffectedShape, ...] = ()
     start_point: StartPoint | None
+    rejoin_point: StartPoint | None = None
 
 
 class Detour(_Frozen):
