@@ -64,7 +64,7 @@ src/septa_detours/model.py
 web/             map frontend (the detours map): index.html, css/app.css,
                  js/ (ES modules: main, data, mapview = the only
                  maplibregl user, sidebar = the sidebar DOM; format,
-                 routes, detours = pure), test/
+                 routes, detours, state = pure), test/
                  (node --test); web/data/ holds the data contract
                  (`export site`; gitignored)
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
@@ -198,18 +198,20 @@ draws it: grey network, detoured routes in color, start dots by timing.
 Since W3 a fixed left sidebar (`sidebar.js`) holds the status line,
 search (prefix matches first), mode chips, "Detoured now", every route
 by mode with counts by timing, and "Not on the map"; `routes.json`
-carries detour windows (schema 2). State lives in `main.js` for now.
-81 JS tests.
+carries detour windows (schema 2). Since W4 (built; map side still
+to check by eye) a row, line or dot focuses a route: the panel replaces
+the list (detours grouped by timing, "Ended" collapsed), the map dims
+the rest, the URL hash (`#route=...&detour=...`) and Back/Escape work.
+State lives in `state.js`. 107 JS tests.
 
 ## Next
 
 **The web app**: `docs/web-plan.md` holds the whole plan (decisions
 made, facts measured, the contract's files, the JS module layout, the
 order of work, and **decisions still to confirm: ask before building
-those**). P1-P6 (Python), W1, W2 and W3 are done; continue at its
-"Order of work", **W4 (focus a route)**: confirm its open decisions
-(D6 ended detours, focused map styling, panel vs. list, unplaced
-cards) before building.
+those**). P1-P6 (Python) and W1-W4 are done (W4's map side: check by
+eye); continue at its "Order of work", **W5** (card <-> dot linking,
+the multi-route click chooser).
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
 collection, small follow-ups) and `docs/geography-plan.md` (tier A step

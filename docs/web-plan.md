@@ -455,7 +455,7 @@ Web (plain JS):
      by timing ("3 now, 4 later", not a total); search ranking (see
      Overview); "Not on the map" only in the unfiltered list (blank
      search, every chip on; rejected: always shown, or searchable).
-10. **W4** (next) Focus: detail fetch + cache, map focus, panel with detour
+10. **W4** (built; map side to check by eye) Focus: detail fetch + cache, map focus, panel with detour
     cards, URL hash, Back/Escape. Move state into `state.js`. Decided
     2026-11-25: (a) D6: ended detours in a collapsed "Ended (n)" group
     at the bottom of the panel (groups: active, upcoming, unknown, then
@@ -468,14 +468,14 @@ Web (plain JS):
     with a muted "Location not found on the map" line. Known gaps from
     W3 to fix with the state work: the per-minute rebuild closes opened
     "Not on the map" items and drops keyboard focus inside the list.
-    - Step 1: `state.js` (pure): the store (`subscribe`, setters) and
+    - Step 1 (done): `state.js` (pure): the store (`subscribe`, setters) and
       the URL hash (`parseHash`, `formatHash`).
-    - Step 2: `groupByTiming` (`detours.js`) + card text (`format.js`).
-    - Step 3: the route panel DOM (`sidebar.js`, HTML, CSS).
-    - Step 4: the focused map (`mapview.js`).
-    - Step 5: wiring (`main.js`): row/line/dot clicks focus, hash,
+    - Step 2 (done): `groupByTiming` (`detours.js`) + card text (`format.js`).
+    - Step 3 (done): the route panel DOM (`sidebar.js`, HTML, CSS).
+    - Step 4 (done): the focused map (`mapview.js`).
+    - Step 5 (done): wiring (`main.js`): row/line/dot clicks focus, hash,
       Back/Escape, the W3 gaps.
-11. **W5** Card <-> dot linking, the multi-route click chooser.
+11. **W5** (next) Card <-> dot linking, the multi-route click chooser.
 12. **W6** Mobile bottom sheet, keyboard/a11y pass.
 
 ## Decisions to confirm (with recommendations)

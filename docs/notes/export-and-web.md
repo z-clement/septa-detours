@@ -457,3 +457,65 @@ list.
   state, e.g. remember open `source_key`s); "Detoured now" is long (52
   rows): revisit if it feels so in use.
 Tests: 81 JS.
+
+## W4: focus a route (2026-11-25)
+
+Decided first (yours): D6 ended detours in a collapsed "Ended (n)" group
+at the bottom; the focused map dims the rest (network 0.6 -> 0.3 opacity,
+other routes' colored lines and dots hidden); the route panel replaces
+search, chips and list (status line stays); unplaced cards stay in their
+group with a muted "Location not found on the map". Committed at each
+step without review (allowed for this session).
+
+- `state.js` (pure, tested): `createState({modes, now})` -> `get`,
+  `subscribe(listener(state, changed))` (returns unsubscribe), actions
+  `focus(key, detour = null)`, `setSearch`, `toggleMode`, `setNow`.
+  Snapshots frozen; `toggleMode` makes a new Set; no-op actions notify
+  no one (`setNow` compares times, not Date objects); `focus` to another
+  route (or null) drops the selection. `parseHash`/`formatHash`:
+  `#route=bus-21&detour=...`; empty values and a detour without a route
+  parse as null; round-trips values that need encoding.
+- `detours.js`: `TIMING_ORDER` (active, upcoming, unknown, ended) and
+  `groupByTiming(detours, now)` (empty groups dropped, snapshot order
+  within).
+- `format.js`: `detourPlaces` (pulled out of `unmatchedSummary`; a
+  same-place start/end is said once: 29 real stop closures read "Market
+  & Schuylkill Ave to Market & Schuylkill Ave"), `directionLabel`
+  (route's name via `direction_id`, else the API text "EB", else null;
+  the contract's direction `name` may be null, none today in 353),
+  `directionSummary` ("Southbound to 20th-Johnston", "Direction 0"),
+  `detourHeadline`, `timingHeading` ("In effect (2)", "Upcoming",
+  "Dates unknown", "Ended"; wording mine).
+- `sidebar.js`: `renderRoutePanel(container, {route, detail, error, now,
+  selectedDetour, onBack})`: header (Back, badge, names, directions),
+  loading/error/no-detours notes, cards (`data-source-key`, `.selected`;
+  parse issues in a closed "Parser notes" `<details>`). "Ended" stays
+  open across re-renders of the same route. `routeBadge` shared with
+  rows. `renderRouteList` now keeps opened unmatched items and keyboard
+  focus across rebuilds (`focusSelector`: a row by section + key, since
+  a route can be in "Detoured now" and its group; a summary by detour):
+  the W3 gaps, fixed.
+- `index.html`: `#browse` (search, chips, list) and `#route-panel`, one
+  `hidden`; `[hidden] { display: none !important }` because
+  `#browse { display: flex }` would otherwise beat the attribute.
+- `mapview.js`: `addOverviewLayers` adds a `focus` source/layer (between
+  detoured lines and dots; covering shapes 6 px at z16, others 3) and
+  returns `showFocus({key, detail} | null)`. While the detail loads, the
+  route's network lines stay colored (detoured layer filtered to the
+  key); once loaded, the detoured layer is hidden. `fitRoute` is separate
+  so only a focus change moves the camera; Back doesn't move it (mine).
+  `addPopups` became `addClickHandler(map, routes, loadDetail, onFocus)`:
+  one route under the click focuses it (a dot also selects its detour);
+  several keep the old popup until W5's chooser. Lines are queried on
+  the network layer only (focus features carry no `key`).
+- `main.js`: one store; focus pushes a history entry (Back leaves the
+  route), a selection on the same route replaces it; `hashchange` and
+  `popstate` both read the hash (the second is a no-op); a hash naming
+  an unknown route is the overview. The list renders only while shown;
+  a detail load that finishes after the user moved on is dropped.
+- Checking: headless Firefox (`firefox --headless --screenshot`) has no
+  WebGL, so the map never loads; the sidebar DOM was checked with a
+  scratch harness page (real data embedded as a static module import, so
+  it renders before the screenshot's `load`). The map side (focus
+  styling, clicks, Back) still needs a look in a real browser.
+Tests: 107 JS.
