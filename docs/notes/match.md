@@ -335,3 +335,6 @@ The mutation runner is now a scratch script taking a mutations file
   `121123Z` 63 paths, rejoins 67 -> 89, stretches 53 -> 75, detours file
   263 -> 423 KB; `141550Z` 36 paths, rejoins 39 -> 48, stretches 29 ->
   38.
+- `rejoin_by` (2026-11-26): `match_notice` keeps tier B's rejoin
+  (`"crossing"`) and only takes the path's when tier B had none
+  (`"walk"`); before, it always took the path's (the same point).

@@ -348,6 +348,20 @@ def test_path_rejects_bad_points(point):
         make_route_match(path=(PATH_LINE[0], point))
 
 
+@pytest.mark.parametrize("rejoin_by", ["crossing", "walk", None])
+def test_rejoin_by_round_trips(rejoin_by):
+    match = make_route_match(rejoin_by=rejoin_by)
+    assert json.loads(match.model_dump_json())["rejoin_by"] == rejoin_by
+    assert RouteMatch.model_validate_json(match.model_dump_json()) == match
+
+
+def test_rejoin_by_defaults_to_none_and_rejects_others():
+    old = '{"feed":"bus","route_id":"2","shapes":[],"start_point":null}'
+    assert RouteMatch.model_validate_json(old).rejoin_by is None
+    with pytest.raises(ValidationError, match="rejoin_by"):
+        make_route_match(rejoin_by="guess")
+
+
 LOCATION = TypeAdapter(Location)
 
 

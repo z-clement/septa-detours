@@ -120,6 +120,11 @@ type Location = Annotated[Intersection | Segment, Field(discriminator="kind")]
 """A structured location; ``kind`` says which, also in JSON."""
 
 
+type RejoinBy = Literal["crossing", "walk"]
+"""How a rejoin point was found: ``"crossing"``, the message's last two
+streets' crossing (tier B); ``"walk"``, the last street followed back
+onto the route (tier C)."""
+
 type Turn = Literal["via", "left", "right"]
 """How a detour step joins its street: ``"via"`` for the first street."""
 
@@ -296,6 +301,11 @@ class RouteMatch(_Frozen):
             least 2, bounded like ``StartPoint``'s. ``None`` with no issue
             when any step can't be walked without guessing. Defaults to
             ``None`` so older detours files still read.
+        rejoin_by: How ``rejoin_point`` was found (``RejoinBy``), so the
+            page can name it ("at Passyunk & 17th" vs "via Francis St").
+            ``None`` without a rejoin, and in files written before this
+            field (not checked against ``rejoin_point``, so those still
+            read).
     """
 
     feed: Feed
@@ -307,6 +317,7 @@ class RouteMatch(_Frozen):
     path: (
         Annotated[tuple[tuple[Longitude, Latitude], ...], Field(min_length=2)] | None
     ) = None
+    rejoin_by: RejoinBy | None = None
 
 
 class Detour(_Frozen):

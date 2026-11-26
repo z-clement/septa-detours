@@ -406,6 +406,7 @@ def test_rejoin_point_is_placed(fixture_notices, reference: MatchReference):
     lon, lat = WASHINGTON_17TH
     assert detour.match is not None
     assert detour.match.rejoin_point == StartPoint(node_id=11, lon=lon, lat=lat)
+    assert detour.match.rejoin_by == "crossing"
     assert detour.issues == ()
 
 
@@ -416,6 +417,7 @@ def test_real_path_ending_off_the_test_streets_has_no_rejoin(
     detour = match_notice(fixture_notices(ROUTE_2)[0], reference)
     assert detour.match is not None
     assert detour.match.rejoin_point is None
+    assert detour.match.rejoin_by is None
     assert detour.issues == ()
 
 
@@ -543,6 +545,7 @@ def test_path_is_walked_to_the_rejoin(fixture_notices, reference: MatchReference
     assert detour.match.path == ROUND_THE_BLOCK
     lon, lat = block_point(0, 1)
     assert detour.match.rejoin_point == StartPoint(node_id=12, lon=lon, lat=lat)
+    assert detour.match.rejoin_by == "crossing"  # tier B's; the path ends on it
     assert detour.match.skipped is not None
     assert detour.issues == ()
 
@@ -565,6 +568,7 @@ def test_path_finds_a_rejoin_tier_b_cannot(fixture_notices, reference: MatchRefe
     assert detour.match.path == ROUND_THE_BLOCK
     lon, lat = block_point(0, 1)
     assert detour.match.rejoin_point == StartPoint(node_id=12, lon=lon, lat=lat)
+    assert detour.match.rejoin_by == "walk"
     # The new rejoin gives a skipped stretch too.
     assert detour.match.skipped is not None
     assert detour.match.skipped.line[-1] == pytest.approx((lon, lat), abs=1e-7)

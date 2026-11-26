@@ -57,3 +57,8 @@ order, at least 2, bounded like `SkippedStretch.line`; default `None`
 stretch, it isn't cut from one shape, so there's nothing to name with
 it. `rejoin_point`'s docstring now says it may come from the walk (a
 rejoin tier B couldn't find).
+
+`RouteMatch.rejoin_by` (2026-11-26, for naming the rejoin on the card):
+`RejoinBy` = `"crossing"` (tier B) | `"walk"` (tier C found it); `None`
+without a rejoin and in older files (not checked against
+`rejoin_point`, so those still read).

@@ -19,6 +19,7 @@ from septa_detours.model import (
     Detour,
     DetourNotice,
     Direction,
+    RejoinBy,
     RouteMatch,
     SkippedStretch,
     StartPoint,
@@ -119,9 +120,10 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
           direction); ``None`` with no issue when not found.
           Its ``path`` comes from ``path.detour_path`` (start point
           needed), walking the steps with the affected shapes' lines;
-          ``None`` with no issue when not found. A path's rejoin becomes
-          ``rejoin_point`` (the same point when tier B found one; else a
-          rejoin tier B couldn't find).
+          ``None`` with no issue when not found. Without a tier B rejoin,
+          a path's rejoin becomes ``rejoin_point`` (with one, the path
+          ends on it). ``rejoin_by`` says which: ``"crossing"`` or
+          ``"walk"``, ``None`` without a rejoin.
           Its ``skipped`` comes from ``_skipped`` (both points needed);
           ``None`` with no issue when not found.
 
@@ -146,9 +148,10 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
     rejoin_point = find_rejoin_point(
         notice.route_steps, reference.ways, reference.street_keys, affected_lines
     )
+    rejoin_by: RejoinBy | None = None if rejoin_point is None else "crossing"
     path = _path(notice, start_point, rejoin_point, affected_lines, reference)
-    if path is not None:
-        rejoin_point = path.rejoin
+    if path is not None and rejoin_point is None:
+        rejoin_point, rejoin_by = path.rejoin, "walk"
     skipped = _skipped(feed, shapes, start_point, rejoin_point, reference)
     return Detour(
         notice=notice,
@@ -160,6 +163,7 @@ def match_notice(notice: DetourNotice, reference: MatchReference) -> Detour:
             rejoin_point=rejoin_point,
             skipped=skipped,
             path=None if path is None else path.line,
+            rejoin_by=rejoin_by,
         ),
         issues=shape_issues + start_issues,
     )
