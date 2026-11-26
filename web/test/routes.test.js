@@ -9,6 +9,7 @@ import {
   detouredRoutes,
   groupByMode,
   routesBounds,
+  searchRoutes,
   timingCounts,
 } from "../js/routes.js";
 
@@ -208,4 +209,75 @@ test("groupByMode: a mode in two runs is one group, at its first place", () => {
 test("groupByMode: keeps the route objects themselves", () => {
   const [group] = groupByMode([BUS_K]);
   assert.equal(group.routes[0], BUS_K);
+});
+
+// --- searchRoutes -----------------------------------------------------------
+
+/** A routes.json entry with just its key and names. */
+function named(key, shortName, longName) {
+  return { key, short_name: shortName, long_name: longName };
+}
+
+// Real names, in routes.json order.
+const N_L1 = named("bus-L1", "L1", "Market-Frankford Line All Stops");
+const N_2 = named("bus-2", "2", "20-Johnston to Pulaski-Hunting Park");
+const N_5 = named("bus-5", "5", "2nd-Market to Frankford Transit Ctr");
+const N_12 = named("bus-12", "12", "Columbus-Dock to 50th-Woodland");
+const N_21 = named("bus-21", "21", "Columbus-Dock to 69th St TC");
+const N_204 = named("bus-204", "204", "Eagleview to Paoli Train Station");
+const N_B1_OWL = named("bus-B1_OWL", "B1 OWL", "Midnight-5am Service (Bus) for B1");
+const N_K = named("bus-K", "K", "Ridge-Midvale to Arrott Transit Ctr");
+const N_L1_OWL = named("bus-L1_OWL", "L1 OWL", "Midnight-5am Service (Bus) for L1");
+const N_AIR = named("rail-AIR", "AIR", "Airport Line");
+const NAMED = [N_L1, N_2, N_5, N_12, N_21, N_204, N_B1_OWL, N_K, N_L1_OWL, N_AIR];
+
+test("searchRoutes: a number matches route numbers from the start", () => {
+  // Not 12 (a 2 inside), not 5 ("2nd-Market": a long name starting with 2).
+  assert.deepEqual(searchRoutes(NAMED, "2"), [N_2, N_21, N_204]);
+  assert.deepEqual(searchRoutes(NAMED, "20"), [N_204]);
+});
+
+test("searchRoutes: a number never matches inside a long name", () => {
+  // "69th St TC" and "50th-Woodland" are street numbers, not routes.
+  assert.deepEqual(searchRoutes(NAMED, "69"), []);
+  assert.deepEqual(searchRoutes(NAMED, "50"), []);
+});
+
+test("searchRoutes: text matches anywhere in either name", () => {
+  assert.deepEqual(searchRoutes(NAMED, "owl"), [N_B1_OWL, N_L1_OWL]); // short name
+  assert.deepEqual(searchRoutes(NAMED, "columbus"), [N_12, N_21]); // long name start
+  assert.deepEqual(searchRoutes(NAMED, "transit"), [N_5, N_K]); // long name middle
+  assert.deepEqual(searchRoutes(NAMED, "air"), [N_AIR]); // both names
+});
+
+test("searchRoutes: letters and digits together are text, matched anywhere", () => {
+  // L1 itself, and the owl bus whose long name ends "for L1".
+  assert.deepEqual(searchRoutes(NAMED, "L1"), [N_L1, N_L1_OWL]);
+  // "5am" is text, so it matches inside "Midnight-5am".
+  assert.deepEqual(searchRoutes(NAMED, "5am"), [N_B1_OWL, N_L1_OWL]);
+});
+
+test("searchRoutes: case and surrounding spaces are ignored", () => {
+  assert.deepEqual(searchRoutes(NAMED, "  AiRpOrT "), [N_AIR]);
+  assert.deepEqual(searchRoutes(NAMED, " 2 "), [N_2, N_21, N_204]);
+  assert.deepEqual(searchRoutes(NAMED, "l1 owl"), [N_L1_OWL]);
+});
+
+test("searchRoutes: a blank query keeps every route, in a new list", () => {
+  for (const query of ["", "   "]) {
+    const result = searchRoutes(NAMED, query);
+    assert.deepEqual(result, NAMED);
+    assert.notEqual(result, NAMED); // the caller may sort it; NAMED stays put
+  }
+});
+
+test("searchRoutes: no match is empty", () => {
+  assert.deepEqual(searchRoutes(NAMED, "ferry"), []);
+  assert.deepEqual(searchRoutes([], "2"), []);
+});
+
+test("searchRoutes: a route with no long name matches on its short name only", () => {
+  const noLong = named("bus-X9", "X9", null);
+  assert.deepEqual(searchRoutes([noLong, N_K], "x9"), [noLong]);
+  assert.deepEqual(searchRoutes([noLong, N_K], "null"), []); // not the text "null"
 });

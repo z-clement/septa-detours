@@ -105,3 +105,30 @@ export function groupByMode(routes) {
   }
   return [...groups].map(([mode, members]) => ({ mode, routes: members }));
 }
+
+/**
+ * The sidebar search: routes whose names match `query`, catalog order kept.
+ *
+ * Case is ignored and the query is trimmed; a blank query keeps every
+ * route. A number (digits only) is a route number: it matches only at the
+ * start of `short_name`, so "2" finds 2, 21 and 204 but not 12, and not
+ * route 5 ("2nd-Market to ...": long names are full of street numbers).
+ * Anything else matches anywhere in `short_name` or `long_name`: "owl"
+ * finds L1 OWL and B1 OWL, "chest" finds 23 (... to Chestnut Hill). A
+ * `null` long name never matches.
+ *
+ * @param {object[]} routes routes.json
+ * @param {string} query what the user typed
+ * @returns {object[]}
+ */
+export function searchRoutes(routes, query) {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") {
+    return [...routes];
+  }
+  if (/^[0-9]+$/.test(needle)) {
+    return routes.filter((route) => route.short_name.startsWith(needle)); // digits: no case
+  }
+  const contains = (name) => name !== null && name.toLowerCase().includes(needle);
+  return routes.filter((route) => contains(route.short_name) || contains(route.long_name));
+}
