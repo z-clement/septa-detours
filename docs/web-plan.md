@@ -559,3 +559,15 @@ first: (1) static hosting + a scheduled job (every 5-10 min) running
 plus a small proxy for live vehicles, if needed; (3) a real backend only
 if those fall short. With plain overwrite, `web/data/` must be served
 with short cache lifetimes (or revisit D3's build directories).
+
+Caching (found 2026-11-26): `python -m http.server` sends no
+`Cache-Control`, so the browser reused an old `routes/bus-49.json`
+after a schema bump (Ctrl+Shift+R didn't clear it; a private window
+did). Now `data.js` fetches with `cache: "no-cache"` (always revalidate;
+a 304 when unchanged). For hosting, **versioned URLs** instead: fetch
+`status.json` fresh, then every other file as `...?v=<generated_at>`,
+so each export has its own URLs (nothing re-checked, old and new never
+mixed, even mid-export) and the files can be cached long. The JS
+modules themselves can still be cached stale (a page reading an old
+`SCHEMA_VERSION`): versioned script URLs or a no-cache header on
+`index.html` and `js/` cover that too.

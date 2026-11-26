@@ -658,3 +658,7 @@ Tests: 125 JS.
   3-6 px, x~1.6 when emphasized), under the start dots; clickable like
   a dot. Legend row "Back on route here" (harness checked). Map side not
   checked by eye.
+- Caching (2026-11-26): a stale cached `routes/bus-49.json` after the
+  schema bump (`http.server` sends no Cache-Control). `data.loadJson`
+  now fetches with `cache: "no-cache"` (a test checks every request);
+  versioned URLs are logged under hosting in `web-plan.md`.

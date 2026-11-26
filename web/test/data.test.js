@@ -1,7 +1,7 @@
 // Tests for web/js/data.js's contract loaders. Run: node --test web/test/
 //
 // `fetch` is replaced by a fake that serves files from a dictionary and
-// records every URL asked for, in order.
+// records every URL asked for, in order, and every request's options.
 
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
@@ -9,12 +9,15 @@ import { beforeEach, test } from "node:test";
 import { SCHEMA_VERSION, loadSite, routeDetailLoader } from "../js/data.js";
 
 let requested;
+let options;
 
 /** Serve `files` (url -> parsed JSON); anything else is a 404. */
 function serve(files) {
   requested = [];
-  globalThis.fetch = async (url) => {
+  options = [];
+  globalThis.fetch = async (url, init) => {
     requested.push(url);
+    options.push(init);
     if (!(url in files)) {
       return { ok: false, status: 404 };
     }
@@ -36,6 +39,7 @@ const SITE = {
   "data/skipped.geojson": SKIPPED,
   "data/paths.geojson": PATHS,
 };
+const SITE_FILE_COUNT = Object.keys(SITE).length;
 const BUS_2 = { schema_version: 5, key: "bus-2", detours: [] };
 const RAIL_AIR = { schema_version: 5, key: "rail-AIR", detours: [] };
 
@@ -46,6 +50,16 @@ test("SCHEMA_VERSION matches the Python contract's", () => {
 });
 
 // --- loadSite ---------------------------------------------------------------
+
+test("every fetch revalidates with the server (no stale cached files)", async () => {
+  serve({ ...SITE, "data/routes/bus-2.json": BUS_2 });
+  await loadSite();
+  await routeDetailLoader()("bus-2");
+  assert.equal(options.length, SITE_FILE_COUNT + 1);
+  for (const init of options) {
+    assert.deepEqual(init, { cache: "no-cache" });
+  }
+});
 
 test("loadSite: returns every overview file, status first", async () => {
   serve(SITE);

@@ -12,11 +12,17 @@ const MAKE_SITE_COMMANDS =
 /**
  * Fetch and parse one JSON file; a missing file names the commands.
  *
+ * `cache: "no-cache"`: the browser may keep a copy but must ask the server
+ * before using it (a cheap 304 when unchanged). Without it, a dev server
+ * that sends no Cache-Control (`python -m http.server`) lets the browser
+ * reuse stale files after a re-export, mixing old and new (seen: an old
+ * route file after a schema bump; even Ctrl+Shift+R didn't clear it).
+ *
  * @param {string} url
  * @returns {Promise<any>}
  */
 async function loadJson(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { cache: "no-cache" });
   if (!response.ok) {
     throw new Error(
       `Could not load ${url} (HTTP ${response.status}).\n` +
