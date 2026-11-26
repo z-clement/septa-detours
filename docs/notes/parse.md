@@ -257,3 +257,20 @@ issue when it raises. Real: 107 of 157 distinct messages. Tests
 survivors were either equivalent (`-+` vs `-`, the lstrip handles the
 rest) or dead code, removed (`not words`, an en dash nobody writes,
 stop words no test needed).
+
+## Daily hours (UI plan U8, 2026-11-26)
+
+`parse/hours.py`: `parse_daily_hours(message)` -> `DailyHours | None`,
+or `ValueError` for hours it can't read. Reads only the text before
+`via`; date labels (`on Thurs 11/26/26`) go *before* commas become
+spaces (`Mon thru Fri, 12/26/26`: the comma shows `Fri` ends the range:
+a sweep bug, now a test). Daily = a time range plus days or `until`
+(every day); a range on one date isn't (start/end cover it). Times need
+am/pm or an unambiguous 24-hour `h:mm` (`00:30`, `23:30`); `11:59`,
+`12:30` with no am/pm raise ("morning or evening?"); `24:00`, `13pm`,
+`7:60am`, `0am`, start == end raise. Real sweep (163 distinct messages):
+42 hours, 2 unreadable (`9am -11:59`), matching the 44 measured.
+Mutation check found two dead rules (`24/7`: those messages have no
+range; re-reading a day range's ends), removed, and two test gaps.
+The scratch runner needed a fresh `PYTHONPYCACHEPREFIX` per mutant: a
+stale `.pyc` made a same-length `23`->`24` mutant look survived.

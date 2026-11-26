@@ -250,7 +250,8 @@ Details and their origins are in `docs/notes/`; the short version:
 - Mutation-check every increment: break the code, see a test fail. The
   runner is a scratch script (not committed): copy the target, apply
   `[(old, new), ...]` pairs that must each match exactly once, run pytest
-  with `PYTHONDONTWRITEBYTECODE=1` (a stale `.pyc` silently tests the
+  with `PYTHONDONTWRITEBYTECODE=1` and a fresh `PYTHONPYCACHEPREFIX`
+  temp dir per mutant (a stale `.pyc` silently tests the
   wrong code), restore in `finally`. Before calling a survivor
   "equivalent", check it (e.g. `strict=False` is *not* equivalent for
   `read_detours`).
