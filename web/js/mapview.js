@@ -19,11 +19,19 @@ const ENDED_COLOR = "#9e9e9e";
 /** Rough centre of Philadelphia, [lon, lat], shown before the data arrives. */
 const PHILLY_CENTER = [-75.16, 39.95];
 
+/** The network's opacity on the overview, and fainter while a route is focused. */
+const NETWORK_OPACITY = 0.6;
+const NETWORK_OPACITY_FOCUSED = 0.3;
+
 const NETWORK_SOURCE = "network";
 const STARTS_SOURCE = "starts";
+const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
+const FOCUS_LAYER = "focus-lines";
 const STARTS_LAYER = "start-dots";
+
+const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
 /**
  * Create the map in the element with id `container`, with zoom buttons.
@@ -44,10 +52,12 @@ export function createMap(container) {
 
 /**
  * Draw the overview: the whole network faintly, detoured routes in color,
- * and every placed detour's start point on top.
+ * and every placed detour's start point on top. Returns `showFocus`,
+ * which switches between the overview and one focused route.
  *
  * Must run after the style has loaded (adding a source before then throws).
- * Layers draw in the order they're added.
+ * Layers draw in the order they're added: network, detoured, the focused
+ * route (empty until one is focused), dots.
  *
  * Expressions: MapLibre styles are small programs written as JSON arrays,
  * evaluated per feature. `["get", "color"]` reads a property; `coalesce`
@@ -64,10 +74,13 @@ export function createMap(container) {
  *
  * @param {maplibregl.Map} map
  * @param {{routes: object[], network: object, starts: object}} site
+ * @returns {(focus: {key: string, detail: object | null} | null) => void}
+ *   see `showFocus` below
  */
 export function addOverviewLayers(map, site) {
   map.addSource(NETWORK_SOURCE, { type: "geojson", data: site.network });
   map.addSource(STARTS_SOURCE, { type: "geojson", data: site.starts });
+  map.addSource(FOCUS_SOURCE, { type: "geojson", data: EMPTY_COLLECTION });
 
   const routeColor = ["coalesce", ["get", "color"], FALLBACK_COLOR];
   const offset = ["interpolate", ["linear"], ["zoom"], 10, 1, 16, 4];
@@ -80,7 +93,7 @@ export function addOverviewLayers(map, site) {
     layout: lineLayout,
     paint: {
       "line-color": NETWORK_COLOR,
-      "line-opacity": 0.6,
+      "line-opacity": NETWORK_OPACITY,
       // `interpolate` over `zoom`: thin when zoomed out, wider when zoomed
       // in (pairs are zoom, value).
       "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.75, 16, 2.5],
@@ -90,15 +103,39 @@ export function addOverviewLayers(map, site) {
 
   // The same lines again, only for detoured routes, in their own color.
   // `["literal", [...]]` marks the array as data, not an expression.
+  const detouredFilter = ["in", ["get", "key"], ["literal", detouredKeys(site.routes)]];
   map.addLayer({
     id: DETOURED_LAYER,
     type: "line",
     source: NETWORK_SOURCE,
-    filter: ["in", ["get", "key"], ["literal", detouredKeys(site.routes)]],
+    filter: detouredFilter,
     layout: lineLayout,
     paint: {
       "line-color": routeColor,
       "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 5],
+      "line-offset": offset,
+    },
+  });
+
+  // The focused route's every shape (route detail, not the network's
+  // covering set): covering shapes as thick as detoured lines, short-turns
+  // and branches thinner. Empty on the overview.
+  map.addLayer({
+    id: FOCUS_LAYER,
+    type: "line",
+    source: FOCUS_SOURCE,
+    layout: lineLayout,
+    paint: {
+      "line-color": routeColor,
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        ["case", ["get", "covering"], 2, 1],
+        16,
+        ["case", ["get", "covering"], 6, 3],
+      ],
       "line-offset": offset,
     },
   });
@@ -125,6 +162,43 @@ export function addOverviewLayers(map, site) {
       "circle-stroke-width": 2,
     },
   });
+
+  /**
+   * Show the overview (`null`) or one focused route.
+   *
+   * Focused: the network fainter, other routes' colored lines and dots
+   * hidden, the route's own dots kept. Its shapes come from `detail`;
+   * while that's loading (null), its network lines stay in color so the
+   * route doesn't vanish meanwhile. Doesn't move the camera (`fitRoute`).
+   *
+   * @param {{key: string, detail: object | null} | null} focus
+   */
+  return function showFocus(focus) {
+    const only = focus === null ? null : ["==", ["get", "key"], focus.key];
+    const detail = focus === null ? null : focus.detail;
+    map.setPaintProperty(
+      NETWORK_LAYER,
+      "line-opacity",
+      focus === null ? NETWORK_OPACITY : NETWORK_OPACITY_FOCUSED,
+    );
+    map.setFilter(DETOURED_LAYER, only ?? detouredFilter);
+    map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
+    map.setFilter(STARTS_LAYER, only);
+    map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
+  };
+}
+
+/**
+ * Move the camera to a route's lines (animated). A route without shapes
+ * (`bounds` null) leaves the camera where it is.
+ *
+ * @param {maplibregl.Map} map
+ * @param {object} route a routes.json entry
+ */
+export function fitRoute(map, route) {
+  if (route.bounds !== null) {
+    map.fitBounds(route.bounds, { padding: 40 });
+  }
 }
 
 /**
