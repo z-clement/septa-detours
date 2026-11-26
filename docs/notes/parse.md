@@ -242,3 +242,18 @@ issue (end text can be inferred by walking the detour).
   total.
 - Not updated yet: the fixture README's "Expected" column for the
   location-related items.
+
+## Route steps (tier B, 2026-11-25)
+
+`parse/steps.py::parse_route_steps(message) -> tuple[Step, ...]`: the
+street after the first `via` (also glued: `viaTasker`), then each turn
+(`Left on` / `Right on`, or `L -` / `R--`), up to the first `Reg Rt` /
+`Reg Rte` after it. Commas inside a step and parenthesized asides are
+dropped, a leading dash stripped; a street must be plain words, at most
+4 (`Cecil B Moore Ave`), without `on` or `around`. Anything else raises.
+`parse_detour` stores it as `DetourNotice.route_steps`, `()` with no
+issue when it raises. Real: 107 of 157 distinct messages. Tests
+(`test_steps.py`, real messages verbatim + hand-built edges); mutation
+survivors were either equivalent (`-+` vs `-`, the lstrip handles the
+rest) or dead code, removed (`not words`, an en dash nobody writes,
+stop words no test needed).

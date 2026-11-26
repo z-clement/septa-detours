@@ -233,3 +233,21 @@ place 14 / 15; segment 2 / 2; not in OSM 4 / 4; not within 500 m 5 / 6;
 route not in GTFS 5 / 5; ambiguous 0 / 0 (same as the scratch lookup).
 The mutation runner is now a scratch script taking a mutations file
 (`MUTATIONS = [(old, new), ...]`) plus target and test paths.
+
+## Rejoin point and skipped stretch (tier B, 2026-11-25)
+
+- `place.find_rejoin_point(steps, ways, keys, lines)`: the crossing of
+  the last two steps' streets within `REJOIN_RADIUS_M` (30 m, from real
+  data: 66 at 0-15 m, next 62 m) of the **affected** shapes only;
+  exactly one or `None`, never an issue. `split_shared_ways` matters: a
+  short way would otherwise "cross itself" (a test pins it).
+- `skipped.skipped_stretch(line, start, rejoin)` (shapely + pyproj,
+  EPSG:2272): `None` when the start is over 500 m or the rejoin over
+  30 m from the line, the rejoin isn't after the start along it, or the
+  stretch is over 3x its ends' distance + 100 m (a hairpin test pins the
+  slack's unit: metres, not feet). `notice._skipped` takes the first
+  affected shape that gives one.
+- `RouteMatch.rejoin_point` / `.skipped` default to `None` so old
+  detours files read. Real `121123Z`: 65 rejoins, 51 stretches.
+- Test data: a "Federal Street" way crosses the test 17th one block
+  north of Washington, so a test path can rejoin away from its start.

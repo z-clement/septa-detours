@@ -53,7 +53,8 @@ crossing is near the route (route 2 "... Right on Passyunk, Left on
 on Francis St, Reg Rt": Francis isn't, so the real rejoin is further on:
 unknown). Any doubt -> no rejoin.
 
-Steps (each committed; model and contract changes flagged):
+Steps (each committed; model and contract changes flagged). All built
+2026-11-25; the drawn map still needs a look by eye.
 1. `parse/steps.py` (pure): `parse_route_steps(message)` -> `Step`s
    (`via` street, then each `left`/`right` street) up to "Reg Rt"; raises
    on anything unrecognized. `Step` in `model.py`.
@@ -68,3 +69,33 @@ Steps (each committed; model and contract changes flagged):
    and `skipped`; an overview file for the skipped lines.
 6. web: draw the skipped stretch in its own style ("not served"), the
    regular route solid.
+
+Results and decisions made while building (tier B):
+- Steps: 107 of 157 distinct real messages give a path (25 have no
+  `via`: stop closures; 15 no `Reg Rt`: layovers; 10 garbled, e.g.
+  "Stay on Ridge Ave", "Left on Around 30th St", "Morton Ave turns to
+  Chester Pk"). Stop words kept to what tests pin: `on` (any `on` that
+  isn't `Left on`/`Right on` is an unknown instruction) and `around`.
+- No parse issue for a missing path (it would make notices `partial` and
+  move every pin); revisit with the other message questions.
+- `REJOIN_RADIUS_M = 30`: last-two-streets crossings are 0-15 m from the
+  affected shapes in 66 detours, the next at 62 m. 65 rejoins.
+- Stretch (shapely + pyproj, EPSG:2272): projections onto the shape,
+  rejoin must come after start; doubt -> none when the stretch is over
+  3x its ends' distance + 100 m (drops route 97's 7.6 km for 1.9 km).
+  First affected shape that gives one (lengths differ between shapes in
+  5 of 51). 51 stretches, 2 m simplified: 456 points, 18 KB.
+- Map: white casing + dashes (red now, orange later, grey ended) over
+  the solid route, same offset; stretches act like dots (hover, select,
+  click); legend top left.
+
+Tier B follow-ups (not built):
+- A rejoin when the last street isn't the route (98 crossings sat
+  62-959 m off): walk the last street to where it meets the route (a
+  first step of tier C).
+- The 6 detours with both points but no stretch: 5 have the rejoin at
+  the start crossing itself (two-step paths like "via Harbison, Right
+  on Frankford"): maybe "the route between start and the next crossing
+  of the last street" (tier C territory).
+- Show the rejoin on the focused map and name it on the card ("Back on
+  route at Passyunk & 17th": the steps' last two streets).

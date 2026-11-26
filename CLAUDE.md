@@ -93,10 +93,10 @@ docs/            plans (web-plan.md = current, geography-plan.md,
   test touches the network
 - OSM: pyosmium (`osmium`, added; reads `.osm.pbf` and `.osm` XML). It
   pulls in `requests`/`urllib3` (unused by us)
-- Candidate libraries (ask before adding each): shapely + pyproj (match;
-  project to EPSG:2272 before measuring distances), networkx (tier C).
-  Decided: **not for tier A**; tier A's geometry is hand-written
-  (`match/crossings.py`, equirectangular metres). Save them for tiers B/C.
+- Geometry: shapely + pyproj (added for tier B, `match/skipped.py`;
+  project to EPSG:2272, US survey feet). Tier A's geometry stays
+  hand-written (`match/crossings.py`, equirectangular metres).
+  Candidate (ask first): networkx (tier C).
 
 ## Commands
 
@@ -204,10 +204,18 @@ a route: the panel replaces the list (detours grouped by timing,
 "Ended" collapsed), the map dims the rest, the URL hash
 (`#route=...&detour=...`) and Back/Escape work; state lives in
 `state.js`. Since W5 cards and dots are linked (hover, select, scroll,
-pan) and a click on several routes opens a chooser. Since W6 (built;
-check on a phone) below 700 px the sidebar is a bottom sheet (3
-heights, tap handle; `sheet.js`), plus a keyboard/screen-reader pass.
-125 JS tests.
+pan) and a click on several routes opens a chooser. Since W6 below 700
+px the sidebar is a bottom sheet (3 heights, tap handle; `sheet.js`),
+plus a keyboard/screen-reader pass. 125 JS tests.
+
+Then **tier B** (geography plan): parse reads the message's path
+(`parse/steps.py`, `DetourNotice.route_steps`), match places the rejoin
+(`RouteMatch.rejoin_point`: last two streets' crossing within 30 m of
+the affected shapes) and cuts the skipped stretch (`RouteMatch.skipped`,
+`match/skipped.py`), the contract is schema 3 (`rejoin_point`,
+`skipped`, `skipped.geojson`), and the map draws stretches dashed over
+the solid route, with a legend. Real `121123Z`: 107 of 157 messages
+give a path, 65 rejoins, 51 stretches. Map side not yet checked by eye.
 
 ## Next
 
@@ -215,9 +223,9 @@ heights, tap handle; `sheet.js`), plus a keyboard/screen-reader pass.
 made, facts measured, the contract's files, the JS module layout, the
 order of work, and **decisions still to confirm: ask before building
 those**). P1-P6 (Python) and W1-W6 are done (W6: check on a phone).
-Its "Order of work" is finished; next is picking from "Later in the
-web part" (detoured lines in their own line style, stops/closures,
-live vehicles) or the backlog: ask which.
+Tier B is built (check the stretches by eye); its follow-ups and tier C
+are in `docs/geography-plan.md`. Next: pick from there, the web plan's
+"Later in the web part", or the backlog: ask which.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
 collection, small follow-ups) and `docs/geography-plan.md` (tier A step
@@ -245,7 +253,8 @@ Details and their origins are in `docs/notes/`; the short version:
   RUF001 flags literal en dashes / NBSPs (write `"\u2013"`, `"\u00a0"`;
   Claude has typed literal NBSPs before: `sed -i
   's/\xc2\xa0/\\u00a0/g' <file>`).
-- ty: 45 pre-existing diagnostics (mostly `**dict` test helpers and
+- ty: 46 pre-existing diagnostics (45, plus one per new `DetourNotice`
+  field from `test_model.py`'s untyped `make_notice` helper) (mostly `**dict` test helpers and
   `dict` invariance vs `Properties`); don't add more.
 - JS: `node --test web/test/` for pure modules (no DOM, no
   `maplibregl`). Tests set `process.env.TZ = "Asia/Tokyo"`: this machine

@@ -38,3 +38,13 @@ Decisions:
   job, and so is flagging `end < start` as an issue.
 Tests: `tests/test_model.py` (35; `make_notice(**overrides)` over a real
 route 2 entry). 15 mutations, all caught. 185 tests total.
+
+## Tier B fields (2026-11-25)
+
+`Step` (`turn`: via/left/right, `street` as written) and
+`DetourNotice.route_steps` (default `()`); `RouteMatch.rejoin_point`
+(a `StartPoint`, default `None`) and `RouteMatch.skipped`
+(`SkippedStretch`: `shape_id` + `(lon, lat)` line, at least 2 points,
+bounded; default `None`). Defaults keep pre-tier-B files readable (a
+test reads one). Bounds can't catch a lat/lon swap in Philly (-75 is a
+valid latitude): the realistic-coordinate tests in `match/` do.

@@ -601,3 +601,22 @@ search box to full.
   restore (every control, and not carried to another route), chip
   states. Real phone and the map side not checked.
 Tests: 125 JS.
+
+## Tier B on the map: contract schema 3 (2026-11-25)
+
+- Contract 3: the detour object gains `rejoin_point` and `skipped`
+  (`skipped_line`: 2 m simplified, 5 decimals, like detail shapes);
+  `skipped.geojson` (LineStrings, properties as `starts.geojson`;
+  `skipped_collection`); `write.SITE_FILES` lists it. `data.js` reads
+  3 and loads it. Real: 51 stretches, 456 points, 18 KB.
+- `mapview.js`: `skipped` source (`promoteId: source_key`), a white
+  casing layer then dashes (`line-dasharray [2, 1.2]`, butt caps so the
+  gaps stay open) by timing: red `#d32f2f` now, orange later, grey
+  ended; widths grow when hovered/selected. Same `line-offset` as the
+  route lines. Feature-state goes on dot and stretch alike
+  (`DETOUR_SOURCES`); a stretch click counts as a dot (`clickChoices`
+  dedupes a detour's dot + stretch). Focus filters stretches to the
+  route. `addLegend`: a top-left MapLibre control (route, skipped,
+  start); its red is repeated in app.css.
+- Not checked by eye yet: the drawn stretches (offset side, dash look
+  at each zoom, casing over route colors).
