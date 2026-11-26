@@ -146,10 +146,15 @@ Steps (each committed; model and contract changes flagged):
    the direction, so `S Penn Sq` finds `South Penn Square`~~ (done: no
    pins moved, no start changed; walked 65 -> 80 on `121123Z`; turns
    read over ~100 m all agree: see `notes/match.md`).
-2. Add networkx; `match/walk.py`: one street's graph and the walk
-   between two node sets.
-3. The whole path from the steps (doubt rules), and the extension to
-   the route when there's no rejoin.
+2. ~~Add networkx; `match/walk.py`: one street's graph and the walk
+   between two node sets~~ (done, plus `turn_side`).
+3. ~~The whole path from the steps (doubt rules), and the extension to
+   the route when there's no rejoin~~ (done: `match/path.py`). Decided
+   on the way: without a rejoin, a corner already within 30 m of the
+   route -> no path (6 real cases, 5 two-street paths). Real `121123Z`:
+   63 paths of 97 candidates, 22 of them with a rejoin tier B lacked.
+   Follow-up: check the first turn (off the route) and a one-node last
+   leg's turn against the route shape's direction.
 4. `RouteMatch.path` (model change), filled by `match_notice`.
 5. Contract schema 4: the detour object's `path`, a `paths.geojson`.
 6. web: draw the path in its own style (ask which).

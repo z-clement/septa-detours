@@ -10,9 +10,15 @@ which runs diagonally).
 import polars as pl
 import pytest
 
-from septa_detours.match.path import Leg, walk_to_route, walk_turns
+from septa_detours.match.path import (
+    DetourPath,
+    Leg,
+    detour_path,
+    walk_to_route,
+    walk_turns,
+)
 from septa_detours.match.streets import street_key_table
-from septa_detours.model import Step, Turn
+from septa_detours.model import StartPoint, Step, Turn
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
 
 LON, LAT = -75.1716, 39.9385
@@ -282,3 +288,93 @@ def test_corner_may_be_any_iterable() -> None:
     assert walk_to_route(VIA_BROAD, corner, GRID, KEYS, [ON_BROAD], None) == leg(
         "Reed", (0, -1), (1, -1), (2, -1)
     )
+
+
+# detour_path.
+
+
+def start_at(x: int, y: int) -> StartPoint:
+    lon, lat = point(x, y)
+    return StartPoint(node_id=node(x, y), lon=lon, lat=lat)
+
+
+def test_route_2_path_to_its_known_rejoin() -> None:
+    rejoin = start_at(0, -1)
+    path = detour_path(ROUTE_2, start_at(0, 0), rejoin, GRID, KEYS, [ON_17TH])
+    assert path == DetourPath(
+        line=tuple(
+            point(x, y) for x, y in [(0, 0), (1, 0), (2, 0), (2, -1), (1, -1), (0, -1)]
+        ),
+        rejoin=rejoin,
+    )
+
+
+def test_path_without_a_rejoin_finds_one() -> None:
+    # From Broad & Washington: west, down 17th, east on Reed back to Broad.
+    path = detour_path(VIA_BROAD, start_at(2, 0), None, GRID, KEYS, [ON_BROAD])
+    assert path == DetourPath(
+        line=tuple(
+            point(x, y) for x, y in [(2, 0), (1, 0), (0, 0), (0, -1), (1, -1), (2, -1)]
+        ),
+        rejoin=start_at(2, -1),
+    )
+
+
+def test_the_turn_onto_the_last_street_must_agree() -> None:
+    # South on 17th, then east on Reed: a left.
+    wrong = [*VIA_BROAD[:-1], Step(turn="right", street="Reed")]
+    assert detour_path(wrong, start_at(2, 0), None, GRID, KEYS, [ON_BROAD]) is None
+
+
+def test_a_rejoin_at_the_start_counts_as_none() -> None:
+    # Round the block back to 17th & Washington, the start: tier B's rejoin
+    # would be the start itself. Without it, the corner is on the route.
+    loop = [
+        *ROUTE_2[:4],
+        Step(turn="right", street="17th"),
+        Step(turn="right", street="Washington"),
+    ]
+    start = start_at(0, 0)
+    assert detour_path(loop, start, start, GRID, KEYS, [ON_17TH]) is None
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        [],
+        steps(("via", "17th")),
+        # A middle street that doesn't reach the next one.
+        steps(
+            ("via", "17th"), ("left", "Washington"), ("right", "Reed"), ("left", "17th")
+        ),
+    ],
+)
+def test_no_path(path: list[Step]) -> None:
+    assert (
+        detour_path(path, start_at(0, 0), start_at(0, -1), GRID, KEYS, [ON_17TH])
+        is None
+    )
+
+
+def test_last_street_failing_is_no_path() -> None:
+    # The known rejoin isn't on 17th.
+    assert (
+        detour_path(ROUTE_2, start_at(0, 0), start_at(2, -2), GRID, KEYS, [ON_17TH])
+        is None
+    )
+
+
+def test_a_single_point_is_no_path() -> None:
+    # Node 9999 sits exactly on the start (OSM has such duplicates): walking
+    # to it goes nowhere.
+    lon, lat = point(0, 0)
+    ways = pl.concat(
+        [GRID, extra_way(5, "Washington Avenue", [(START, lon, lat), (9999, lon, lat)])]
+    )
+    rejoin = StartPoint(node_id=9999, lon=lon, lat=lat)
+    two = steps(("via", "17th"), ("left", "Washington"))
+    keys = street_key_table(ways)
+    assert walk_to_route(two, {START}, ways, keys, [ON_17TH], 9999) == Leg(
+        "Washington", (START, 9999), (point(0, 0), point(0, 0))
+    )
+    assert detour_path(two, start_at(0, 0), rejoin, ways, keys, [ON_17TH]) is None

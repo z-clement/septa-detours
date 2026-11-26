@@ -20,7 +20,7 @@ from septa_detours.match.crossings import find_crossings
 from septa_detours.match.place import REJOIN_RADIUS_M
 from septa_detours.match.streets import split_shared_ways, street_matches
 from septa_detours.match.walk import street_graph, turn_side, walk_street
-from septa_detours.model import Step, Turn
+from septa_detours.model import StartPoint, Step, Turn
 
 
 class Leg(NamedTuple):
@@ -36,6 +36,77 @@ class Leg(NamedTuple):
     street: str
     nodes: tuple[int, ...]
     points: tuple[tuple[float, float], ...]
+
+
+class DetourPath(NamedTuple):
+    """Where a detour goes, from its start to where it's back on the route.
+
+    Attributes:
+        line: ``(lon, lat)`` points in travel order, at least two.
+        rejoin: Where it gets back on the route: tier B's rejoin, or the
+            node ``walk_to_route`` reached.
+    """
+
+    line: tuple[tuple[float, float], ...]
+    rejoin: StartPoint
+
+
+def detour_path(
+    steps: Sequence[Step],
+    start: StartPoint,
+    rejoin: StartPoint | None,
+    ways: pl.DataFrame,
+    keys: pl.DataFrame,
+    lines: Sequence[Sequence[Sequence[float]]],
+) -> DetourPath | None:
+    """Walk a detour's message from its start back onto its route.
+
+    ``walk_turns`` for the streets in between, ``walk_to_route`` for the
+    last one; the turn onto the last street must agree too. The legs
+    join into one line: a corner shared by two legs appears once (a wide
+    crossing's two nodes both stay: a jump of a few metres).
+
+    Args:
+        steps: The notice's ``route_steps``.
+        start: The detour's start point (tier A).
+        rejoin: Tier B's rejoin, or ``None``. One at the start itself
+            (a two-street path's last two streets cross at the start) is
+            treated as ``None``.
+        ways: The street cache.
+        keys: ``street_key_table(ways)``.
+        lines: The affected shapes, as ``[lon, lat]`` lists.
+
+    Returns:
+        The path, or ``None`` (never a guess) when there are fewer than
+        two steps, a walk fails or a turn disagrees (see ``walk_turns``
+        and ``walk_to_route``), or the path is a single point.
+    """
+    if len(steps) < 2:
+        return None
+    rejoin_node = None if rejoin is None else rejoin.node_id
+    if rejoin_node == start.node_id:
+        rejoin_node = None
+    walked = walk_turns(steps, {start.node_id}, ways, keys)
+    if walked is None:
+        return None
+    legs, corner = walked
+    last = walk_to_route(steps, corner, ways, keys, lines, rejoin_node)
+    if last is None:
+        return None
+    if legs and not _turn_agrees(legs[-1], last, steps[-1].turn):
+        return None
+    line: list[tuple[float, float]] = []
+    for leg in (*legs, last):
+        for point in leg.points:
+            if not line or line[-1] != point:
+                line.append(point)
+    if len(line) < 2:
+        return None
+    lon, lat = last.points[-1]
+    return DetourPath(
+        line=tuple(line),
+        rejoin=StartPoint(node_id=last.nodes[-1], lon=lon, lat=lat),
+    )
 
 
 def walk_turns(

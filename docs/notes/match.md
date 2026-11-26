@@ -317,3 +317,12 @@ The mutation runner is now a scratch script taking a mutations file
   the bus gets back on). First tried "near nodes not connected to the
   corner through near nodes": wrong with sparse OSM nodes (two near
   nodes joined by a 111 m edge that leaves the route).
+- `path.detour_path(steps, start, rejoin, ways, keys, lines)` (step
+  3d): `walk_turns` + `walk_to_route` + the turn onto the last street;
+  a tier B rejoin at the start counts as none; legs joined into one
+  line (a shared corner once; a wide crossing's two nodes both kept);
+  under 2 points -> `None` (pinned with a duplicate-position OSM node).
+  Returns `DetourPath(line, rejoin)`. Real: `121123Z` 63 paths of 97
+  candidates (41 on tier B's rejoin, 22 rejoins found by walking),
+  71 m-5.2 km (median 2.1 km), 5,199 points; `141550Z` 36 of 48 (28 +
+  8), 1,776 points.
