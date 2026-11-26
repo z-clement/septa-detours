@@ -6,7 +6,7 @@
 
 import { loadSite, routeDetailLoader } from "./data.js";
 import { statusLine } from "./format.js";
-import { addClickHandler, addOverviewLayers, createMap, fitRoute } from "./mapview.js";
+import { addClickHandler, addOverviewLayers, createMap, fitRoute, panToDot } from "./mapview.js";
 import {
   detouredRoutes,
   groupByMode,
@@ -139,9 +139,42 @@ async function main() {
         // Dropped if the user has moved on to another route meanwhile.
         if (store.get().focus === key) {
           renderFocus(store.get());
+          scrollToSelected(store.get()); // a shared link's detour
         }
       });
   };
+  // The selected detour's card, scrolled into view only as far as needed
+  // ("nearest": a card already in view, e.g. the one clicked, stays put).
+  // Twins share a source_key; the first is enough.
+  const scrollToSelected = ({ selectedDetour }) => {
+    if (selectedDetour !== null) {
+      panelElement
+        .querySelector(`.detour-card[data-source-key="${CSS.escape(selectedDetour)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    }
+  };
+  // The map to the selected detour's dot, if it has one and it's off
+  // screen. Needs the detail file (dots carry no detour data).
+  const panToSelected = ({ focus, selectedDetour }) => {
+    const detail = loaded.key === focus ? loaded.detail : null;
+    const detour = detail?.detours.find((d) => d.source_key === selectedDetour);
+    if (detour?.start_point != null) {
+      panToDot(map, detour.start_point);
+    }
+  };
+  // Cards: one listener each for the whole panel (cards are rebuilt on
+  // each render). A click anywhere on a card selects it, except inside
+  // its "Parser notes", which only opens and closes them.
+  panelElement.addEventListener("click", (event) => {
+    const card = event.target.closest(".detour-card");
+    if (card !== null && event.target.closest(".issues") === null) {
+      store.focus(store.get().focus, card.dataset.sourceKey);
+    }
+  });
+  panelElement.addEventListener("mouseover", (event) => {
+    setHoveredDot(event.target.closest(".detour-card")?.dataset.sourceKey ?? null);
+  });
+  panelElement.addEventListener("mouseleave", () => setHoveredDot(null));
   addClickHandler(map, site.routes, loadDetail, store.focus);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && store.get().focus !== null) {
@@ -186,6 +219,8 @@ async function main() {
     if (changed.has("focus")) {
       browseElement.hidden = state.focus !== null;
       panelElement.hidden = state.focus === null;
+      // The hovered card is gone (removed cards fire no mouseleave).
+      setHoveredDot(null);
       if (state.focus !== null) {
         startLoading(state.focus);
         fitRoute(map, routesByKey.get(state.focus));
@@ -200,6 +235,15 @@ async function main() {
     }
     if (["focus", "selectedDetour", "now"].some((key) => changed.has(key))) {
       renderFocus(state);
+    }
+    if (changed.has("selectedDetour")) {
+      setSelectedDot(state.selectedDetour);
+      scrollToSelected(state);
+      // A new route was just fitted (fitRoute), and its dots are in its
+      // bounds: pan only for a new selection on the same route.
+      if (!changed.has("focus")) {
+        panToSelected(state);
+      }
     }
   });
 

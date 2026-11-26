@@ -216,6 +216,8 @@ export function createModeChips(container, modeOrder, onToggle) {
 /**
  * One detour's card: where, when, why, the raw message.
  *
+ * The headline is a `<button>` (the keyboard's way to select the card;
+ * main.js handles clicks on the whole card through the panel).
  * An unplaced detour (no `start_point`) gets a muted note instead of
  * being hidden (decided: it stays in its timing group). Parse issues are
  * debugging text, so they sit in a closed `<details>`.
@@ -229,8 +231,13 @@ function detourCard(detour, directions, selected) {
   const card = element("article", "detour-card");
   card.dataset.sourceKey = detour.source_key;
   card.classList.toggle("selected", selected);
+  const headline = element("h3");
+  const select = element("button", "card-select", detourHeadline(detour, directions));
+  select.type = "button";
+  select.setAttribute("aria-pressed", String(selected));
+  headline.append(select);
   card.append(
-    element("h3", undefined, detourHeadline(detour, directions)),
+    headline,
     element("p", "when", `${formatTime(detour.start)} to ${formatTime(detour.end)}`),
     element("p", undefined, `Reason: ${detour.reason ?? "(none given)"}`),
   );

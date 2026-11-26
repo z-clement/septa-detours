@@ -300,6 +300,10 @@ body {
   padding: 8px 12px;
   border-bottom: 1px solid #eee;
   font-size: 13px;
+  cursor: pointer;
+}
+.detour-card:hover {
+  background: #f0f4ff;
 }
 .detour-card.selected {
   background: #fff7d6;
@@ -307,6 +311,16 @@ body {
 .detour-card h3 {
   margin: 0 0 2px;
   font-size: 14px;
+}
+/* The headline's button looks like a heading. */
+.card-select {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .detour-card p {
   margin: 2px 0;
