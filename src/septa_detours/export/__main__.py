@@ -39,6 +39,7 @@ from septa_detours.export.geojson import (
 from septa_detours.export.site import (
     lines_bounds,
     network_collection,
+    paths_collection,
     route_catalog,
     route_detail,
     route_directions,
@@ -218,6 +219,7 @@ def export_site(
         "network.geojson": network_collection(catalog, shapes, coordinates),
         "starts.geojson": starts,
         "skipped.geojson": skipped,
+        "paths.geojson": paths_collection(catalog, detours, now),
     }
     for entry in catalog:
         key = entry["key"]

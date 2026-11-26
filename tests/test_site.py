@@ -8,6 +8,7 @@ import pytest
 
 from septa_detours.export.contract import (
     NETWORK_PROPERTIES,
+    PATH_PROPERTIES,
     SHAPE_PROPERTIES,
     SKIPPED_PROPERTIES,
     START_PROPERTIES,
@@ -22,6 +23,7 @@ from septa_detours.export.site import (
     detour_timing,
     lines_bounds,
     network_collection,
+    paths_collection,
     route_catalog,
     route_detail,
     route_directions,
@@ -422,6 +424,17 @@ ROUTE_2_SKIPPED = (
 )
 
 
+# Route 2 #0's walked path, first block: the start, a point ~1 m off the
+# straight line (dropped at 2 m), the Broad corner, a block south on
+# Broad. Rounded to 5 decimals.
+ROUTE_2_PATH = (
+    (-75.171604, 39.938503),
+    (-75.1706, 39.93851),
+    (-75.1696, 39.9385),
+    (-75.16963, 39.937),
+)
+
+
 def test_detour_object_matched_and_placed(notices) -> None:
     # Route 2 #0 with its real match: SB shape, start at 17th & Washington,
     # rejoin at Passyunk & 17th.
@@ -432,6 +445,7 @@ def test_detour_object_matched_and_placed(notices) -> None:
         start_point=StartPoint(node_id=110024066, lon=-75.1716, lat=39.9385),
         rejoin_point=StartPoint(node_id=110024247, lon=-75.1746167, lat=39.9245599),
         skipped=SkippedStretch(shape_id="317310", line=ROUTE_2_SKIPPED),
+        path=ROUTE_2_PATH,
     )
     detour = Detour(notice=notices("bus_route_2")[0], match=match, issues=("x: y",))
     assert detour_object(detour) == {
@@ -451,6 +465,7 @@ def test_detour_object_matched_and_placed(notices) -> None:
         "start_point": {"lon": -75.1716, "lat": 39.9385, "node_id": 110024066},
         "rejoin_point": {"lon": -75.1746167, "lat": 39.9245599, "node_id": 110024247},
         "skipped": [[-75.17158, 39.93846], [-75.17461, 39.92456]],
+        "path": [[-75.1716, 39.9385], [-75.1696, 39.9385], [-75.16963, 39.937]],
         "shape_ids": ["317310"],
     }
 
@@ -475,6 +490,7 @@ def test_detour_object_unmatched(notices) -> None:
         "start_point": None,
         "rejoin_point": None,
         "skipped": None,
+        "path": None,
         "shape_ids": [],
     }
 
@@ -610,7 +626,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 3,
+        "schema_version": 4,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1280,6 +1296,81 @@ def test_skipped_rejects_a_route_not_in_the_catalog(notices) -> None:
         skipped_collection([ROUTE_2], detours, STARTS_NOW)
 
 
+# --- paths_collection -------------------------------------------------------------
+
+
+def walking(
+    notice: DetourNotice,
+    path: tuple[tuple[float, float], ...] | None,
+    *,
+    skipped: tuple[tuple[float, float], ...] | None = None,
+    feed: Feed = "bus",
+    route_id: str = "2",
+) -> Detour:
+    """A placed detour with a path (and maybe a skipped stretch)."""
+    start = StartPoint(node_id=110024066, lon=-75.1716, lat=39.9385)
+    stretch = (
+        None if skipped is None else SkippedStretch(shape_id="317310", line=skipped)
+    )
+    match = RouteMatch(
+        feed=feed,
+        route_id=route_id,
+        start_point=start,
+        skipped=stretch,
+        path=path,
+    )
+    return Detour(notice=notice, match=match)
+
+
+AIR_PATH = ((-75.2345, 39.8765), (-75.2401, 39.8799), (-75.2301, 39.8812))
+
+
+def test_paths_whole_output(notices) -> None:
+    # Only detours with a path; a stretch alone isn't one.
+    route_2 = notices("bus_route_2")
+    detours = [
+        walking(route_2[2], None, skipped=ROUTE_2_SKIPPED),  # stretch, no path
+        Detour(notice=route_2[3], match=None),  # unmatched
+        walking(route_2[4], AIR_PATH, feed="rail", route_id="AIR"),
+        walking(route_2[0], ROUTE_2_PATH, skipped=ROUTE_2_SKIPPED),
+    ]
+    assert paths_collection([ROUTE_2, AIR], detours, STARTS_NOW) == {
+        "type": "FeatureCollection",
+        "features": [
+            stretch_feature(
+                [[-75.2345, 39.8765], [-75.2401, 39.8799], [-75.2301, 39.8812]],
+                "rail-AIR",
+                "ff53152c4c7f9011",
+                "#5A6F7B",
+                "ended",
+            ),
+            stretch_feature(
+                [[-75.1716, 39.9385], [-75.1696, 39.9385], [-75.16963, 39.937]],
+                "bus-2",
+                "5d0d22dfe7d86935",
+                "#00A1DE",
+                "active",
+            ),
+        ],
+    }
+
+
+def test_path_properties_are_the_contract_ones(notices) -> None:
+    assert PATH_PROPERTIES == START_PROPERTIES
+    detours = [walking(notices("bus_route_2")[0], ROUTE_2_PATH)]
+    [feature] = paths_collection([ROUTE_2], detours, STARTS_NOW)["features"]
+    assert tuple(feature["properties"]) == PATH_PROPERTIES
+
+
+def test_paths_reject_a_route_not_in_the_catalog(notices) -> None:
+    notice = notices("bus_route_2")[0]
+    detours = [walking(notice, ROUTE_2_PATH, route_id="21")]
+    with pytest.raises(
+        ValueError, match=f"{notice.source_key} is on unknown route 'bus-21'"
+    ):
+        paths_collection([ROUTE_2], detours, STARTS_NOW)
+
+
 # --- status ----------------------------------------------------------------------
 
 SNAPSHOT = "2026-11-25T121123Z.json"
@@ -1297,7 +1388,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",

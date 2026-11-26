@@ -157,5 +157,6 @@ Steps (each committed; model and contract changes flagged):
    leg's turn against the route shape's direction.
 4. ~~`RouteMatch.path` (model change), filled by `match_notice`~~ (done:
    a path's rejoin fills `rejoin_point`; real `121123Z` stretches 53 -> 75).
-5. Contract schema 4: the detour object's `path`, a `paths.geojson`.
+5. ~~Contract schema 4: the detour object's `path`, a `paths.geojson`~~
+   (done; `data.js` loads it, nothing draws it yet).
 6. web: draw the path in its own style (ask which).

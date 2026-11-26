@@ -270,6 +270,7 @@ def test_site_files_are_the_contract_ones() -> None:
         "network.geojson",
         "starts.geojson",
         "skipped.geojson",
+        "paths.geojson",
     } == SITE_FILES
 
 

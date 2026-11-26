@@ -37,6 +37,7 @@ SITE_FILES = frozenset(
         "network.geojson",
         "starts.geojson",
         "skipped.geojson",
+        "paths.geojson",
     }
 )
 """The contract's fixed files (``export/contract.py``); route details go in

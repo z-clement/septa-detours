@@ -2,7 +2,7 @@
 // (see export/contract.py).
 
 /** The contract version this page reads; status.json and route files carry it. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** The commands that make the contract's files, named when one is missing. */
 const MAKE_SITE_COMMANDS =
@@ -50,18 +50,19 @@ function checkSchema(url, file) {
  * other files (network.geojson is ~1 MB) aren't downloaded at all. Then
  * the rest in parallel.
  *
- * @returns {Promise<{status: object, routes: object[], network: object, starts: object, skipped: object}>}
+ * @returns {Promise<{status: object, routes: object[], network: object, starts: object, skipped: object, paths: object}>}
  */
 export async function loadSite() {
   const status = await loadJson("data/status.json");
   checkSchema("data/status.json", status);
-  const [routes, network, starts, skipped] = await Promise.all([
+  const [routes, network, starts, skipped, paths] = await Promise.all([
     loadJson("data/routes.json"),
     loadJson("data/network.geojson"),
     loadJson("data/starts.geojson"),
     loadJson("data/skipped.geojson"),
+    loadJson("data/paths.geojson"),
   ]);
-  return { status, routes, network, starts, skipped };
+  return { status, routes, network, starts, skipped, paths };
 }
 
 /**

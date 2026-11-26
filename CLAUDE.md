@@ -123,7 +123,7 @@ docs/            plans (web-plan.md = current, geography-plan.md,
 - Export the data contract (~9 s, ~350 MB RAM; needs both GTFS feeds):
   `uv run python -m septa_detours.export site [detours.json]` (default:
   newest `detours-<stamp>.json`) -> `web/data/{status,routes}.json`,
-  `{network,starts}.geojson`, `routes/<feed>-<route_id>.json` (one per
+  `{network,starts,skipped,paths}.geojson`, `routes/<feed>-<route_id>.json` (one per
   route, 181); overwrites in place, deletes route files of routes gone
   from GTFS. Types: `export/contract.py`
 - Export one route's shapes (debugging tool, not used by the page):

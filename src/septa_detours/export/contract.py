@@ -9,6 +9,7 @@ Layout::
     network.geojson         FeatureCollection (NETWORK_PROPERTIES)
     starts.geojson          FeatureCollection (START_PROPERTIES)
     skipped.geojson         FeatureCollection (SKIPPED_PROPERTIES)
+    paths.geojson           FeatureCollection (PATH_PROPERTIES)
     routes/<key>.json       RouteDetail
 
 Each export overwrites these in place (decided: no history), one file at
@@ -26,7 +27,9 @@ an optional field the page can ignore doesn't need a bump.
 
 Versions: 1, the first contract; 2, ``routes.json`` gains
 ``detours.windows``; 3, tier B: the detour object gains ``rejoin_point``
-and ``skipped``, and ``skipped.geojson`` is new (the page draws them).
+and ``skipped``, and ``skipped.geojson`` is new (the page draws them);
+4, tier C: the detour object gains ``path``, and ``paths.geojson`` is
+new.
 """
 
 from typing import Final, Literal, TypedDict
@@ -35,7 +38,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus
 
-SCHEMA_VERSION: Final = 3
+SCHEMA_VERSION: Final = 4
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -84,6 +87,10 @@ class DetourObject(TypedDict):
     """The regular route it skips, start to rejoin, ``[lon, lat]`` in
     travel order (simplified at ``DETAIL_TOLERANCE_M``, rounded), or
     ``None`` when unknown."""
+    path: list[Position] | None
+    """Where the detour goes (tier C), start to rejoin, ``[lon, lat]`` in
+    travel order (simplified and rounded as ``skipped``), or ``None``
+    when unknown."""
     shape_ids: list[str]
     """The matched shapes, in match order; ``[]`` when unmatched."""
 
@@ -184,6 +191,10 @@ detour). ``timing`` is a ``Timing``, computed at export time."""
 SKIPPED_PROPERTIES: Final = ("key", "source_key", "color", "timing")
 """Feature properties in ``skipped.geojson`` (LineStrings, one per detour
 with a skipped stretch), as ``START_PROPERTIES``."""
+
+PATH_PROPERTIES: Final = ("key", "source_key", "color", "timing")
+"""Feature properties in ``paths.geojson`` (LineStrings, one per detour
+with a path), as ``START_PROPERTIES``."""
 
 SHAPE_PROPERTIES: Final = (
     "shape_id",

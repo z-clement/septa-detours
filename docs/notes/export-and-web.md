@@ -624,3 +624,13 @@ Tests: 125 JS.
   start); its fade is repeated in app.css.
 - Not checked by eye yet: the drawn stretches (offset side, how the
   fade reads at each zoom and over dark route colors).
+
+## Tier C in the contract: schema 4 (2026-11-26)
+
+- Contract 4: the detour object gains `path` (`path_line`: simplified
+  and rounded as `skipped`); `paths.geojson` (`PATH_PROPERTIES`, as
+  `starts.geojson`'s; `paths_collection`). `skipped_collection` and
+  `paths_collection` share `_detour_lines` (they differ only in the
+  line). `write.SITE_FILES` lists it; `data.js` reads 4 and loads it
+  (the "newer route file" test now uses 5). Real `141550Z`: 36 paths,
+  12 KB (skipped 11 KB); 187 files, 3.6 MB.

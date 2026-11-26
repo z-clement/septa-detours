@@ -4,7 +4,7 @@ Pure functions: no file I/O (that's ``write.py``).
 """
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Final, NamedTuple
 
@@ -213,7 +213,7 @@ def detour_object(detour: Detour) -> DetourObject:
     they all agree, else ``None`` (no shapes, mixed, or unknown).
     ``issues`` lists parse issues, then match issues. Times are ISO 8601
     with the UTC offset as parsed; anything unknown is ``None``.
-    ``skipped`` is ``skipped_line``.
+    ``skipped`` is ``skipped_line``, ``path`` is ``path_line``.
     """
     notice = detour.notice
     match = detour.match
@@ -237,6 +237,7 @@ def detour_object(detour: Detour) -> DetourObject:
         "start_point": _point_object(None if match is None else match.start_point),
         "rejoin_point": _point_object(None if match is None else match.rejoin_point),
         "skipped": skipped_line(detour),
+        "path": path_line(detour),
         "shape_ids": [shape.shape_id for shape in shapes],
     }
 
@@ -258,6 +259,18 @@ def skipped_line(detour: Detour) -> list[Position] | None:
     if detour.match is None or detour.match.skipped is None:
         return None
     line = simplify_line(detour.match.skipped.line, DETAIL_TOLERANCE_M)
+    return round_line(line, COORDINATE_DECIMALS)
+
+
+def path_line(detour: Detour) -> list[Position] | None:
+    """A detour's path for the page, or ``None`` without one.
+
+    Simplified and rounded as ``skipped_line``. Shared by the detour
+    object and ``paths.geojson``.
+    """
+    if detour.match is None or detour.match.path is None:
+        return None
+    line = simplify_line(detour.match.path, DETAIL_TOLERANCE_M)
     return round_line(line, COORDINATE_DECIMALS)
 
 
@@ -589,10 +602,31 @@ def skipped_collection(
     Raises:
         ValueError: As ``starts_collection``.
     """
+    return _detour_lines(catalog, detours, now, skipped_line)
+
+
+def paths_collection(
+    catalog: Sequence[RouteEntry], detours: Sequence[Detour], now: datetime
+) -> FeatureCollection:
+    """Build ``paths.geojson``: each detour's path, all routes.
+
+    As ``skipped_collection``, with ``path_line`` (``RouteMatch.path``)
+    and ``PATH_PROPERTIES``.
+    """
+    return _detour_lines(catalog, detours, now, path_line)
+
+
+def _detour_lines(
+    catalog: Sequence[RouteEntry],
+    detours: Sequence[Detour],
+    now: datetime,
+    line_of: Callable[[Detour], list[Position] | None],
+) -> FeatureCollection:
+    """One LineString per detour that ``line_of`` gives a line for."""
     colors = {entry["key"]: entry["color"] for entry in catalog}
     features = []
     for detour in detours:
-        line = skipped_line(detour)
+        line = line_of(detour)
         if line is None or detour.match is None:
             continue
         key = route_key(detour.match.feed, detour.match.route_id)
