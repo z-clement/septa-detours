@@ -2,6 +2,8 @@
 //
 // PURE: no DOM, no `maplibregl`, no fetch, so `node --test` can run it.
 
+import { detourTiming } from "./detours.js";
+
 /**
  * The routes with at least one matched detour, in catalog order.
  *
@@ -43,4 +45,41 @@ export function routesBounds(routes) {
     [Math.min(...boxes.map((b) => b[0][0])), Math.min(...boxes.map((b) => b[0][1]))],
     [Math.max(...boxes.map((b) => b[1][0])), Math.max(...boxes.map((b) => b[1][1]))],
   ];
+}
+
+/**
+ * How many of a route's matched detours are active, upcoming, ended or of
+ * unknown timing at `now`, from its `routes.json` windows.
+ *
+ * Every matched detour has a window, placed or not, so the four counts add
+ * up to `route.detours.total`.
+ *
+ * @param {object} route a routes.json entry
+ * @param {Date} now
+ * @returns {{active: number, upcoming: number, ended: number, unknown: number}}
+ */
+export function timingCounts(route, now) {
+  const counts = { active: 0, upcoming: 0, ended: 0, unknown: 0 };
+  for (const [start, end] of route.detours.windows) {
+    counts[detourTiming(start, end, now)] += 1;
+  }
+  return counts;
+}
+
+/**
+ * The sidebar's "Detoured now": routes with at least one active detour.
+ *
+ * Most active detours first; ties keep catalog order (`sort` is stable).
+ * Routes whose detours are all upcoming, ended or unknown aren't here;
+ * they're still in their mode's group with their counts.
+ *
+ * @param {object[]} routes routes.json
+ * @param {Date} now
+ * @returns {{route: object, active: number}[]}
+ */
+export function detouredNow(routes, now) {
+  return routes
+    .map((route) => ({ route, active: timingCounts(route, now).active }))
+    .filter((row) => row.active > 0)
+    .sort((a, b) => b.active - a.active);
 }
