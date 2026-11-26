@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from septa_detours.model import DetourNotice, Direction, Location, SourceText
 from septa_detours.parse._api import ApiDetour, ApiRoute, read_snapshot
 from septa_detours.parse.direction import find_directions
+from septa_detours.parse.hours import parse_daily_hours
 from septa_detours.parse.location import parse_location
 from septa_detours.parse.steps import parse_route_steps
 from septa_detours.parse.text import clean_text
@@ -91,9 +92,10 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
           end is 11/24): API fields win. Whether to flag the mismatch is
           open; detecting it means parsing message dates, which is out of
           scope for now.
-        - Recurring windows ("7am - 4pm Mon thru Fri"): not modelled; open
-          whether this should add an issue (it would make most notices
-          ``partial``).
+        - Daily hours ("7am - 4pm Mon thru Fri", ``parse_daily_hours``):
+          ``daily_hours``, or ``None`` with no issue when the message gives
+          none; hours it can't read without guessing add an ``hours:``
+          issue (decided 2026-11-26: unclear beats wrong).
         - Stop closures vs reroutes: the model has no ``kind`` field yet.
           Adding one changes ``model.py`` (flag it first).
         - Route steps (``parse_route_steps``): the message's path, or
@@ -129,6 +131,11 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         route_steps = parse_route_steps(detour.message)
     except ValueError:
         route_steps = ()
+    try:
+        daily_hours = parse_daily_hours(detour.message)
+    except ValueError as err:
+        daily_hours = None
+        issues.append(f"hours: {err}")
     return DetourNotice(
         source=source,
         source_key=make_source_key(route.route_id, detour.location_start, detour.start),
@@ -141,6 +148,7 @@ def parse_detour(route: ApiRoute, detour: ApiDetour, snapshot: str) -> DetourNot
         reason=clean_text(detour.reason),
         direction=direction,
         route_steps=route_steps,
+        daily_hours=daily_hours,
         issues=tuple(issues),
     )
 

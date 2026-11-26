@@ -274,3 +274,8 @@ Mutation check found two dead rules (`24/7`: those messages have no
 range; re-reading a day range's ends), removed, and two test gaps.
 The scratch runner needed a fresh `PYTHONPYCACHEPREFIX` per mutant: a
 stale `.pyc` made a same-length `23`->`24` mutant look survived.
+- Wired (2026-11-26): `parse_detour` sets `daily_hours`; a `ValueError`
+  becomes `hours: <reason>` (decided: the notice turns partial). Pins:
+  route 44 #3 (`9am -11:59`) joins `NOT_COMPLETE`; a new `HOURS` pin
+  lists the 8 fixture items with hours (103 #0-1, 2 #0, 24 #2-3, 32 #2
+  overnight, 61 #0-1).

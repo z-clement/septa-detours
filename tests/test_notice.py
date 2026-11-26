@@ -577,8 +577,42 @@ NOT_COMPLETE = {
         "partial",
         ("location_start: unrecognized location 'Broad &'",),
     ),
+    # "Mon - Tues 9am -11:59 until, 11/23/26": 11:59 morning or night?
+    (f"{OLD}__bus_route_44.json", 3): (
+        "partial",
+        ("hours: no am/pm in '11:59' ('9am -11:59'): morning or evening?",),
+    ),
 }
 """Every fixture item that isn't ``complete``, with its issues."""
+
+
+HOURS = {
+    (f"{OLD}__bus_route_103.json", 0): ((0, 1, 2, 3, 4), "07:40", "18:00"),
+    (f"{OLD}__bus_route_103.json", 1): ((0, 1, 2, 3, 4), "07:40", "18:00"),
+    (f"{OLD}__bus_route_2.json", 0): ((0, 1, 2, 3, 4), "07:00", "16:00"),
+    (f"{OLD}__bus_route_24.json", 2): ((0, 1, 2, 3, 4, 5, 6), "07:00", "15:30"),
+    (f"{OLD}__bus_route_24.json", 3): ((0, 1, 2, 3, 4, 5, 6), "07:00", "15:30"),
+    (f"{OLD}__bus_route_32.json", 2): ((0, 1, 2), "19:00", "05:00"),
+    (f"{OLD}__bus_route_61.json", 0): ((0, 1, 2, 3, 4), "07:00", "17:30"),
+    (f"{OLD}__bus_route_61.json", 1): ((0, 1, 2, 3, 4), "07:00", "17:30"),
+}
+"""Every fixture item with daily hours (the rest: ``None``)."""
+
+
+def test_parse_detour_fixture_hours_are_pinned(
+    read_alert_fixture: Callable[[str], bytes], alert_fixture_names: list[str]
+) -> None:
+    notices = parse_all_fixtures(read_alert_fixture, alert_fixture_names)
+    hours = {
+        key: (
+            notice.daily_hours.days,
+            notice.daily_hours.start.strftime("%H:%M"),
+            notice.daily_hours.end.strftime("%H:%M"),
+        )
+        for key, notice in notices.items()
+        if notice.daily_hours is not None
+    }
+    assert hours == HOURS
 
 
 def test_parse_detour_fixture_summary_is_pinned(
