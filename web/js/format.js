@@ -138,6 +138,29 @@ export function describeDetour(detour, route) {
 }
 
 /**
+ * A sidebar row's detour count by timing: "3 now, 4 later".
+ *
+ * Parts come in a fixed order (now, later, ended, unknown) and zero parts
+ * are left out, so a route with no detours gets "" (the row shows nothing).
+ *
+ * @param {{active: number, upcoming: number, ended: number, unknown: number}} counts
+ *   from `timingCounts`
+ * @returns {string}
+ */
+export function timingSummary(counts) {
+  const parts = [
+    [counts.active, "now"],
+    [counts.upcoming, "later"],
+    [counts.ended, "ended"],
+    [counts.unknown, "unknown"],
+  ];
+  return parts
+    .filter(([count]) => count > 0)
+    .map(([count, word]) => `${count} ${word}`)
+    .join(", ");
+}
+
+/**
  * Popup text for a route line: its name and its detours.
  *
  * @param {object} route a routes.json entry

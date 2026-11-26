@@ -13,6 +13,7 @@ import {
   plural,
   routeLabel,
   statusLine,
+  timingSummary,
 } from "../js/format.js";
 
 // Times must show in SEPTA_TIME_ZONE whatever the machine's own zone. On a
@@ -206,4 +207,24 @@ test("modeLabel: an unknown mode shows as itself", () => {
   assert.equal(modeLabel("ferry"), "ferry");
   // Not an Object method found through the prototype chain.
   assert.equal(modeLabel("toString"), "toString");
+});
+
+// --- timingSummary ----------------------------------------------------------
+
+test("timingSummary: every part, in order, counts unequal so swaps show", () => {
+  assert.equal(
+    timingSummary({ active: 3, upcoming: 4, ended: 1, unknown: 2 }),
+    "3 now, 4 later, 1 ended, 2 unknown",
+  );
+});
+
+test("timingSummary: zero parts are left out", () => {
+  // Route 2 at the snapshot time (Nov 25, 7:11 AM): 3 active, 4 upcoming.
+  assert.equal(timingSummary({ active: 3, upcoming: 4, ended: 0, unknown: 0 }), "3 now, 4 later");
+  assert.equal(timingSummary({ active: 0, upcoming: 1, ended: 0, unknown: 0 }), "1 later");
+  assert.equal(timingSummary({ active: 0, upcoming: 0, ended: 2, unknown: 1 }), "2 ended, 1 unknown");
+});
+
+test("timingSummary: no detours gives an empty string", () => {
+  assert.equal(timingSummary({ active: 0, upcoming: 0, ended: 0, unknown: 0 }), "");
 });
