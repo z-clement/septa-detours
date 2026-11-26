@@ -24,6 +24,7 @@ from septa_detours.export.site import (
     lines_bounds,
     network_collection,
     paths_collection,
+    rejoin_streets,
     route_catalog,
     route_detail,
     route_directions,
@@ -42,9 +43,12 @@ from septa_detours.model import (
     AffectedShape,
     Detour,
     DetourNotice,
+    RejoinBy,
     RouteMatch,
     SkippedStretch,
     StartPoint,
+    Step,
+    Turn,
 )
 from septa_detours.parse.notice import parse_snapshot
 
@@ -446,6 +450,7 @@ def test_detour_object_matched_and_placed(notices) -> None:
         rejoin_point=StartPoint(node_id=110024247, lon=-75.1746167, lat=39.9245599),
         skipped=SkippedStretch(shape_id="317310", line=ROUTE_2_SKIPPED),
         path=ROUTE_2_PATH,
+        rejoin_by="crossing",
     )
     detour = Detour(notice=notices("bus_route_2")[0], match=match, issues=("x: y",))
     assert detour_object(detour) == {
@@ -464,6 +469,7 @@ def test_detour_object_matched_and_placed(notices) -> None:
         "issues": ["x: y"],
         "start_point": {"lon": -75.1716, "lat": 39.9385, "node_id": 110024066},
         "rejoin_point": {"lon": -75.1746167, "lat": 39.9245599, "node_id": 110024247},
+        "rejoin_streets": ["Passyunk", "17th"],
         "skipped": [[-75.17158, 39.93846], [-75.17461, 39.92456]],
         "path": [[-75.1716, 39.9385], [-75.1696, 39.9385], [-75.16963, 39.937]],
         "shape_ids": ["317310"],
@@ -489,6 +495,7 @@ def test_detour_object_unmatched(notices) -> None:
         "issues": ["location_start: unrecognized location 'PNC Center'", "route: none"],
         "start_point": None,
         "rejoin_point": None,
+        "rejoin_streets": None,
         "skipped": None,
         "path": None,
         "shape_ids": [],
@@ -626,7 +633,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 4,
+        "schema_version": 5,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1388,7 +1395,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",
@@ -1448,3 +1455,53 @@ def test_status_does_not_share_versions() -> None:
 def test_status_rejects_a_naive_generated_at() -> None:
     with pytest.raises(ValueError, match="generated_at must have a time zone"):
         status([], SNAPSHOT, VERSIONS, datetime(2026, 11, 25, 17, 2, 11))  # noqa: DTZ001
+
+
+# --- rejoin_streets ----------------------------------------------------------------
+
+
+def rejoining(
+    notice: DetourNotice, rejoin_by: RejoinBy | None, *, rejoin: bool = True
+) -> Detour:
+    point = StartPoint(node_id=110024247, lon=-75.1746167, lat=39.9245599)
+    match = RouteMatch(
+        feed="bus",
+        route_id="2",
+        start_point=None,
+        rejoin_point=point if rejoin else None,
+        rejoin_by=rejoin_by,
+    )
+    return Detour(notice=notice, match=match)
+
+
+def with_steps(notice: DetourNotice, *streets: str) -> DetourNotice:
+    def turn(index: int) -> Turn:
+        return "via" if index == 0 else "left"
+
+    steps = tuple(Step(turn=turn(i), street=s) for i, s in enumerate(streets))
+    return notice.model_copy(update={"route_steps": steps})
+
+
+def test_rejoin_streets_crossing_is_the_last_two(notices) -> None:
+    # Route 2 #0: "..., Right on Passyunk, Left on 17th, Reg Rt".
+    detour = rejoining(notices("bus_route_2")[0], "crossing")
+    assert rejoin_streets(detour) == ["Passyunk", "17th"]
+
+
+def test_rejoin_streets_walk_is_the_last_street(notices) -> None:
+    notice = with_steps(notices("bus_route_2")[0], "Ridge Ave", "Francis St")
+    assert rejoin_streets(rejoining(notice, "walk")) == ["Francis St"]
+
+
+def test_rejoin_streets_none_without_a_rejoin(notices) -> None:
+    notice = notices("bus_route_2")[0]
+    assert rejoin_streets(rejoining(notice, None)) is None
+    assert rejoin_streets(rejoining(notice, "crossing", rejoin=False)) is None
+    assert rejoin_streets(Detour(notice=notice, match=None)) is None
+
+
+def test_rejoin_streets_none_when_the_steps_cant_name_it(notices) -> None:
+    notice = notices("bus_route_2")[0]
+    assert rejoin_streets(rejoining(with_steps(notice, "17th"), "crossing")) is None
+    assert rejoin_streets(rejoining(with_steps(notice), "walk")) is None
+    assert rejoin_streets(rejoining(with_steps(notice, "17th"), "walk")) == ["17th"]

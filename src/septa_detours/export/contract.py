@@ -29,7 +29,8 @@ Versions: 1, the first contract; 2, ``routes.json`` gains
 ``detours.windows``; 3, tier B: the detour object gains ``rejoin_point``
 and ``skipped``, and ``skipped.geojson`` is new (the page draws them);
 4, tier C: the detour object gains ``path``, and ``paths.geojson`` is
-new.
+new; 5, the detour object gains ``rejoin_streets`` (the card names the
+rejoin).
 """
 
 from typing import Final, Literal, TypedDict
@@ -38,7 +39,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus
 
-SCHEMA_VERSION: Final = 4
+SCHEMA_VERSION: Final = 5
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -83,6 +84,11 @@ class DetourObject(TypedDict):
     start_point: StartPointObject | None
     rejoin_point: StartPointObject | None
     """Where the detour gets back on its route (tier B), or ``None``."""
+    rejoin_streets: list[str] | None
+    """How to name the rejoin, streets as written in the message: two
+    (``["Passyunk", "17th"]``: their crossing, "at Passyunk & 17th") or
+    one (``["Francis St"]``: that street leads back, "via Francis St");
+    ``None`` without a rejoin (``rejoin_point`` is then ``None`` too)."""
     skipped: list[Position] | None
     """The regular route it skips, start to rejoin, ``[lon, lat]`` in
     travel order (simplified at ``DETAIL_TOLERANCE_M``, rounded), or

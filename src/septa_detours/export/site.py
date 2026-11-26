@@ -236,10 +236,28 @@ def detour_object(detour: Detour) -> DetourObject:
         "issues": [*notice.issues, *detour.issues],
         "start_point": _point_object(None if match is None else match.start_point),
         "rejoin_point": _point_object(None if match is None else match.rejoin_point),
+        "rejoin_streets": rejoin_streets(detour),
         "skipped": skipped_line(detour),
         "path": path_line(detour),
         "shape_ids": [shape.shape_id for shape in shapes],
     }
+
+
+def rejoin_streets(detour: Detour) -> list[str] | None:
+    """The streets that name a detour's rejoin (``DetourObject``), or ``None``.
+
+    From the message's steps and ``RouteMatch.rejoin_by``: a crossing is
+    the last two streets', a walk follows the last street back. ``None``
+    without a rejoin, or when the steps can't name it (none, or one for
+    a crossing: not from real matching, which needs two).
+    """
+    match = detour.match
+    steps = detour.notice.route_steps
+    if match is None or match.rejoin_by is None or match.rejoin_point is None:
+        return None
+    if match.rejoin_by == "crossing":
+        return None if len(steps) < 2 else [steps[-2].street, steps[-1].street]
+    return None if not steps else [steps[-1].street]
 
 
 def _point_object(point: StartPoint | None) -> StartPointObject | None:

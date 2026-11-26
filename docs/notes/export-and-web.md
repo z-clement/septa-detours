@@ -642,3 +642,8 @@ Tests: 125 JS.
   (`clickChoices` dedupes dot + stretch + path). Legend row "Detour
   path" (`.legend-path`; harness screenshot checked). Map side not
   checked by eye.
+- Contract 5 (2026-11-26): the detour object gains `rejoin_streets`
+  (`site.rejoin_streets`: the last two steps' streets for a `"crossing"`
+  rejoin, the last one for a `"walk"`, as written; `None` without a
+  rejoin or steps to name it). Real `141550Z`: 40 named by a crossing, 8
+  by a street, 53 without. `data.js` reads 5.

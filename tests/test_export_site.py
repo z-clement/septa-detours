@@ -161,7 +161,7 @@ def test_export_site_status(detours) -> None:
     export_site(DETOURS_FILE, now=NOW)
     result = read("status.json")
     assert {key: value for key, value in result.items() if key != "unmatched"} == {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at": "2026-11-25T14:00:00Z",
         "snapshot": f"{STAMP}.json",
         "snapshot_fetched_at": "2026-11-25T02:53:44Z",
