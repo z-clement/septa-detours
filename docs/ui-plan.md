@@ -242,3 +242,9 @@ Proposed design:
 4. Page: `isInEffect` also needs the current local time (SEPTA's zone,
    via `Intl`) inside the hours; cards say the hours ("Weekdays 7am -
    4pm") and whether it's running now.
+
+Decided (2026-11-26): outside its hours a detour is **hidden** on the
+map like an upcoming one (its card stays, saying the hours and "not
+running now"); a time range parse can't read as daily hours gets a
+**parse issue** (the notice becomes partial; parse's pins move, to
+review); **U8 before U5b**.
