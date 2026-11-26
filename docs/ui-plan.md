@@ -174,7 +174,9 @@ checked by eye with your screenshots. Rough sizes in brackets.
   [small-medium, JS]: fit the focused
   route's detours in effect; a selected card zooms to its detour; a
   "Whole route" control.
-- **U5. Directions (D)** [small-medium, JS]. Asked for (yours,
+- **U5. Directions (D)** (done 2026-11-26: your choice, arrows on the
+  focused route from zoom 13, nothing faded; the overview keeps two
+  lines; not yet checked by eye) [small-medium, JS]. Asked for (yours,
   2026-11-26, after U3): on a focused route the two directions are hard
   to tell apart (route 47 NB vs SB): show direction (arrows along the
   line?) and/or fade the direction that isn't the focused detour's.

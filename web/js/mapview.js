@@ -50,6 +50,8 @@ const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
 const FOCUS_LAYER = "focus-lines";
+const FOCUS_ARROWS_LAYER = "focus-arrows";
+const ARROW_IMAGE = "direction-arrow";
 const SKIPPED_LAYER = "skipped-fade";
 const PATH_CASING_LAYER = "path-casing";
 const PATH_LAYER = "path-dashes";
@@ -209,6 +211,38 @@ export function addOverviewLayers(map, site) {
         ["case", ["get", "covering"], 6, 3],
       ],
       "line-offset": offset,
+    },
+  });
+
+  // Which way each of the focused route's lines runs (U5, your choice:
+  // arrows, nothing faded): white chevrons along it, pointing the way
+  // the bus goes (a shape's points run in travel order, and a line
+  // symbol follows them). Shifted sideways like the lines (`icon-offset`
+  // is in the icon's own frame: +y is right of travel), so each arrow
+  // sits on its own direction's line. From zoom 13: thinner lines can't
+  // hold them.
+  addArrowImage(map);
+  map.addLayer({
+    id: FOCUS_ARROWS_LAYER,
+    type: "symbol",
+    source: FOCUS_SOURCE,
+    minzoom: 13,
+    layout: {
+      "symbol-placement": "line",
+      "symbol-spacing": 80,
+      "icon-image": ARROW_IMAGE,
+      "icon-rotation-alignment": "map",
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      "icon-offset": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        13,
+        ["literal", [0, 2.5]],
+        16,
+        ["literal", [0, 4]],
+      ],
     },
   });
 
@@ -453,6 +487,31 @@ export function addOverviewLayers(map, site) {
     setHoveredDot: dotStateSetter(map, "hover"),
     setSelectedDot: dotStateSetter(map, "selected"),
   };
+}
+
+/**
+ * Add the direction arrow (`ARROW_IMAGE`): a white chevron pointing
+ * right (east), as line symbols expect, drawn on a canvas at twice its
+ * size for sharp screens (12 CSS px).
+ *
+ * @param {maplibregl.Map} map
+ */
+function addArrowImage(map) {
+  const size = 24;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = 4;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(9, 5);
+  context.lineTo(16, 12);
+  context.lineTo(9, 19);
+  context.stroke();
+  map.addImage(ARROW_IMAGE, context.getImageData(0, 0, size, size), { pixelRatio: 2 });
 }
 
 /**

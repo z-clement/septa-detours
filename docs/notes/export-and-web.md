@@ -704,3 +704,10 @@ Tests: 125 JS.
   every zoom and the markers are off (`showFocus`: one route has nothing
   to untangle). Panel header: a "Whole route" button (routes with
   shapes; harness screenshot checked). Map side not checked by eye.
+- U5, directions (2026-11-26; your choice: arrows only, nothing faded;
+  the overview keeps two offset lines): `focus-arrows`, a line-placed
+  symbol layer on the focused route's shapes from zoom 13, a white
+  chevron (`addArrowImage`: canvas, 24 px at pixelRatio 2) every 80 px,
+  `icon-offset` 2.5-4 px to the right of travel, so each arrow sits on
+  its own direction's line. Not on detour paths (yet). Map-only: no pure
+  logic to test; check by eye.
