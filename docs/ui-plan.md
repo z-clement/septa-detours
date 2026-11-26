@@ -1,8 +1,8 @@
 # UI/UX plan: a map readable at a glance (draft, 2026-11-26)
 
-Written from your point of view: "I", "my choice" = you. Status: **draft**,
-waiting for your screenshots of the current map before proposing
-designs. Nothing here is decided unless it says so.
+Written from your point of view: "I", "my choice" = you. Status:
+directions A, B, C, E **decided** (2026-11-26); D, F, G proposed, to
+confirm before building them. Order of work at the end.
 
 ## Goal (decided 2026-11-26)
 
@@ -88,9 +88,10 @@ dots, small end dots (rejoins), and a panel of cards grouped by timing
 6. **Phone, route 31 focused:** the detours are a few pixels in the
    middle; the legend covers the route's west end.
 
-## Design directions (proposals; decisions are yours)
+## Design directions
 
-Each answers one or more problems above. **Recommended** marked.
+Each answers one or more problems above. **Decided** (2026-11-26, all
+the recommended options): **A1, B1, C1, E1**. D, F, G: proposed.
 
 A. **Overview: detours, not routes** (problems 1, 2, by-eye 1, 2, 5).
    - A1 **(recommended)** Routes recede (detoured routes thin and grey,
@@ -149,3 +150,30 @@ Phone (DevTools device mode, ~390 x 844):
 2. Design options per problem (with sketches), each a decision for
    you; recommendations marked.
 3. An order of work in small, checkable steps, like `web-plan.md`'s.
+
+## Order of work (proposed)
+
+Small steps, each tested (pure JS where possible), committed, then
+checked by eye with your screenshots. Rough sizes in brackets.
+
+- **U1. Time (E1, first half)** [small, JS]: every layer timed by the
+  page's clock (`detourTiming` per `source_key`, applied as a filter);
+  the map shows only detours in effect; upcoming and ended stay in the
+  panel.
+- **U2. Accent overview (A1)** [medium, JS + CSS]: detoured routes thin
+  grey like the network; paths, fades and start markers in one accent
+  color (checked against every SEPTA route color); legend updated.
+- **U3. Route-number markers (B1)** [medium, JS]: below ~zoom 13 one
+  labelled marker per detour (a MapLibre symbol layer: the basemap's
+  fonts); lines from zoom 13. Check the threshold by eye.
+- **U4. Focus frames detours (C1)** [small-medium, JS]: fit the focused
+  route's detours in effect; a selected card zooms to its detour; a
+  "Whole route" control.
+- **U5. Directions (D, if confirmed)** [small, JS].
+- **U6. Legend (G, if confirmed)** [small, JS + CSS].
+- **U7. Rider cards (F, if confirmed)** [medium: contract gains the
+  steps, schema bump; A/B markers on the map].
+- **U8. Daily hours (E1, second half)** [large: parse windows from the
+  message (`parse/`), model + contract changes (flagged), "running now"
+  on the page]. Its own short plan first: the message formats seen,
+  measured on the snapshots.
