@@ -181,6 +181,18 @@ checked by eye with your screenshots. Rough sizes in brackets.
   to tell apart (route 47 NB vs SB): show direction (arrows along the
   line?) and/or fade the direction that isn't the focused detour's.
   Confirm the exact form when we get here.
+- **U5b. One line per direction** (yours, 2026-11-26, seen on route 79
+  zoomed in: four lines on Snyder, two per direction) [medium: export
+  geometry + contract change]. Cause, measured (`145719Z`): a direction
+  is drawn once per GTFS shape, and shapes of one direction are
+  digitized up to a metre or so apart (route 79 on Snyder: 5 shapes
+  within ~1 m), so they split apart when zoomed in. 141 of 341
+  route-directions draw more than one network line; route detail files
+  have 2-20 shapes in 212 route-directions. Proposed fix: at export,
+  merge each route-direction's shapes into non-overlapping pieces
+  (busiest shape first; later shapes keep only their parts more than
+  ~10 m from what's kept; tiny leftovers dropped; travel order kept for
+  the arrows), for `network.geojson` and the route detail's `shapes`.
 - **U6. Legend (G)** (done 2026-11-26: rows for what's drawn, a 'Map
   key' button closed on phones) [small, JS + CSS].
 - **U7. Rider cards (F)** (done 2026-11-26: turn-by-turn steps and the
