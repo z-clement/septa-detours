@@ -1,6 +1,6 @@
 import json
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import polars as pl
@@ -20,7 +20,6 @@ from septa_detours.export.site import (
     MODE_ORDER,
     RouteShape,
     detour_object,
-    detour_timing,
     lines_bounds,
     network_collection,
     paths_collection,
@@ -633,7 +632,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 5,
+        "schema_version": 6,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1079,58 +1078,15 @@ def test_network_rejects_a_covering_shape_without_coordinates() -> None:
         network_collection([AIR], shapes, NETWORK_RAW)
 
 
-# --- detour_timing ---------------------------------------------------------------
-
 PHILLY = ZoneInfo("America/New_York")
-# Route 2 #0's real dates; "now" values are given in UTC.
-START = datetime(2026, 11, 11, 6, 30, tzinfo=PHILLY)
-END = datetime(2026, 11, 27, 16, 0, tzinfo=PHILLY)
-TICK = timedelta(microseconds=1)
-
-
-@pytest.mark.parametrize(
-    ("now", "timing"),
-    [
-        (datetime(2026, 11, 25, 12, 11, 23, tzinfo=UTC), "active"),  # snapshot time
-        (datetime(2026, 11, 11, 11, 30, tzinfo=UTC), "active"),  # == START
-        (datetime(2026, 11, 27, 21, 0, tzinfo=UTC), "active"),  # == END
-        (datetime(2026, 11, 11, 11, 30, tzinfo=UTC) - TICK, "upcoming"),
-        (datetime(2026, 11, 27, 21, 0, tzinfo=UTC) + TICK, "ended"),
-    ],
-)
-def test_detour_timing(now: datetime, timing: str) -> None:
-    assert detour_timing(START, END, now) == timing
-
-
-@pytest.mark.parametrize(("start", "end"), [(None, END), (START, None), (None, None)])
-@pytest.mark.parametrize("now", [START - TICK, START, END + TICK])
-def test_detour_timing_missing_time_is_unknown(
-    start: datetime | None, end: datetime | None, now: datetime
-) -> None:
-    assert detour_timing(start, end, now) == "unknown"
-
-
-@pytest.mark.parametrize("now", [END - TICK, END, START, START + TICK])
-def test_detour_timing_end_before_start_is_unknown(now: datetime) -> None:
-    assert detour_timing(END, START, now) == "unknown"
-
-
-@pytest.mark.parametrize(
-    ("now", "timing"),
-    [(START - TICK, "upcoming"), (START, "active"), (START + TICK, "ended")],
-)
-def test_detour_timing_zero_length_detour(now: datetime, timing: str) -> None:
-    assert detour_timing(START, START, now) == timing
-
-
-def test_detour_timing_rejects_a_naive_now() -> None:
-    with pytest.raises(ValueError, match="now must have a time zone"):
-        detour_timing(START, END, datetime(2026, 11, 25, 12, 0))  # noqa: DTZ001
 
 
 # --- starts_collection -------------------------------------------------------------
 
-STARTS_NOW = datetime(2026, 11, 25, 14, 0, tzinfo=UTC)
+# Route 2 #0, #2 and #4's real overall windows, as features carry them.
+WINDOW_0 = ("2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00")
+WINDOW_2 = ("2026-11-25T15:00:00-05:00", "2026-11-26T02:00:00-05:00")
+WINDOW_4 = ("2026-11-24T19:33:00-05:00", "2026-11-25T08:00:00-05:00")
 
 
 def placed_at(
@@ -1148,7 +1104,12 @@ def placed_at(
 
 
 def dot(
-    lon: float, lat: float, key: str, source_key: str, color: str | None, timing: str
+    lon: float,
+    lat: float,
+    key: str,
+    source_key: str,
+    color: str | None,
+    window: tuple[str | None, str | None],
 ):
     return {
         "type": "Feature",
@@ -1157,14 +1118,14 @@ def dot(
             "key": key,
             "source_key": source_key,
             "color": color,
-            "timing": timing,
+            "start": window[0],
+            "end": window[1],
         },
     }
 
 
 def test_starts_whole_output(notices) -> None:
-    # At 14:00 UTC: #0 runs until 11/27 (active), #2 starts 15:00 local
-    # (upcoming), #4 ended 08:00 local (ended).
+    # Each dot carries its detour's overall window (the page times it).
     route_2 = notices("bus_route_2")
     detours = [
         placed_at(route_2[2], -75.1690, 39.9620),
@@ -1173,32 +1134,32 @@ def test_starts_whole_output(notices) -> None:
         placed_at(route_2[4], -75.2345, 39.8765, feed="rail", route_id="AIR"),
         placed_at(route_2[0], -75.1716, 39.9385),
     ]
-    assert starts_collection([ROUTE_2, AIR], detours, STARTS_NOW) == {
+    assert starts_collection([ROUTE_2, AIR], detours) == {
         "type": "FeatureCollection",
         "features": [
-            dot(-75.1690, 39.9620, "bus-2", "f92dcfe1cd1904c8", "#00A1DE", "upcoming"),
-            dot(-75.2345, 39.8765, "rail-AIR", "ff53152c4c7f9011", "#5A6F7B", "ended"),
-            dot(-75.1716, 39.9385, "bus-2", "5d0d22dfe7d86935", "#00A1DE", "active"),
+            dot(-75.1690, 39.9620, "bus-2", "f92dcfe1cd1904c8", "#00A1DE", WINDOW_2),
+            dot(-75.2345, 39.8765, "rail-AIR", "ff53152c4c7f9011", "#5A6F7B", WINDOW_4),
+            dot(-75.1716, 39.9385, "bus-2", "5d0d22dfe7d86935", "#00A1DE", WINDOW_0),
         ],
     }
 
 
 def test_starts_properties_are_the_contract_ones(notices) -> None:
     detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
-    [feature] = starts_collection([ROUTE_2], detours, STARTS_NOW)["features"]
+    [feature] = starts_collection([ROUTE_2], detours)["features"]
     assert tuple(feature["properties"]) == START_PROPERTIES
 
 
 def test_starts_color_may_be_null(notices) -> None:
     entry: RouteEntry = {**ROUTE_2, "color": None}
     detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
-    [feature] = starts_collection([entry], detours, STARTS_NOW)["features"]
+    [feature] = starts_collection([entry], detours)["features"]
     assert feature["properties"]["color"] is None
 
 
 def test_starts_no_placed_detours(notices) -> None:
     detours = [Detour(notice=notices("bus_route_2")[0], match=None)]
-    assert starts_collection([ROUTE_2], detours, STARTS_NOW) == {
+    assert starts_collection([ROUTE_2], detours) == {
         "type": "FeatureCollection",
         "features": [],
     }
@@ -1210,13 +1171,7 @@ def test_starts_rejects_a_route_not_in_the_catalog(notices) -> None:
     with pytest.raises(
         ValueError, match=f"{notice.source_key} is on unknown route 'bus-21'"
     ):
-        starts_collection([ROUTE_2], detours, STARTS_NOW)
-
-
-def test_starts_rejects_a_naive_now(notices) -> None:
-    detours = [placed_at(notices("bus_route_2")[0], -75.1716, 39.9385)]
-    with pytest.raises(ValueError, match="now must have a time zone"):
-        starts_collection([ROUTE_2], detours, datetime(2026, 11, 25, 14, 0))  # noqa: DTZ001
+        starts_collection([ROUTE_2], detours)
 
 
 # --- skipped_collection -----------------------------------------------------------
@@ -1240,7 +1195,11 @@ def skipping(
 
 
 def stretch_feature(
-    line: list[list[float]], key: str, source_key: str, color: str | None, timing: str
+    line: list[list[float]],
+    key: str,
+    source_key: str,
+    color: str | None,
+    window: tuple[str | None, str | None],
 ):
     return {
         "type": "Feature",
@@ -1249,7 +1208,8 @@ def stretch_feature(
             "key": key,
             "source_key": source_key,
             "color": color,
-            "timing": timing,
+            "start": window[0],
+            "end": window[1],
         },
     }
 
@@ -1258,7 +1218,7 @@ AIR_STRETCH = ((-75.2345, 39.8765), (-75.2301, 39.8812))
 
 
 def test_skipped_whole_output(notices) -> None:
-    # Timings as in test_starts_whole_output; only detours with a stretch.
+    # Windows as in test_starts_whole_output; only detours with a stretch.
     route_2 = notices("bus_route_2")
     detours = [
         placed_at(route_2[2], -75.1690, 39.9620),  # placed, no stretch
@@ -1266,7 +1226,7 @@ def test_skipped_whole_output(notices) -> None:
         skipping(route_2[4], AIR_STRETCH, feed="rail", route_id="AIR"),
         skipping(route_2[0], ROUTE_2_SKIPPED),
     ]
-    assert skipped_collection([ROUTE_2, AIR], detours, STARTS_NOW) == {
+    assert skipped_collection([ROUTE_2, AIR], detours) == {
         "type": "FeatureCollection",
         "features": [
             stretch_feature(
@@ -1274,14 +1234,14 @@ def test_skipped_whole_output(notices) -> None:
                 "rail-AIR",
                 "ff53152c4c7f9011",
                 "#5A6F7B",
-                "ended",
+                WINDOW_4,
             ),
             stretch_feature(
                 [[-75.17158, 39.93846], [-75.17461, 39.92456]],  # as the detour object
                 "bus-2",
                 "5d0d22dfe7d86935",
                 "#00A1DE",
-                "active",
+                WINDOW_0,
             ),
         ],
     }
@@ -1290,7 +1250,7 @@ def test_skipped_whole_output(notices) -> None:
 def test_skipped_properties_are_the_contract_ones(notices) -> None:
     assert SKIPPED_PROPERTIES == START_PROPERTIES
     detours = [skipping(notices("bus_route_2")[0], ROUTE_2_SKIPPED)]
-    [feature] = skipped_collection([ROUTE_2], detours, STARTS_NOW)["features"]
+    [feature] = skipped_collection([ROUTE_2], detours)["features"]
     assert tuple(feature["properties"]) == SKIPPED_PROPERTIES
 
 
@@ -1300,7 +1260,7 @@ def test_skipped_rejects_a_route_not_in_the_catalog(notices) -> None:
     with pytest.raises(
         ValueError, match=f"{notice.source_key} is on unknown route 'bus-21'"
     ):
-        skipped_collection([ROUTE_2], detours, STARTS_NOW)
+        skipped_collection([ROUTE_2], detours)
 
 
 # --- paths_collection -------------------------------------------------------------
@@ -1341,7 +1301,7 @@ def test_paths_whole_output(notices) -> None:
         walking(route_2[4], AIR_PATH, feed="rail", route_id="AIR"),
         walking(route_2[0], ROUTE_2_PATH, skipped=ROUTE_2_SKIPPED),
     ]
-    assert paths_collection([ROUTE_2, AIR], detours, STARTS_NOW) == {
+    assert paths_collection([ROUTE_2, AIR], detours) == {
         "type": "FeatureCollection",
         "features": [
             stretch_feature(
@@ -1349,14 +1309,14 @@ def test_paths_whole_output(notices) -> None:
                 "rail-AIR",
                 "ff53152c4c7f9011",
                 "#5A6F7B",
-                "ended",
+                WINDOW_4,
             ),
             stretch_feature(
                 [[-75.1716, 39.9385], [-75.1696, 39.9385], [-75.16963, 39.937]],
                 "bus-2",
                 "5d0d22dfe7d86935",
                 "#00A1DE",
-                "active",
+                WINDOW_0,
             ),
         ],
     }
@@ -1365,7 +1325,7 @@ def test_paths_whole_output(notices) -> None:
 def test_path_properties_are_the_contract_ones(notices) -> None:
     assert PATH_PROPERTIES == START_PROPERTIES
     detours = [walking(notices("bus_route_2")[0], ROUTE_2_PATH)]
-    [feature] = paths_collection([ROUTE_2], detours, STARTS_NOW)["features"]
+    [feature] = paths_collection([ROUTE_2], detours)["features"]
     assert tuple(feature["properties"]) == PATH_PROPERTIES
 
 
@@ -1375,7 +1335,7 @@ def test_paths_reject_a_route_not_in_the_catalog(notices) -> None:
     with pytest.raises(
         ValueError, match=f"{notice.source_key} is on unknown route 'bus-21'"
     ):
-        paths_collection([ROUTE_2], detours, STARTS_NOW)
+        paths_collection([ROUTE_2], detours)
 
 
 # --- status ----------------------------------------------------------------------
@@ -1395,7 +1355,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 5,
+        "schema_version": 6,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",

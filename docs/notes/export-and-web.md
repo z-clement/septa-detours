@@ -662,3 +662,10 @@ Tests: 125 JS.
   schema bump (`http.server` sends no Cache-Control). `data.loadJson`
   now fetches with `cache: "no-cache"` (a test checks every request);
   versioned URLs are logged under hosting in `web-plan.md`.
+
+## U1, time on the map (UI plan, 2026-11-26)
+
+- Contract 6: detour features (starts, skipped, paths) trade `timing`
+  for `start`/`end` (`site._detour_properties`, ISO as the detour
+  object); the collections lose `now`; Python `detour_timing` is gone
+  (the page's `detourTiming` is now the only timing rule).

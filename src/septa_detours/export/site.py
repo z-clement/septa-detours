@@ -20,7 +20,6 @@ from septa_detours.export.contract import (
     RouteEntry,
     StartPointObject,
     Status,
-    Timing,
 )
 from septa_detours.export.geojson import (
     FeatureCollection,
@@ -533,34 +532,8 @@ def network_collection(
     return {"type": "FeatureCollection", "features": features}
 
 
-def detour_timing(
-    start: datetime | None, end: datetime | None, now: datetime
-) -> Timing:
-    """Whether a detour is in effect at ``now``, by its overall start and end.
-
-    ``active`` from ``start`` to ``end`` inclusive, ``upcoming`` before,
-    ``ended`` after. ``unknown`` when a time is missing, or when ``end`` is
-    before ``start`` (bad data: "upcoming" and "ended" could both be
-    wrong). Recurring windows ("7am - 4pm Mon thru Fri") aren't parsed, so
-    ``active`` means "inside the overall dates", not "running right now".
-    The page has the same rule in JS; keep them in step.
-
-    Raises:
-        ValueError: ``now`` has no time zone (it couldn't be compared).
-    """
-    if now.tzinfo is None:
-        raise ValueError("now must have a time zone")
-    if start is None or end is None or end < start:
-        return "unknown"
-    if now < start:
-        return "upcoming"
-    if now > end:
-        return "ended"
-    return "active"
-
-
 def starts_collection(
-    catalog: Sequence[RouteEntry], detours: Sequence[Detour], now: datetime
+    catalog: Sequence[RouteEntry], detours: Sequence[Detour]
 ) -> FeatureCollection:
     """Build ``starts.geojson``: one dot per placed detour, all routes.
 
@@ -568,16 +541,13 @@ def starts_collection(
         catalog: Output of ``route_catalog`` (each dot's ``color``).
         detours: The snapshot's detours; only placed ones (a matched route
             and a ``start_point``) get a dot.
-        now: When the export runs: ``timing`` is computed for this moment,
-            as a first-paint default (the page recomputes it).
 
     Returns:
         One Point per placed detour at its exact start node, in snapshot
         order, properties ``START_PROPERTIES``.
 
     Raises:
-        ValueError: A placed detour's route isn't in ``catalog``, or ``now``
-            has no time zone (``detour_timing``).
+        ValueError: A placed detour's route isn't in ``catalog``.
     """
     colors = {entry["key"]: entry["color"] for entry in catalog}
     features = []
@@ -590,20 +560,14 @@ def starts_collection(
             raise ValueError(
                 f"detour {detour.notice.source_key} is on unknown route {key!r}"
             )
-        notice = detour.notice
-        properties: Properties = {
-            "key": key,
-            "source_key": notice.source_key,
-            "color": colors[key],
-            "timing": detour_timing(notice.start, notice.end, now),
-        }
+        properties = _detour_properties(key, detour, colors[key])
         position = [match.start_point.lon, match.start_point.lat]
         features.append(point_feature(position, properties))
     return {"type": "FeatureCollection", "features": features}
 
 
 def skipped_collection(
-    catalog: Sequence[RouteEntry], detours: Sequence[Detour], now: datetime
+    catalog: Sequence[RouteEntry], detours: Sequence[Detour]
 ) -> FeatureCollection:
     """Build ``skipped.geojson``: each detour's skipped stretch, all routes.
 
@@ -611,7 +575,6 @@ def skipped_collection(
         catalog: Output of ``route_catalog`` (each line's ``color``).
         detours: The snapshot's detours; only those with a skipped stretch
             (``RouteMatch.skipped``) get a line.
-        now: As ``starts_collection``'s: the export-time ``timing``.
 
     Returns:
         One LineString per stretch (``skipped_line``), in snapshot order,
@@ -620,24 +583,23 @@ def skipped_collection(
     Raises:
         ValueError: As ``starts_collection``.
     """
-    return _detour_lines(catalog, detours, now, skipped_line)
+    return _detour_lines(catalog, detours, skipped_line)
 
 
 def paths_collection(
-    catalog: Sequence[RouteEntry], detours: Sequence[Detour], now: datetime
+    catalog: Sequence[RouteEntry], detours: Sequence[Detour]
 ) -> FeatureCollection:
     """Build ``paths.geojson``: each detour's path, all routes.
 
     As ``skipped_collection``, with ``path_line`` (``RouteMatch.path``)
     and ``PATH_PROPERTIES``.
     """
-    return _detour_lines(catalog, detours, now, path_line)
+    return _detour_lines(catalog, detours, path_line)
 
 
 def _detour_lines(
     catalog: Sequence[RouteEntry],
     detours: Sequence[Detour],
-    now: datetime,
     line_of: Callable[[Detour], list[Position] | None],
 ) -> FeatureCollection:
     """One LineString per detour that ``line_of`` gives a line for."""
@@ -652,15 +614,26 @@ def _detour_lines(
             raise ValueError(
                 f"detour {detour.notice.source_key} is on unknown route {key!r}"
             )
-        notice = detour.notice
-        properties: Properties = {
-            "key": key,
-            "source_key": notice.source_key,
-            "color": colors[key],
-            "timing": detour_timing(notice.start, notice.end, now),
-        }
+        properties = _detour_properties(key, detour, colors[key])
         features.append(line_feature(line, properties))
     return {"type": "FeatureCollection", "features": features}
+
+
+def _detour_properties(key: str, detour: Detour, color: str | None) -> Properties:
+    """A detour feature's properties (``START_PROPERTIES``).
+
+    Its route, its ``source_key`` (the page's feature id), the route's
+    color, and its overall ``start``/``end`` as in ``DetourObject``: the
+    page decides, with its own clock, which detours are in effect.
+    """
+    notice = detour.notice
+    return {
+        "key": key,
+        "source_key": notice.source_key,
+        "color": color,
+        "start": _iso(notice.start),
+        "end": _iso(notice.end),
+    }
 
 
 def status(

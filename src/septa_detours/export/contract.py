@@ -30,7 +30,8 @@ Versions: 1, the first contract; 2, ``routes.json`` gains
 and ``skipped``, and ``skipped.geojson`` is new (the page draws them);
 4, tier C: the detour object gains ``path``, and ``paths.geojson`` is
 new; 5, the detour object gains ``rejoin_streets`` (the card names the
-rejoin).
+rejoin); 6, detour features (starts, skipped, paths) trade ``timing``
+for ``start``/``end``: the page times them with its own clock.
 """
 
 from typing import Final, Literal, TypedDict
@@ -39,14 +40,14 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus
 
-SCHEMA_VERSION: Final = 5
+SCHEMA_VERSION: Final = 6
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
 
 type Timing = Literal["active", "upcoming", "ended", "unknown"]
-"""Whether a detour is in effect at some moment. The page computes it;
-``starts.geojson`` carries an export-time default for first paint."""
+"""Whether a detour is in effect at some moment. The page computes it
+(``detourTiming`` in ``web/js/detours.js``); no file carries it."""
 
 type Bounds = tuple[Position, Position]
 """``([west, south], [east, north])``, as MapLibre's ``fitBounds`` takes."""
@@ -190,15 +191,16 @@ NETWORK_PROPERTIES: Final = ("key", "direction_id", "mode", "color")
 """Feature properties in ``network.geojson`` (LineStrings). The rest of a
 route's fields come from ``routes.json`` by ``key``."""
 
-START_PROPERTIES: Final = ("key", "source_key", "color", "timing")
+START_PROPERTIES: Final = ("key", "source_key", "color", "start", "end")
 """Feature properties in ``starts.geojson`` (Points, one per placed
-detour). ``timing`` is a ``Timing``, computed at export time."""
+detour). ``start``/``end`` as ``DetourObject``'s (ISO 8601 or null:
+MapLibre drops nulls, but the page reads them from the parsed file)."""
 
-SKIPPED_PROPERTIES: Final = ("key", "source_key", "color", "timing")
+SKIPPED_PROPERTIES: Final = ("key", "source_key", "color", "start", "end")
 """Feature properties in ``skipped.geojson`` (LineStrings, one per detour
 with a skipped stretch), as ``START_PROPERTIES``."""
 
-PATH_PROPERTIES: Final = ("key", "source_key", "color", "timing")
+PATH_PROPERTIES: Final = ("key", "source_key", "color", "start", "end")
 """Feature properties in ``paths.geojson`` (LineStrings, one per detour
 with a path), as ``START_PROPERTIES``."""
 

@@ -183,8 +183,8 @@ def export_site(
     Args:
         detours_file: A ``match`` output.
         root: Where the page's data goes.
-        now: The export time (``generated_at``, and the moment ``timing``
-            is computed for); default: the current time.
+        now: The export time (``generated_at``); default: the current
+            time.
 
     Raises:
         FileNotFoundError: ``detours_file`` or a required GTFS file is
@@ -209,8 +209,8 @@ def export_site(
             key = route_key(detour.match.feed, detour.match.route_id)
             by_route.setdefault(key, []).append(detour)
 
-    starts = starts_collection(catalog, detours, now)
-    skipped = skipped_collection(catalog, detours, now)
+    starts = starts_collection(catalog, detours)
+    skipped = skipped_collection(catalog, detours)
     files: dict[str, object] = {
         "status.json": status(
             detours, _snapshot_name(detours, detours_file), _feed_versions(), now
@@ -219,7 +219,7 @@ def export_site(
         "network.geojson": network_collection(catalog, shapes, coordinates),
         "starts.geojson": starts,
         "skipped.geojson": skipped,
-        "paths.geojson": paths_collection(catalog, detours, now),
+        "paths.geojson": paths_collection(catalog, detours),
     }
     for entry in catalog:
         key = entry["key"]
