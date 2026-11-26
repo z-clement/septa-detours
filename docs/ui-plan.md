@@ -174,6 +174,10 @@ checked by eye with your screenshots. Rough sizes in brackets.
 - **U6. Legend (G, if confirmed)** [small, JS + CSS].
 - **U7. Rider cards (F, if confirmed)** [medium: contract gains the
   steps, schema bump; A/B markers on the map].
+- **Match follow-up (not UI, seen 2026-11-26 on route 79):** a path can
+  start off the route; a lead-in from the route to the start point is
+  logged in `geography-plan.md` (tier C follow-ups). Fit it in between
+  UI steps.
 - **U8. Daily hours (E1, second half)** [large: parse windows from the
   message (`parse/`), model + contract changes (flagged), "running now"
   on the page]. Its own short plan first: the message formats seen,

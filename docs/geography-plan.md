@@ -156,6 +156,15 @@ Steps (each committed; model and contract changes flagged):
    63 paths of 97 candidates, 22 of them with a rejoin tier B lacked.
    Follow-up: check the first turn (off the route) and a one-node last
    leg's turn against the route shape's direction.
+   Follow-up (yours, 2026-11-26, seen on route 79 by eye): **the start
+   can sit off the route**, so the path begins in mid-air. Route 79's
+   "EB via Graysferry, Right on Washington, ..." starts at Graysferry &
+   Washington, ~150 m past where the route turns off Grays Ferry; the
+   path should begin where the bus leaves the route. Fix: a lead-in leg,
+   walking `steps[0]` (the `via` street) from where it leaves the
+   affected shapes (within `REJOIN_RADIUS_M`) to the start node, same
+   doubt rules; prepend it to `RouteMatch.path`. Measure first how many
+   starts sit > 30 m off their affected shapes.
 4. ~~`RouteMatch.path` (model change), filled by `match_notice`~~ (done:
    a path's rejoin fills `rejoin_point`; real `121123Z` stretches 53 -> 75).
 5. ~~Contract schema 4: the detour object's `path`, a `paths.geojson`~~
