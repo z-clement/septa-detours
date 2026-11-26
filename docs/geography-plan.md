@@ -104,3 +104,49 @@ Tier B follow-ups (not built):
   of the last street" (tier C territory).
 - Show the rejoin on the focused map and name it on the card ("Back on
   route at Passyunk & 17th": the steps' last two streets).
+
+## Tier C (started 2026-11-26)
+
+Goal (yours): draw the detour's own path, in its own style, next to the
+faded skipped stretch.
+
+Measured first (scratch script; snapshots `121123Z` / `141550Z`): walk
+the message street by street: from the start point, along each street's
+OSM ways (shortest path on that street alone) to the nearest crossing
+with the next street.
+- 97 / 48 detours have a path and a start point; the start is the first
+  two streets' crossing in 90 / 43 (the `via` street is the route).
+- Walked to the end: 65 / 38. Of those with a tier B rejoin (45 / 30),
+  every walk ends exactly on the rejoin node.
+- Turns: the walk's left/right agrees with the message at 119 of 120
+  crossings (14 legs too short to tell); the one disagreement is the MFO
+  shuttle's Schuylkill -> Arch.
+- Legs: median 450 m, 90th percentile 1.3 km, longest 2.5 km (Verree Rd).
+- Failures (`121123Z`, 32): 16 are Penn Square (`S Penn Sq` vs OSM
+  `South Penn Square`: `Sq` isn't a known street type), 4 have the start
+  point off the first turn street, the rest messy (`31st` & `34th` never
+  cross; no `Pattison` & `Pennrose` crossing; no `W Brown St` way;
+  `Tinicum Blvd` doesn't reach `88th St`).
+
+Decided (2026-11-26):
+- Shortest paths with **networkx** (new dependency).
+- No tier B rejoin: keep walking the last street until it comes within
+  `REJOIN_RADIUS_M` of the affected shapes; that point ends the path and
+  is the rejoin (tier B's first follow-up). Never close: no path.
+- Fix street-name matching for `Sq`/`Square` (and spelled-out
+  directions) first, in `match/streets.py`; it moves tier A's pins too.
+
+Doubt rules (proposed): nearest reachable crossing at each turn; a turn
+whose direction disagrees with the message -> no path; with a tier B
+rejoin, the path must end on it.
+
+Steps (each committed; model and contract changes flagged):
+1. `match/streets.py`: `Sq` = Square, so `S Penn Sq` finds
+   `South Penn Square`. Review the moved pins.
+2. Add networkx; `match/walk.py`: one street's graph and the walk
+   between two node sets.
+3. The whole path from the steps (doubt rules), and the extension to
+   the route when there's no rejoin.
+4. `RouteMatch.path` (model change), filled by `match_notice`.
+5. Contract schema 4: the detour object's `path`, a `paths.geojson`.
+6. web: draw the path in its own style (ask which).
