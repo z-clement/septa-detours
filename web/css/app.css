@@ -15,11 +15,13 @@ body {
   display: flex;
 }
 
-/* The route sidebar: fixed width, scrolls on its own (not the page). */
+/* The route sidebar: fixed width, a column of status, search, then the
+   route list, which alone scrolls (so the search box stays in view). */
 #sidebar {
   flex: none; /* don't grow or shrink: always 320px */
   width: 320px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid #ccc;
   background: #fff;
   color: #222;
@@ -61,8 +63,31 @@ body {
   display: none;
 }
 
+#search {
+  flex: none;
+  margin: 8px 12px;
+  padding: 6px 8px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+}
+
+/* The scrolling part. `min-height: 0` lets a flex item shrink below its
+   content's height; without it the list grows past the window instead
+   of scrolling. */
+#route-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.route-list-empty {
+  margin: 12px;
+  color: #777;
+}
+
 /* Route list: one section per group, its heading stuck to the top of
-   the sidebar while its rows scroll under it. */
+   the list while its rows scroll under it. */
 .route-section h2 {
   position: sticky;
   top: 0;

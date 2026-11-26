@@ -82,12 +82,18 @@ function routeSection(title, routes, now) {
  * "Detoured now" first (left out when no detour is active), then every
  * route grouped by mode. A route in "Detoured now" is also in its group.
  * Rebuilt whole on every call: 181 rows is cheap, and it avoids patching.
+ * Draws whatever routes it's given: filtering (search) is the caller's.
+ * No routes (nothing matched) shows a short message instead.
  *
  * @param {HTMLElement} container
- * @param {object[]} routes routes.json
+ * @param {object[]} routes routes.json entries to show, in catalog order
  * @param {Date} now
  */
 export function renderRouteList(container, routes, now) {
+  if (routes.length === 0) {
+    container.replaceChildren(element("p", "route-list-empty", "No routes match."));
+    return;
+  }
   const sections = [];
   const active = detouredNow(routes, now);
   if (active.length > 0) {
