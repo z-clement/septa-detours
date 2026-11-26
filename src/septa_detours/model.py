@@ -120,6 +120,24 @@ type Location = Annotated[Intersection | Segment, Field(discriminator="kind")]
 """A structured location; ``kind`` says which, also in JSON."""
 
 
+type Turn = Literal["via", "left", "right"]
+"""How a detour step joins its street: ``"via"`` for the first street."""
+
+
+class Step(_Frozen):
+    """One leg of a detour's path, from its message: ``"Left on Washington"``.
+
+    Attributes:
+        turn: ``"via"`` for the street the detour leaves the route on
+            (``"SB via 17th"``), else the turn onto ``street``.
+        street: The street as written (cleaned), not normalized:
+            ``"Washington"``, ``"S Penn Sq"``.
+    """
+
+    turn: Turn
+    street: CleanText
+
+
 class DetourNotice(_Frozen):
     """What can be learned from one API detour entry, without GTFS.
 
