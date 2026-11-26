@@ -173,7 +173,8 @@ export function visibleRoutes(routes, query, modes) {
  * Choices keep the order first seen (MapLibre lists the topmost first).
  *
  * @param {{properties: {key: string, source_key?: string}}[]} dots
- *   start-dot features under the click
+ *   detour features under the click: start dots and skipped stretches
+ *   (a detour's dot and stretch both hit are one choice)
  * @param {{properties: {key: string}}[]} lines line features under the click
  * @returns {{key: string, detour: string | null}[]}
  */

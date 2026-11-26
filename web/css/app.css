@@ -339,6 +339,49 @@ body {
   }
 }
 
+/* --- The map's legend (mapview.js addLegend) ----------------------------- */
+
+.legend {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 10%);
+  color: #222;
+  font: 12px/1.5 system-ui, sans-serif;
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-swatch {
+  flex: none;
+  width: 24px;
+}
+/* A solid route line; the skipped stretch's red dashes (mapview.js's
+   SKIPPED_ACTIVE_COLOR); a start dot (white ring, as drawn). */
+.legend-route {
+  border-top: 4px solid #333;
+}
+.legend-skipped {
+  height: 4px;
+  background: repeating-linear-gradient(
+    to right,
+    #d32f2f 0 8px,
+    transparent 8px 13px
+  );
+}
+.legend-start {
+  box-sizing: border-box; /* 14 px with its border; + margins = 24 px */
+  width: 14px;
+  height: 14px;
+  margin: 0 5px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #333;
+  box-shadow: 0 0 0 1px #999;
+}
+
 /* --- The route panel ---------------------------------------------------- */
 
 .panel-header {

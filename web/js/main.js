@@ -8,6 +8,7 @@ import { loadSite, routeDetailLoader } from "./data.js";
 import { focusAnnouncement, statusLine } from "./format.js";
 import {
   addClickHandler,
+  addLegend,
   addOverviewLayers,
   createMap,
   fitPadding,
@@ -65,6 +66,7 @@ async function main() {
   const loadDetail = routeDetailLoader();
 
   const { showFocus, setHoveredDot, setSelectedDot } = addOverviewLayers(map, site);
+  addLegend(map);
   showStatus(statusLine(site.status));
 
   // The catalog's mode order (D8, as Python wrote it), for the chips and
