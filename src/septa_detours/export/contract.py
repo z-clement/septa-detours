@@ -17,9 +17,14 @@ Plain JSON files (not GeoJSON) keep lists as lists and missing values as
 explicit ``null``. In GeoJSON files, MapLibre drops null properties and
 turns nested values into strings, so their properties stay flat scalars.
 
-Bump ``SCHEMA_VERSION`` on any change a page already in use couldn't read
-(renamed or removed field, changed meaning). Adding a file or an optional
-field the page can ignore doesn't need a bump.
+Bump ``SCHEMA_VERSION`` (and ``SCHEMA_VERSION`` in ``web/js/data.js``) on
+any change a page already in use couldn't read (renamed or removed field,
+changed meaning), or when the page starts relying on a new field (old
+data would then read silently wrong: refuse it instead). Adding a file or
+an optional field the page can ignore doesn't need a bump.
+
+Versions: 1, the first contract; 2, ``routes.json`` gains
+``detours.windows``.
 """
 
 from typing import Final, Literal, TypedDict
@@ -28,7 +33,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""

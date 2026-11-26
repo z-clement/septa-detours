@@ -590,7 +590,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 1,
+        "schema_version": 2,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1193,7 +1193,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",

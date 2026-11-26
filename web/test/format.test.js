@@ -60,7 +60,7 @@ test("formatTime: missing is (unknown), whether undefined or null", () => {
 // Real status.json counts (snapshot 2026-11-25T121123Z), as export site
 // should write them.
 const STATUS = {
-  schema_version: 1,
+  schema_version: 2,
   generated_at: "2026-11-25T19:59:53Z",
   snapshot: "2026-11-25T121123Z.json",
   snapshot_fetched_at: "2026-11-25T12:11:23Z",

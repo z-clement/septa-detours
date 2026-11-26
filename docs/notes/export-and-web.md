@@ -358,3 +358,22 @@ and their tests; the old page code. Checked with a scratch Node smoke
 test (fake `maplibregl`/`document`/`fetch` on the real `web/data/`:
 loads, layers, dot/line clicks, a stale schema) and by eye. Tests: 31
 JS (`format`, `data`, `routes`).
+
+Done (2026-11-25): **W3 step 1, `routes.json` windows (schema 2).** The
+sidebar's "Detoured now" needs every matched detour's timing, but the
+overview files had it only for placed detours (`starts.geojson`); 27 of
+`121123Z`'s 161 matched detours aren't placed. Options were windows in
+`routes.json`, placed-only timing, or no timing in the list; windows
+chosen (mine). `RouteDetourCounts.windows`: one `[start, end]` per matched
+detour, placed or not, snapshot order, ISO 8601 via `_iso` (shared with
+`detour_object`, so the formats can't drift). `route_catalog` now counts
+straight into each entry (the two Counters are gone). `SCHEMA_VERSION` 1
+-> 2 in `contract.py` and `data.js` (mine): the contract's rule only
+covered an old page reading new data; it now also bumps when the page
+starts relying on a field, since old data would read silently wrong. The
+JS stale-schema tests now use the real cases: data at 1 (stale data) and
+a route file at 3 (stale page). Also decided: D4 (shapeless routes
+listed greyed), D5 ("Not on the map" section). Real: 161 windows, none
+with a missing time, `routes.json` ~60 KB. Mutation check: start/end
+swapped, reversed order, placed-only windows, end = start, UTC
+conversion, `""` for `None`, either version number reverted: all caught.

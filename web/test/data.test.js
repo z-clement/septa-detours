@@ -22,7 +22,7 @@ function serve(files) {
   };
 }
 
-const STATUS = { schema_version: 1, snapshot: "2026-11-25T121123Z.json" };
+const STATUS = { schema_version: 2, snapshot: "2026-11-25T121123Z.json" };
 const ROUTES = [{ key: "bus-2" }, { key: "rail-AIR" }];
 const NETWORK = { type: "FeatureCollection", features: [{ id: "network" }] };
 const STARTS = { type: "FeatureCollection", features: [{ id: "starts" }] };
@@ -32,13 +32,13 @@ const SITE = {
   "data/network.geojson": NETWORK,
   "data/starts.geojson": STARTS,
 };
-const BUS_2 = { schema_version: 1, key: "bus-2", detours: [] };
-const RAIL_AIR = { schema_version: 1, key: "rail-AIR", detours: [] };
+const BUS_2 = { schema_version: 2, key: "bus-2", detours: [] };
+const RAIL_AIR = { schema_version: 2, key: "rail-AIR", detours: [] };
 
 beforeEach(() => serve({}));
 
 test("SCHEMA_VERSION matches the Python contract's", () => {
-  assert.equal(SCHEMA_VERSION, 1);
+  assert.equal(SCHEMA_VERSION, 2);
 });
 
 // --- loadSite ---------------------------------------------------------------
@@ -59,11 +59,11 @@ test("loadSite: returns every overview file, status first", async () => {
   ]);
 });
 
-test("loadSite: an unknown schema_version fails before the other files", async () => {
-  serve({ ...SITE, "data/status.json": { ...STATUS, schema_version: 2 } });
+test("loadSite: stale data (an older schema_version) fails before the other files", async () => {
+  serve({ ...SITE, "data/status.json": { ...STATUS, schema_version: 1 } });
   await assert.rejects(loadSite(), {
     message:
-      "data/status.json has schema_version 2; this page reads 1.\n" +
+      "data/status.json has schema_version 1; this page reads 2.\n" +
       "Re-export the data (or reload the page):\n" +
       "uv run python -m septa_detours.export site",
   });
@@ -73,7 +73,7 @@ test("loadSite: an unknown schema_version fails before the other files", async (
 test("loadSite: a status.json without schema_version is refused", async () => {
   const { schema_version: _, ...noVersion } = STATUS;
   serve({ ...SITE, "data/status.json": noVersion });
-  await assert.rejects(loadSite(), /has schema_version undefined; this page reads 1/);
+  await assert.rejects(loadSite(), /has schema_version undefined; this page reads 2/);
 });
 
 test("loadSite: a missing file names the URL, the status and the commands", async () => {
@@ -129,12 +129,12 @@ test("routeDetailLoader: a failed load is retried next time", async () => {
   assert.deepEqual(await load("bus-2"), BUS_2);
 });
 
-test("routeDetailLoader: a stale route file is refused, then retried", async () => {
-  serve({ "data/routes/bus-2.json": { ...BUS_2, schema_version: 0 } });
+test("routeDetailLoader: a newer route file (stale page) is refused, then retried", async () => {
+  serve({ "data/routes/bus-2.json": { ...BUS_2, schema_version: 3 } });
   const load = routeDetailLoader();
   await assert.rejects(
     load("bus-2"),
-    /data\/routes\/bus-2\.json has schema_version 0; this page reads 1/,
+    /data\/routes\/bus-2\.json has schema_version 3; this page reads 2/,
   );
   serve({ "data/routes/bus-2.json": BUS_2 });
   assert.deepEqual(await load("bus-2"), BUS_2);

@@ -2,7 +2,7 @@
 // (see export/contract.py).
 
 /** The contract version this page reads; status.json and route files carry it. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** The commands that make the contract's files, named when one is missing. */
 const MAKE_SITE_COMMANDS =

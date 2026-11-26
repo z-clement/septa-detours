@@ -1,6 +1,7 @@
 # Web plan: data contract and map app
 
-Status: **P1-P6, W1, W2 done** (the page draws the data contract); W3 next. Written
+Status: **P1-P6, W1, W2 done** (the page draws the data contract); W3 in
+progress (step 1, `routes.json` windows + schema 2, done). Written
 2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
@@ -96,7 +97,9 @@ export (no history needed). Each file is replaced atomically
 rarely mix old and new files (accepted). Route files for routes that no
 longer exist are deleted after the new ones are written. The page reads
 `status.json` first and refuses a `schema_version` it doesn't know, with
-an error naming the export command (a stale page or stale data, not a
+an error naming the export command. Versions: 1, the first contract; 2,
+`routes.json` gains `detours.windows` (W3; the page needs it, so old
+data is refused rather than read silently wrong) (a stale page or stale data, not a
 silent half-map). Rejected: each export in its own `builds/<id>/`
 directory plus a `current.json` pointer written last (all-at-once
 builds, cache-friendly for hosting; revisit if mixed reads ever matter).
@@ -105,7 +108,7 @@ builds, cache-friendly for hosting; revisit if mixed reads ever matter).
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_at": "2026-11-25T17:02:11Z",
   "snapshot": "2026-11-25T121123Z.json",
   "snapshot_fetched_at": "2026-11-25T12:11:23Z",
@@ -144,7 +147,12 @@ keeps it.
     "text_color": "#FFFFFF",
     "has_shapes": true,
     "bounds": [[-75.26, 39.94], [-75.14, 39.97]],
-    "detours": {"total": 2, "placed": 1}
+    "detours": {
+      "total": 2,
+      "placed": 1,
+      "windows": [["2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00"],
+                  ["2026-11-19T10:00:00-05:00", null]]
+    }
   }
 ]
 ```
@@ -161,10 +169,17 @@ keeps it.
   ...`. "Detoured first" is a page-side grouping (it changes with every
   snapshot); the base order stays stable.
 - `has_shapes: false` for the 6 shapeless routes, with `bounds: null`.
-  **Confirm** (D4): list them greyed ("no scheduled service in this
-  GTFS"), since substitution shuttles matter exactly when they run.
+  Decided (D4): listed greyed ("no scheduled service in this GTFS"),
+  since substitution shuttles matter exactly when they run.
 - `detours.total` counts matched detours (placed or not); `placed` counts
   those with a start point.
+- `detours.windows` (added in W3, schema 2; decided): one `[start, end]`
+  per matched detour, placed or not, snapshot order; ISO 8601 as in the
+  detour object, `null` when unknown. The page computes each one's
+  timing from it, so "Detoured now" needs no route files. Why: only
+  `starts.geojson` had timing, and only for placed detours (27 matched
+  detours on `121123Z` aren't placed). Real: 161 windows, `routes.json`
+  ~60 KB.
 
 ### `network.geojson`
 
@@ -193,7 +208,7 @@ a missing file; the shuttles' files carry their directions).
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "key": "bus-21",
   "directions": [
     {"direction_id": 0, "name": "Eastbound", "destination": "Penn's Landing"},
@@ -271,7 +286,7 @@ nothing reaches into parse/match).
   moved there from `match/crossings.py`), never from `match/`.
 - `export/contract.py` (pure): TypedDicts for every file above (the
   contract's Python source of truth, like `geojson.py`'s types) and
-  `SCHEMA_VERSION = 1`.
+  `SCHEMA_VERSION` (now 2; `web/js/data.js` has the same number).
 - `export/site.py` (pure builders): `route_mode`, `route_sort_key`,
   `route_catalog(...)`, `network_collection(...)`, `starts_collection(...)`,
   `route_detail(...)`, `detour_object(detour, key)`, `status(...)`.
@@ -338,7 +353,7 @@ that then notify subscribers (sidebar and map re-render from state):
   full route color and thicker, `starts.geojson` dots on top, styled by
   `timing` (active solid, upcoming hollow, ended grey).
 - Sidebar: search box, mode filter chips, then "Detoured now" (routes
-  with active detours, by count), then every route grouped by mode in
+  with active detours by `detours.windows`, by count), then every route grouped by mode in
   `routes.json` order, each row: colored badge with `short_name`,
   `long_name`, detour count. Shapeless routes greyed. A "Not on the map"
   section lists `status.unmatched`.
@@ -398,7 +413,8 @@ Web (plain JS):
    `network`, `starts`; overview map + status line. Then remove `export
    detours` (D7: done).
 9. **W3** Sidebar: grouped list, search, mode chips, "Detoured now",
-   "Not on the map". `routes.js` + `detours.js` with tests.
+   "Not on the map". `routes.js` + `detours.js` with tests. Step 1
+   (done): `routes.json` `detours.windows` + schema 2 (Python, `data.js`).
 10. **W4** Focus: detail fetch + cache, map focus, panel with detour
     cards, URL hash, Back/Escape.
 11. **W5** Card <-> dot linking, the multi-route click chooser.
@@ -416,9 +432,9 @@ Web (plain JS):
   single shapes).
 - **D3** (decided) Plain overwrite of `web/data/` (accepting a rare mixed
   read mid-export). Rejected: build directory + `current.json` pointer.
-- **D4** Shapeless routes listed greyed (recommended) vs. omitted.
-- **D5** Unmatched detours in `status.json` + a "Not on the map" section
-  (recommended).
+- **D4** (decided) Shapeless routes listed greyed. Rejected: omitted.
+- **D5** (decided) Unmatched detours in `status.json` + a "Not on the
+  map" section. Rejected: only a count in the status line.
 - **D6** Ended detours shown in a collapsed "Ended" group (recommended)
   vs. hidden.
 - **D7** (decided, done) `export site` replaced `export detours` in W2.

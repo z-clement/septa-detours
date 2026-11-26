@@ -228,8 +228,8 @@ def detour_object(detour: Detour) -> DetourObject:
         "direction_id": direction_ids.pop() if len(direction_ids) == 1 else None,
         "location_start": notice.location_start,
         "location_end": notice.location_end,
-        "start": None if notice.start is None else notice.start.isoformat(),
-        "end": None if notice.end is None else notice.end.isoformat(),
+        "start": _iso(notice.start),
+        "end": _iso(notice.end),
         "reason": notice.reason,
         "message": notice.source.message,
         "issues": [*notice.issues, *detour.issues],
@@ -621,5 +621,5 @@ def _blank_to_none(text: str | None) -> str | None:
 
 
 def _iso(moment: datetime | None) -> str | None:
-    """ISO 8601 with the offset as parsed, as ``DetourObject`` writes times."""
+    """ISO 8601 with the offset as parsed (detour objects and windows)."""
     return None if moment is None else moment.isoformat()
