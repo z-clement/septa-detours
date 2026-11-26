@@ -94,6 +94,7 @@ function routeRow(route, now) {
  */
 function routeSection(title, routes, now) {
   const section = element("section", "route-section");
+  section.dataset.section = title;
   section.append(element("h2", undefined, title), ...routes.map((route) => routeRow(route, now)));
   return section;
 }
@@ -120,6 +121,7 @@ function unmatchedSection(detours, now) {
   );
   for (const detour of detours) {
     const item = element("details", "unmatched");
+    item.dataset.sourceKey = detour.source_key;
     const summary = element("summary");
     summary.append(
       element("span", "name", unmatchedSummary(detour)),
@@ -137,6 +139,32 @@ function unmatchedSection(detours, now) {
 }
 
 /**
+ * A selector that finds `active` again in a rebuilt list, or null.
+ *
+ * A route row by its section and route (a route can be in two sections);
+ * a "Not on the map" item's summary by its detour. Anything else isn't
+ * restored.
+ *
+ * @param {Element} active the focused element, inside the list
+ * @returns {string | null}
+ */
+function focusSelector(active) {
+  const row = active.closest(".route-row");
+  if (row !== null) {
+    const section = row.closest(".route-section").dataset.section;
+    return (
+      `.route-section[data-section="${CSS.escape(section)}"] ` +
+      `.route-row[data-key="${CSS.escape(row.dataset.key)}"]`
+    );
+  }
+  const item = active.closest("details.unmatched");
+  if (item !== null && active.tagName === "SUMMARY") {
+    return `details.unmatched[data-source-key="${CSS.escape(item.dataset.sourceKey)}"] > summary`;
+  }
+  return null;
+}
+
+/**
  * Draw the route list into `container`, replacing what was there.
  *
  * "Detoured now" first (left out when no detour is active), then every
@@ -147,6 +175,10 @@ function unmatchedSection(detours, now) {
  * `emptyText` instead. Unmatched detours, when any are given, come last
  * in "Not on the map" (the caller passes none while filtering).
  *
+ * What the rebuild would lose is carried over: opened "Not on the map"
+ * items stay open, and a focused row keeps keyboard focus (found again by
+ * section and route, since a route can be in two sections).
+ *
  * @param {HTMLElement} container
  * @param {object} view
  * @param {object[]} view.routes routes.json entries to show, in order
@@ -156,6 +188,13 @@ function unmatchedSection(detours, now) {
  * @param {object[]} view.unmatched `status.unmatched` detours to list
  */
 export function renderRouteList(container, { routes, now, modeOrder, emptyText, unmatched }) {
+  const opened = new Set(
+    [...container.querySelectorAll("details.unmatched[open]")].map((d) => d.dataset.sourceKey),
+  );
+  const focused = container.contains(document.activeElement)
+    ? focusSelector(document.activeElement)
+    : null;
+
   if (routes.length === 0) {
     container.replaceChildren(element("p", "route-list-empty", emptyText));
     return;
@@ -172,6 +211,14 @@ export function renderRouteList(container, { routes, now, modeOrder, emptyText, 
     sections.push(unmatchedSection(unmatched, now));
   }
   container.replaceChildren(...sections);
+
+  for (const item of container.querySelectorAll("details.unmatched")) {
+    item.open = opened.has(item.dataset.sourceKey);
+  }
+  if (focused !== null) {
+    // preventScroll: a refresh shouldn't move the list under the reader.
+    container.querySelector(focused)?.focus({ preventScroll: true });
+  }
 }
 
 /**
