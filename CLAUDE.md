@@ -96,7 +96,8 @@ docs/            plans (web-plan.md = current, geography-plan.md,
 - Geometry: shapely + pyproj (added for tier B, `match/skipped.py`;
   project to EPSG:2272, US survey feet). Tier A's geometry stays
   hand-written (`match/crossings.py`, equirectangular metres).
-  Candidate (ask first): networkx (tier C).
+- Graphs: networkx (added for tier C, `match/walk.py`): one street's
+  ways per leg, shortest paths along it.
 
 ## Commands
 
