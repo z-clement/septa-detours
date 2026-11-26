@@ -294,3 +294,14 @@ The mutation runner is now a scratch script taking a mutations file
   IndexError) or exactly straight on. `Side` (not `Turn`: the model's
   has `"via"`). Tests rebuild the Penn Square corner (first segment says
   right, the turn is left) and pin the look distance at 99 / 101 m.
+- `path.walk_turns(steps, sources, ways, keys)` (step 3b, new
+  `match/path.py`, chaining like `place.py`): walks `steps[1:-1]`, each
+  street from the corner it was turned onto at to its nearest crossing
+  with the next (`walk_street` over every crossing's nodes); returns
+  `(legs, corner)` (`Leg`: street as written, nodes, `(lon, lat)`
+  points; `corner` = the last crossing's whole node group, where the
+  last street starts) or `None`. Turns between legs must agree
+  (`turn_side`; can't tell = accepted); the first turn (off the route)
+  isn't checked there. Tests: a grid (17th/Broad x Washington/Reed),
+  plus a slip road (a wide crossing: the next leg starts from its
+  nearer node) and a diagonal Passyunk (a one-node leg).
