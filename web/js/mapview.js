@@ -225,20 +225,23 @@ async function describeDots(features, routesByKey, loadDetail) {
 }
 
 /**
- * Show a popup for whatever was clicked, and a pointer cursor on hover.
+ * Clicks on the map: focus the route clicked, or list the choices.
  *
  * One handler for the whole map instead of one per layer: a start dot
- * usually sits on its route line, and per-layer handlers would then open
- * two popups for one click. `queryRenderedFeatures` returns every drawn
- * feature under the click; dots win, and lines are listed only when no
- * dot was hit. Overlapping dots are all listed; for lines, each route
- * once (a route's directions and shapes overlap).
+ * usually sits on its route line, and per-layer handlers would fire twice
+ * for one click. `queryRenderedFeatures` returns every drawn feature
+ * under the click; dots win, and lines count only when no dot was hit.
+ * When every hit is on one route, that route is focused (with the first
+ * dot's detour selected, if a dot was hit). Several routes under the
+ * click get a popup describing each instead of a guess (a chooser is W5).
+ * Also a pointer cursor over anything clickable.
  *
  * @param {maplibregl.Map} map
  * @param {object[]} routes routes.json
  * @param {(key: string) => Promise<object>} loadDetail
+ * @param {(key: string, detour: string | null) => void} onFocus
  */
-export function addPopups(map, routes, loadDetail) {
+export function addClickHandler(map, routes, loadDetail, onFocus) {
   const routesByKey = new Map(routes.map((route) => [route.key, route]));
 
   map.on("click", (event) => {
@@ -247,18 +250,22 @@ export function addPopups(map, routes, loadDetail) {
       dots.length > 0
         ? []
         : map.queryRenderedFeatures(event.point, { layers: [DETOURED_LAYER, NETWORK_LAYER] });
-    if (dots.length === 0 && lines.length === 0) {
+    const hits = dots.length > 0 ? dots : lines;
+    const keys = [...new Set(hits.map((feature) => feature.properties.key))];
+    if (keys.length === 0) {
+      return;
+    }
+    if (keys.length === 1) {
+      onFocus(keys[0], dots.length > 0 ? dots[0].properties.source_key : null);
       return;
     }
 
     const popup = new maplibregl.Popup({ maxWidth: "360px" })
       .setLngLat(event.lngLat)
       // setText, not setHTML: the text is treated as text, never markup.
-      .setText(dots.length > 0 ? "Loading…" : "")
+      .setText(dots.length > 0 ? "Loading\u2026" : "")
       .addTo(map);
-
     if (dots.length === 0) {
-      const keys = [...new Set(lines.map((feature) => feature.properties.key))];
       popup.setText(keys.map((key) => describeRoute(routesByKey.get(key))).join("\n\n"));
       return;
     }
