@@ -3,7 +3,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { TIMING_ORDER, detourTiming, groupByTiming, rejoinCollection } from "../js/detours.js";
+import {
+  TIMING_ORDER,
+  detourTiming,
+  groupByTiming,
+  inEffectKeys,
+  isInEffect,
+  rejoinCollection,
+} from "../js/detours.js";
 
 // Route 2's real window (its first routes.json window), Philadelphia time;
 // the same cases as Python's test_detour_timing. "now" values are in UTC,
@@ -178,4 +185,47 @@ test("rejoinCollection: none, and a null color passes through", () => {
   });
   const detail = { key: "bus-2", detours: [rejoining("a", START, END, [-75.17, 39.93])] };
   assert.equal(rejoinCollection(detail, null, NOW).features[0].properties.color, null);
+});
+
+// --- isInEffect, inEffectKeys -------------------------------------------------
+
+const UPCOMING = ["2026-12-01T00:00:00-05:00", "2026-12-02T00:00:00-05:00"];
+const ENDED = ["2026-11-01T00:00:00-05:00", "2026-11-20T00:00:00-05:00"];
+
+test("isInEffect: active and unknown are drawn, upcoming and ended aren't", () => {
+  assert.equal(isInEffect(START, END, NOW), true);
+  assert.equal(isInEffect(START, null, NOW), true);
+  assert.equal(isInEffect(END, START, NOW), true); // bad dates: unknown
+  assert.equal(isInEffect(...UPCOMING, NOW), false);
+  assert.equal(isInEffect(...ENDED, NOW), false);
+});
+
+/** A detour feature as starts/skipped/paths.geojson carry it. */
+function feature(sourceKey, start, end) {
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [-75.1716, 39.9385] },
+    properties: { key: "bus-2", source_key: sourceKey, color: "#1A1818", start, end },
+  };
+}
+
+test("inEffectKeys: the source_keys of features in effect", () => {
+  const features = [
+    feature("active", START, END),
+    feature("upcoming", ...UPCOMING),
+    feature("unknown", null, END),
+    feature("ended", ...ENDED),
+  ];
+  assert.deepEqual([...inEffectKeys(features, NOW)], ["active", "unknown"]);
+});
+
+test("inEffectKeys: follows the clock it's given", () => {
+  const features = [feature("upcoming", ...UPCOMING)];
+  assert.deepEqual([...inEffectKeys(features, NOW)], []);
+  const later = new Date("2026-12-01T12:00:00Z");
+  assert.deepEqual([...inEffectKeys(features, later)], ["upcoming"]);
+});
+
+test("inEffectKeys: none", () => {
+  assert.equal(inEffectKeys([], NOW).size, 0);
 });

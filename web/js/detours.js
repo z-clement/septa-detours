@@ -5,8 +5,8 @@
 /**
  * Whether a detour is in effect at `now`, by its overall start and end.
  *
- * The same rule as Python's `export.site.detour_timing` (keep them in
- * step): "active" from `start` to `end` inclusive, "upcoming" before,
+ * The page's one timing rule (since contract 6 no file carries a timing):
+ * "active" from `start` to `end` inclusive, "upcoming" before,
  * "ended" after. "unknown" when a time is missing (`null` from plain JSON,
  * `undefined` from a clicked feature), when `end` is before `start` (bad
  * data: "upcoming" and "ended" could both be wrong), or, unlike Python,
@@ -46,6 +46,41 @@ export function detourTiming(start, end, now) {
 }
 
 
+/**
+ * Whether the map draws a detour now: `detourTiming` "active", or
+ * "unknown" (shown rather than hidden: a detour with odd dates may well
+ * be running). Upcoming and ended detours stay in the route panel.
+ *
+ * @param {string | null | undefined} start
+ * @param {string | null | undefined} end
+ * @param {Date} now
+ * @returns {boolean}
+ */
+export function isInEffect(start, end, now) {
+  const timing = detourTiming(start, end, now);
+  return timing === "active" || timing === "unknown";
+}
+
+/**
+ * The `source_key`s of the detour features in effect at `now`, for the
+ * map's filters (starts, skipped, paths: each feature carries its
+ * detour's `start` and `end`).
+ *
+ * @param {object[]} features GeoJSON features (properties `source_key`,
+ *   `start`, `end`)
+ * @param {Date} now
+ * @returns {Set<string>}
+ */
+export function inEffectKeys(features, now) {
+  const keys = new Set();
+  for (const { properties } of features) {
+    if (isInEffect(properties.start, properties.end, now)) {
+      keys.add(properties.source_key);
+    }
+  }
+  return keys;
+}
+
 /** The route panel's group order: in effect first, ended last (D6). */
 export const TIMING_ORDER = Object.freeze(["active", "upcoming", "unknown", "ended"]);
 
@@ -74,8 +109,7 @@ export function groupByTiming(detours, now) {
  * The focused route's rejoin points, for the map: where each detour in
  * effect gets back on its route.
  *
- * In effect = `detourTiming` "active" or "unknown", the same rule as the
- * map's fade and paths (upcoming and ended detours aren't driven now).
+ * In effect = `isInEffect`, the same rule as the map's other layers.
  * Detours without a `rejoin_point` are left out. Feature properties:
  * `key` (the route), `source_key` (the detour: the map's feature id, as
  * for start dots), `color` (the route's, or null).
@@ -89,8 +123,7 @@ export function rejoinCollection(detail, color, now) {
   const features = [];
   for (const detour of detail.detours) {
     const point = detour.rejoin_point;
-    const timing = detourTiming(detour.start, detour.end, now);
-    if (point === null || timing === "upcoming" || timing === "ended") {
+    if (point === null || !isInEffect(detour.start, detour.end, now)) {
       continue;
     }
     features.push({
