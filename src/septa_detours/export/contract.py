@@ -101,11 +101,19 @@ class Status(TypedDict):
     """Detours whose route isn't in GTFS, listed so none silently vanish."""
 
 
+type DetourWindow = tuple[str | None, str | None]
+"""A detour's overall ``(start, end)``, ISO 8601 as in ``DetourObject``;
+``None`` when unknown. JSON: a 2-item list."""
+
+
 class RouteDetourCounts(TypedDict):
     """A route's matched detours, and how many of them are placed."""
 
     total: int
     placed: int
+    windows: list[DetourWindow]
+    """Every matched detour's window (placed or not), snapshot order, so
+    the page can compute each one's ``Timing`` without the route file."""
 
 
 class RouteEntry(TypedDict):

@@ -246,23 +246,46 @@ def entry(route_id: str, feed: Feed = "bus", **changes: object) -> dict[str, obj
         "text_color": f"#{row['route_text_color']}",
         "has_shapes": bounds is not None,
         "bounds": bounds,
-        "detours": {"total": 0, "placed": 0},
+        "detours": {"total": 0, "placed": 0, "windows": []},
     }
     return expected | changes
 
 
 def test_catalog_whole_output(notice: DetourNotice) -> None:
+    # The fixture runs 2026-11-11 06:30 to 2026-11-27 16:00 (-05:00).
+    later = notice.model_copy(
+        update={"start": datetime(2026, 12, 1, 9, 15, tzinfo=PHILLY), "end": None}
+    )
+    no_start = notice.model_copy(update={"start": None})
     detours = [
         on_route(notice, "bus", "2", placed=True),
-        on_route(notice, "bus", "21", placed=False),
+        on_route(later, "bus", "21", placed=False),
         Detour(notice=notice, match=None),  # unmatched: skipped, not counted
-        on_route(notice, "bus", "2", placed=False),
-        on_route(notice, "bus", "2", placed=True),
+        on_route(no_start, "bus", "2", placed=False),
+        on_route(later, "bus", "2", placed=True),
     ]
     assert route_catalog(ROUTES, BOUNDS, detours) == [
         entry("L1"),
-        entry("2", detours={"total": 3, "placed": 2}),
-        entry("21", detours={"total": 1, "placed": 0}),
+        entry(
+            "2",
+            detours={
+                "total": 3,
+                "placed": 2,
+                "windows": [  # snapshot order, placed or not
+                    ("2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00"),
+                    (None, "2026-11-27T16:00:00-05:00"),
+                    ("2026-12-01T09:15:00-05:00", None),
+                ],
+            },
+        ),
+        entry(
+            "21",
+            detours={
+                "total": 1,
+                "placed": 0,
+                "windows": [("2026-12-01T09:15:00-05:00", None)],
+            },
+        ),
         entry("T_BUS"),
         entry("AIR", feed="rail"),
     ]
@@ -524,7 +547,7 @@ ROUTE_2: RouteEntry = {
     "text_color": "#FFFFFF",
     "has_shapes": True,
     "bounds": ([-75.18, 39.91], [-75.16, 40.04]),
-    "detours": {"total": 2, "placed": 1},
+    "detours": {"total": 2, "placed": 1, "windows": []},  # not read by these builders
 }
 # Route 2's real directions.txt rows.
 ROUTE_2_DIRECTIONS: list[DirectionEntry] = [
@@ -915,7 +938,7 @@ AIR: RouteEntry = {
     "text_color": "#FFFFFF",
     "has_shapes": True,
     "bounds": ([-75.25, 39.87], [-75.16, 39.96]),
-    "detours": {"total": 0, "placed": 0},
+    "detours": {"total": 0, "placed": 0, "windows": []},
 }
 # Raw lines. 317312's midpoint is 3.4 m off its line: kept at 2 m, dropped
 # at 5 m. "001005" is in both feeds with different lines.

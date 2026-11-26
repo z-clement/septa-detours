@@ -177,9 +177,20 @@ def test_export_site_catalog_and_details(detours) -> None:
     export_site(DETOURS_FILE, now=NOW)
     catalog = read("routes.json")
     assert [(e["key"], e["has_shapes"], e["detours"]) for e in catalog] == [
-        ("bus-21", True, {"total": 2, "placed": 1}),
-        ("bus-NS", False, {"total": 0, "placed": 0}),
-        ("rail-AIR", True, {"total": 0, "placed": 0}),
+        (
+            "bus-21",
+            True,
+            {
+                "total": 2,
+                "placed": 1,
+                "windows": [  # JSON: each window a 2-item list
+                    ["2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00"],
+                    ["2026-11-19T10:00:00-05:00", "2026-12-01T23:59:00-05:00"],
+                ],
+            },
+        ),
+        ("bus-NS", False, {"total": 0, "placed": 0, "windows": []}),
+        ("rail-AIR", True, {"total": 0, "placed": 0, "windows": []}),
     ]
     route_21 = read("routes/bus-21.json")
     assert [d["name"] for d in route_21["directions"]] == ["Eastbound", "Westbound"]

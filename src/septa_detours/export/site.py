@@ -4,7 +4,6 @@ Pure functions: no file I/O (that's ``write.py``).
 """
 
 import re
-from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Final, NamedTuple
@@ -174,15 +173,13 @@ def route_catalog(
             "bounds": None
             if route_bounds is None
             else (list(route_bounds[0]), list(route_bounds[1])),
-            "detours": {"total": 0, "placed": 0},
+            "detours": {"total": 0, "placed": 0, "windows": []},
         }
 
     unknown = sorted(set(bounds) - set(entries))
     if unknown:
         raise ValueError(f"bounds for routes not in routes: {unknown}")
 
-    totals: Counter[str] = Counter()
-    placed: Counter[str] = Counter()
     for detour in detours:
         if detour.match is None:
             continue
@@ -191,11 +188,11 @@ def route_catalog(
             raise ValueError(
                 f"detour {detour.notice.source_key} is on unknown route {key!r}"
             )
-        totals[key] += 1
+        counts = entries[key]["detours"]
+        counts["total"] += 1
         if detour.match.start_point is not None:
-            placed[key] += 1
-    for key, entry in entries.items():
-        entry["detours"] = {"total": totals[key], "placed": placed[key]}
+            counts["placed"] += 1
+        counts["windows"].append((_iso(detour.notice.start), _iso(detour.notice.end)))
 
     return sorted(
         entries.values(),
@@ -621,3 +618,8 @@ def _blank_to_none(text: str | None) -> str | None:
     if text is None:
         return None
     return text.strip() or None
+
+
+def _iso(moment: datetime | None) -> str | None:
+    """ISO 8601 with the offset as parsed, as ``DetourObject`` writes times."""
+    return None if moment is None else moment.isoformat()
