@@ -163,11 +163,33 @@ export function apiRouteName(apiRouteId) {
 }
 
 /**
+ * Where a detour runs: "17th & Washington to 17th & Mifflin".
+ *
+ * A missing location leaves out its half ("17th & Washington", or "to
+ * 17th & Mifflin"); none at all says "location not given".
+ *
+ * @param {object} detour a detour object
+ * @returns {string}
+ */
+export function detourPlaces(detour) {
+  const { location_start: from, location_end: to } = detour;
+  if (from !== null && to !== null) {
+    return `${from} to ${to}`;
+  }
+  if (from !== null) {
+    return from;
+  }
+  if (to !== null) {
+    return `to ${to}`;
+  }
+  return "location not given";
+}
+
+/**
  * One line for a detour not matched to a route ("Not on the map").
  *
  * e.g. "Route L, NB: Nedro & 20th St to Wister btwn Church & Spencer".
- * The direction is left out when null; a missing location leaves out its
- * half, and none at all says "location not given".
+ * The direction is left out when null; places as `detourPlaces`.
  *
  * @param {object} detour a `status.unmatched` detour object
  * @returns {string}
@@ -175,16 +197,59 @@ export function apiRouteName(apiRouteId) {
 export function unmatchedSummary(detour) {
   const route = `Route ${apiRouteName(detour.route)}`;
   const head = detour.direction === null ? route : `${route}, ${detour.direction}`;
-  const { location_start: from, location_end: to } = detour;
-  let where = "location not given";
-  if (from !== null && to !== null) {
-    where = `${from} to ${to}`;
-  } else if (from !== null) {
-    where = from;
-  } else if (to !== null) {
-    where = `to ${to}`;
-  }
-  return `${head}: ${where}`;
+  return `${head}: ${detourPlaces(detour)}`;
+}
+
+/**
+ * A detour's direction as the route names it: "Southbound".
+ *
+ * Looked up by `direction_id` in the route detail's `directions`. When
+ * that's null (match couldn't tell, or its shapes disagree) or not in the
+ * list, the API's own text is shown ("EB"); null when there's neither.
+ *
+ * @param {object} detour a detour object
+ * @param {{direction_id: number, name: string}[]} directions the route
+ *   detail's `directions`
+ * @returns {string | null}
+ */
+export function directionLabel(detour, directions) {
+  // A null direction_id finds nothing: directions' ids are always 0 or 1.
+  const named = directions.find((d) => d.direction_id === detour.direction_id);
+  return named === undefined ? detour.direction : named.name;
+}
+
+/**
+ * A detour card's first line: "Southbound: 17th & Washington to 17th & Mifflin".
+ *
+ * Just the places when there's no direction.
+ *
+ * @param {object} detour a detour object
+ * @param {{direction_id: number, name: string}[]} directions
+ * @returns {string}
+ */
+export function detourHeadline(detour, directions) {
+  const direction = directionLabel(detour, directions);
+  const places = detourPlaces(detour);
+  return direction === null ? places : `${direction}: ${places}`;
+}
+
+/** The route panel's heading for each `detourTiming` group. */
+const TIMING_HEADINGS = Object.freeze({
+  active: "In effect",
+  upcoming: "Upcoming",
+  unknown: "Dates unknown",
+  ended: "Ended",
+});
+
+/**
+ * A route panel group's heading with its count: "In effect (2)".
+ *
+ * @param {"active" | "upcoming" | "ended" | "unknown"} timing
+ * @param {number} count detours in the group
+ * @returns {string}
+ */
+export function timingHeading(timing, count) {
+  return `${TIMING_HEADINGS[timing]} (${count})`;
 }
 
 /**

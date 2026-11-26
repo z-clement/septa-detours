@@ -10,11 +10,15 @@ import {
   apiRouteName,
   describeDetour,
   describeRoute,
+  detourHeadline,
+  detourPlaces,
+  directionLabel,
   formatTime,
   modeLabel,
   plural,
   routeLabel,
   statusLine,
+  timingHeading,
   timingSummary,
   unmatchedSummary,
 } from "../js/format.js";
@@ -311,5 +315,74 @@ test("unmatchedSummary: no location at all", () => {
   assert.equal(
     unmatchedSummary({ ...ROUTE_L_NB, location_start: null, location_end: null }),
     "Route L, NB: location not given",
+  );
+});
+
+// --- Route panel cards ---------------------------------------------------------
+
+// Route 2's real directions and its first detour (routes/bus-2.json):
+// direction_id 0 is Southbound on this route.
+const BUS_2_DIRECTIONS = [
+  { direction_id: 0, name: "Southbound", destination: "20th-Johnston" },
+  { direction_id: 1, name: "Northbound", destination: "Pulaski-Hunting Park" },
+];
+const BUS_2_SB = {
+  source_key: "5d0d22dfe7d86935",
+  route: "bus-2",
+  direction: "SB",
+  direction_id: 0,
+  location_start: "17th & Washington",
+  location_end: "17th & Mifflin",
+};
+
+test("detourPlaces: both, one, or neither location", () => {
+  assert.equal(detourPlaces(BUS_2_SB), "17th & Washington to 17th & Mifflin");
+  assert.equal(detourPlaces({ ...BUS_2_SB, location_end: null }), "17th & Washington");
+  assert.equal(detourPlaces({ ...BUS_2_SB, location_start: null }), "to 17th & Mifflin");
+  assert.equal(
+    detourPlaces({ ...BUS_2_SB, location_start: null, location_end: null }),
+    "location not given",
+  );
+});
+
+test("directionLabel: the route's name for direction_id, not the API's text", () => {
+  assert.equal(directionLabel(BUS_2_SB, BUS_2_DIRECTIONS), "Southbound");
+  // direction_id 1 with a mismatched API word: the id wins.
+  assert.equal(
+    directionLabel({ ...BUS_2_SB, direction_id: 1 }, BUS_2_DIRECTIONS),
+    "Northbound",
+  );
+});
+
+test("directionLabel: falls back to the API's text, then null", () => {
+  assert.equal(directionLabel({ ...BUS_2_SB, direction_id: null }, BUS_2_DIRECTIONS), "SB");
+  assert.equal(directionLabel({ ...BUS_2_SB, direction_id: 7 }, BUS_2_DIRECTIONS), "SB");
+  assert.equal(directionLabel(BUS_2_SB, []), "SB");
+  assert.equal(
+    directionLabel({ ...BUS_2_SB, direction: null, direction_id: null }, BUS_2_DIRECTIONS),
+    null,
+  );
+});
+
+test("detourHeadline: direction then places; places alone with no direction", () => {
+  assert.equal(
+    detourHeadline(BUS_2_SB, BUS_2_DIRECTIONS),
+    "Southbound: 17th & Washington to 17th & Mifflin",
+  );
+  assert.equal(
+    detourHeadline({ ...BUS_2_SB, direction: null, direction_id: null }, BUS_2_DIRECTIONS),
+    "17th & Washington to 17th & Mifflin",
+  );
+});
+
+test("timingHeading: each group's heading with its count", () => {
+  assert.deepEqual(
+    [
+      timingHeading("active", 2),
+      timingHeading("upcoming", 1),
+      timingHeading("unknown", 3),
+      timingHeading("ended", 9),
+    ],
+    ["In effect (2)", "Upcoming (1)", "Dates unknown (3)", "Ended (9)"],
   );
 });
