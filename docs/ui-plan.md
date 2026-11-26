@@ -172,7 +172,11 @@ checked by eye with your screenshots. Rough sizes in brackets.
 - **U4. Focus frames detours (C1)** [small-medium, JS]: fit the focused
   route's detours in effect; a selected card zooms to its detour; a
   "Whole route" control.
-- **U5. Directions (D, if confirmed)** [small, JS].
+- **U5. Directions (D)** [small-medium, JS]. Asked for (yours,
+  2026-11-26, after U3): on a focused route the two directions are hard
+  to tell apart (route 47 NB vs SB): show direction (arrows along the
+  line?) and/or fade the direction that isn't the focused detour's.
+  Confirm the exact form when we get here.
 - **U6. Legend (G, if confirmed)** [small, JS + CSS].
 - **U7. Rider cards (F, if confirmed)** [medium: contract gains the
   steps, schema bump; A/B markers on the map].
