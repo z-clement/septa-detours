@@ -36,3 +36,35 @@ Tier A steps (agreed): 1. ~~street-name normalization~~ and
 at the stop (`load_stops`; maybe needs `location_type` from the bus feed
 only, which breaks "shared columns only": ask). Step 4 is postponed
 behind the map UI/UX work.
+
+## Tier B (started 2026-11-25)
+
+Goal (yours): make it easy to see which part of a route is detoured and
+which is the regular route. Decided: tier B first (C later, building on
+it); geometry with **shapely + pyproj** (project to EPSG:2272).
+
+Measured first (snapshot `121123Z`): placing `location_end` with tier
+A's code gives only 22 of 161 matched detours an end (69 ends don't
+parse, 43 are segments, 21 are stop closures), so the rejoin comes from
+the message instead: 117 of 157 distinct messages end in "Reg Rt".
+The rejoin is the crossing of the last two streets **only if** that
+crossing is near the route (route 2 "... Right on Passyunk, Left on
+17th, Reg Rt": 17th is the route, so yes; "... Right on Ridge Ave, Left
+on Francis St, Reg Rt": Francis isn't, so the real rejoin is further on:
+unknown). Any doubt -> no rejoin.
+
+Steps (each committed; model and contract changes flagged):
+1. `parse/steps.py` (pure): `parse_route_steps(message)` -> `Step`s
+   (`via` street, then each `left`/`right` street) up to "Reg Rt"; raises
+   on anything unrecognized. `Step` in `model.py`.
+2. `DetourNotice.route_steps` (default `()`, so old files still read;
+   no issue when missing: messages aren't modeled yet, and an issue
+   would make notices `partial`).
+3. match: `rejoin_point` = the last two streets' crossing near the route
+   (tier A's placement); `RouteMatch.rejoin_point`.
+4. match: the skipped stretch: on the affected shapes, the part between
+   the start and rejoin points (shapely, EPSG:2272); `RouteMatch.skipped`.
+5. contract (schema 3) + export: the detour object gets `rejoin_point`
+   and `skipped`; an overview file for the skipped lines.
+6. web: draw the skipped stretch in its own style ("not served"), the
+   regular route solid.
