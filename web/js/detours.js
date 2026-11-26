@@ -2,6 +2,8 @@
 //
 // PURE: no DOM, no `maplibregl`, no fetch, so `node --test` can run it.
 
+import { SEPTA_TIME_ZONE } from "./format.js";
+
 /**
  * Whether a detour is in effect at `now`, by its overall start and end.
  *
@@ -46,25 +48,118 @@ export function detourTiming(start, end, now) {
 }
 
 
+const WEEKDAY_INDEX = Object.freeze({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 });
+
+let localClockFormat = null;
+
+/** The formatter behind `localClock`, made on first use (so a test's TZ
+ * change, made after imports, applies to it as it would to a page's). */
+function clockFormat() {
+  localClockFormat ??= new Intl.DateTimeFormat("en-US", {
+    timeZone: SEPTA_TIME_ZONE,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  return localClockFormat;
+}
+
+/**
+ * The weekday and time of day at `now` in SEPTA's time zone, whatever the
+ * browser's own zone (daily hours are local times).
+ *
+ * @param {Date} now
+ * @returns {{day: number, minutes: number}} `day`: Monday = 0;
+ *   `minutes`: since local midnight
+ */
+export function localClock(now) {
+  const parts = Object.fromEntries(
+    clockFormat()
+      .formatToParts(now)
+      .map(({ type, value }) => [type, value]),
+  );
+  return {
+    day: WEEKDAY_INDEX[parts.weekday],
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+
+/** "07:30" -> 450. */
+function minutesOf(hhmm) {
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * Whether `now` is inside a detour's daily hours (contract `hours`).
+ *
+ * From `start` (inclusive) to `end` (exclusive), on its `days`. An `end`
+ * before `start` is overnight: the evening part counts on its `days`, the
+ * morning part on the day after each.
+ *
+ * @param {{days: number[], start: string, end: string} | null} hours
+ *   null: all day (true)
+ * @param {Date} now
+ * @returns {boolean}
+ */
+export function inHours(hours, now) {
+  if (hours === null) {
+    return true;
+  }
+  const { day, minutes } = localClock(now);
+  const start = minutesOf(hours.start);
+  const end = minutesOf(hours.end);
+  if (start < end) {
+    return hours.days.includes(day) && minutes >= start && minutes < end;
+  }
+  const yesterday = (day + 6) % 7;
+  return (
+    (hours.days.includes(day) && minutes >= start) ||
+    (hours.days.includes(yesterday) && minutes < end)
+  );
+}
+
+/**
+ * A detour feature's daily hours, from its flat `hours_*` properties
+ * (contract 8), in the detour object's shape; null without hours.
+ *
+ * @param {object} properties
+ * @returns {{days: number[], start: string, end: string} | null}
+ */
+export function hoursOf(properties) {
+  if (properties.hours_days == null) {
+    return null;
+  }
+  return {
+    days: [...properties.hours_days].map(Number),
+    start: properties.hours_start,
+    end: properties.hours_end,
+  };
+}
+
 /**
  * Whether the map draws a detour now: `detourTiming` "active", or
  * "unknown" (shown rather than hidden: a detour with odd dates may well
- * be running). Upcoming and ended detours stay in the route panel.
+ * be running), and inside its daily hours if it has any (U8: outside
+ * them it's hidden like an upcoming one). Upcoming, ended and off-hours
+ * detours stay in the route panel.
  *
  * @param {string | null | undefined} start
  * @param {string | null | undefined} end
  * @param {Date} now
+ * @param {{days: number[], start: string, end: string} | null} [hours]
  * @returns {boolean}
  */
-export function isInEffect(start, end, now) {
+export function isInEffect(start, end, now, hours = null) {
   const timing = detourTiming(start, end, now);
-  return timing === "active" || timing === "unknown";
+  return (timing === "active" || timing === "unknown") && inHours(hours, now);
 }
 
 /**
  * The `source_key`s of the detour features in effect at `now`, for the
  * map's filters (starts, skipped, paths: each feature carries its
- * detour's `start` and `end`).
+ * detour's `start`, `end` and `hours_*`).
  *
  * @param {object[]} features GeoJSON features (properties `source_key`,
  *   `start`, `end`)
@@ -74,7 +169,7 @@ export function isInEffect(start, end, now) {
 export function inEffectKeys(features, now) {
   const keys = new Set();
   for (const { properties } of features) {
-    if (isInEffect(properties.start, properties.end, now)) {
+    if (isInEffect(properties.start, properties.end, now, hoursOf(properties))) {
       keys.add(properties.source_key);
     }
   }
@@ -123,7 +218,7 @@ export function rejoinCollection(detail, color, now) {
   const features = [];
   for (const detour of detail.detours) {
     const point = detour.rejoin_point;
-    if (point === null || !isInEffect(detour.start, detour.end, now)) {
+    if (point === null || !isInEffect(detour.start, detour.end, now, detour.hours)) {
       continue;
     }
     features.push({

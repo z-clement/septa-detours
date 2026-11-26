@@ -739,3 +739,11 @@ Tests: 125 JS.
   (weekday digits, `"01234"`), `hours_start`, `hours_end` (null without
   hours: GeoJSON properties stay scalars). `SKIPPED_PROPERTIES` and
   `PATH_PROPERTIES` are now `START_PROPERTIES` itself.
+- U8, page (2026-11-26): `detours.localClock` (weekday + minutes in
+  SEPTA's zone; its `Intl` formatter is made on first use so a test's
+  `TZ` applies), `inHours` (start inclusive, end exclusive; overnight:
+  evening on its days, morning on the day after), `hoursOf` (flat
+  feature properties back to `HoursObject`); `isInEffect(start, end,
+  now, hours)` now needs the hours too, so the map, rejoin dots and
+  framing hide a detour outside them. `detours.test.js` sets
+  `TZ=Asia/Tokyo` (its own process). Page reads 8.

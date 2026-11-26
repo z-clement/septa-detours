@@ -8,10 +8,18 @@ import {
   detourBounds,
   detourTiming,
   groupByTiming,
+  hoursOf,
   inEffectKeys,
+  inHours,
   isInEffect,
+  localClock,
   rejoinCollection,
 } from "../js/detours.js";
+
+// Daily hours are SEPTA's local times whatever the machine's zone. This
+// machine is on New York time, where a missing `timeZone` would still
+// pass, so pretend to be far away (Node applies a TZ change at runtime).
+process.env.TZ = "Asia/Tokyo";
 
 // Route 2's real window (its first routes.json window), Philadelphia time;
 // the same cases as Python's test_detour_timing. "now" values are in UTC,
@@ -294,4 +302,79 @@ test("detourBounds: a rejoin alone, or a path alone, still counts", () => {
     [-75.18, 39.92],
     [-75.17, 39.93],
   ]);
+});
+
+// --- daily hours: localClock, inHours, hoursOf (U8) ---------------------------
+
+/** A UTC instant from Philadelphia local time in November (UTC-5). */
+const local = (date, time) => new Date(`2026-11-${date}T${time}:00-05:00`);
+// Nov 2026: Mon 23, Tue 24, Wed 25, Thu 26, Fri 27, Sat 28, Sun 29, Mon 30.
+
+test("localClock: SEPTA's weekday and time, not the machine's", () => {
+  // NOW is 12:11:23 UTC on Wed Nov 25: 07:11 in Philadelphia (Tokyo: 21:11).
+  assert.deepEqual(localClock(NOW), { day: 2, minutes: 7 * 60 + 11 });
+  // Summer time (UTC-4): Sat Jul 4, 12:00 UTC is 08:00 local.
+  assert.deepEqual(localClock(new Date("2026-07-04T12:00:00Z")), { day: 5, minutes: 480 });
+  // Just before local midnight on Sunday.
+  assert.deepEqual(localClock(local("29", "23:59")), { day: 6, minutes: 1439 });
+});
+
+// Route 2 #0: "7am - 4pm Mon thru Fri".
+const WEEKDAYS_7_4 = { days: [0, 1, 2, 3, 4], start: "07:00", end: "16:00" };
+
+test("inHours: inside the day's window, on its days", () => {
+  assert.equal(inHours(WEEKDAYS_7_4, local("25", "07:00")), true); // start counts
+  assert.equal(inHours(WEEKDAYS_7_4, local("25", "15:59")), true);
+  assert.equal(inHours(WEEKDAYS_7_4, local("25", "06:59")), false);
+  assert.equal(inHours(WEEKDAYS_7_4, local("25", "16:00")), false); // end doesn't
+  assert.equal(inHours(WEEKDAYS_7_4, local("28", "10:00")), false); // Saturday
+});
+
+test("inHours: no hours is all day", () => {
+  assert.equal(inHours(null, local("28", "03:00")), true);
+});
+
+test("inHours: overnight runs into the next morning", () => {
+  // Route 32: "Monday thru Wednesday, 7:00PM to 5:00AM".
+  const overnight = { days: [0, 1, 2], start: "19:00", end: "05:00" };
+  assert.equal(inHours(overnight, local("25", "23:00")), true); // Wed evening
+  assert.equal(inHours(overnight, local("26", "04:59")), true); // Thu, from Wed
+  assert.equal(inHours(overnight, local("26", "05:00")), false);
+  assert.equal(inHours(overnight, local("26", "19:00")), false); // Thu evening
+  assert.equal(inHours(overnight, local("23", "04:00")), false); // Mon, from Sun
+  assert.equal(inHours(overnight, local("23", "19:00")), true); // Mon evening
+  assert.equal(inHours(overnight, local("25", "12:00")), false); // midday
+});
+
+test("hoursOf: the flat feature properties back to the detour object's shape", () => {
+  const properties = { hours_days: "01234", hours_start: "07:00", hours_end: "16:00" };
+  assert.deepEqual(hoursOf(properties), WEEKDAYS_7_4);
+  assert.equal(hoursOf({ hours_days: null, hours_start: null, hours_end: null }), null);
+  assert.equal(hoursOf({}), null); // MapLibre drops null properties
+});
+
+test("isInEffect: inside its dates but outside its hours is not drawn", () => {
+  assert.equal(isInEffect(START, END, local("25", "20:00"), WEEKDAYS_7_4), false);
+  assert.equal(isInEffect(START, END, local("25", "09:00"), WEEKDAYS_7_4), true);
+  // Unknown dates still need the hours.
+  assert.equal(isInEffect(null, END, local("25", "20:00"), WEEKDAYS_7_4), false);
+  // Outside its dates, the hours don't help.
+  assert.equal(isInEffect(...ENDED, local("25", "09:00"), WEEKDAYS_7_4), false);
+});
+
+test("inEffectKeys and rejoinCollection follow the hours", () => {
+  const hours = { hours_days: "01234", hours_start: "07:00", hours_end: "16:00" };
+  const withHours = feature("weekdays", START, END);
+  Object.assign(withHours.properties, hours);
+  const evening = local("25", "20:00");
+  assert.deepEqual(
+    [...inEffectKeys([withHours, feature("all-day", START, END)], evening)],
+    ["all-day"],
+  );
+  const detail = {
+    key: "bus-2",
+    detours: [{ ...rejoining("weekdays", START, END, [-75.17, 39.93]), hours: WEEKDAYS_7_4 }],
+  };
+  assert.equal(rejoinCollection(detail, null, evening).features.length, 0);
+  assert.equal(rejoinCollection(detail, null, local("25", "09:00")).features.length, 1);
 });

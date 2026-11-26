@@ -226,7 +226,7 @@ async function main() {
   // route (none in effect, none placed, or the detail didn't load).
   const frameFocus = (state) => {
     const inEffect = focusedDetours(state.focus).filter((d) =>
-      isInEffect(d.start, d.end, state.now),
+      isInEffect(d.start, d.end, state.now, d.hours),
     );
     const bounds = detourBounds(selectedDetours(state)) ?? detourBounds(inEffect);
     if (bounds !== null) {
