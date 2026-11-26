@@ -5,6 +5,7 @@ import { test } from "node:test";
 
 import {
   TIMING_ORDER,
+  detourBounds,
   detourTiming,
   groupByTiming,
   inEffectKeys,
@@ -228,4 +229,69 @@ test("inEffectKeys: follows the clock it's given", () => {
 
 test("inEffectKeys: none", () => {
   assert.equal(inEffectKeys([], NOW).size, 0);
+});
+
+// --- detourBounds ------------------------------------------------------------
+
+/** A detour object with just the geometry fields detourBounds reads. */
+function placed({ start = null, rejoin = null, skipped = null, path = null } = {}) {
+  const point = (p) => (p === null ? null : { lon: p[0], lat: p[1], node_id: 1 });
+  return { start_point: point(start), rejoin_point: point(rejoin), skipped, path };
+}
+
+test("detourBounds: every point, stretch and path counts", () => {
+  // Route 2's detour round 17th, Washington, Broad, Passyunk: each edge
+  // of the box comes from a different field.
+  const detour = placed({
+    start: [-75.1716, 39.9385], // north
+    rejoin: [-75.1746, 39.9246], // west
+    skipped: [
+      [-75.1716, 39.9385],
+      [-75.1731, 39.9240], // south
+    ],
+    path: [
+      [-75.1716, 39.9385],
+      [-75.1636, 39.9300], // east
+    ],
+  });
+  assert.deepEqual(detourBounds([detour]), [
+    [-75.1746, 39.924],
+    [-75.1636, 39.9385],
+  ]);
+});
+
+test("detourBounds: several detours share one box", () => {
+  const a = placed({ start: [-75.2, 39.9] });
+  const b = placed({ start: [-75.1, 40.05] });
+  assert.deepEqual(detourBounds([a, b]), [
+    [-75.2, 39.9],
+    [-75.1, 40.05],
+  ]);
+});
+
+test("detourBounds: a lone start point is a zero-size box", () => {
+  assert.deepEqual(detourBounds([placed({ start: [-75.1716, 39.9385] })]), [
+    [-75.1716, 39.9385],
+    [-75.1716, 39.9385],
+  ]);
+});
+
+test("detourBounds: null without geometry", () => {
+  assert.equal(detourBounds([]), null);
+  assert.equal(detourBounds([placed()]), null);
+});
+
+test("detourBounds: a rejoin alone, or a path alone, still counts", () => {
+  assert.deepEqual(detourBounds([placed({ rejoin: [-75.17, 39.93] })]), [
+    [-75.17, 39.93],
+    [-75.17, 39.93],
+  ]);
+  const path = [
+    [-75.18, 39.92],
+    [-75.17, 39.93],
+  ];
+  assert.deepEqual(detourBounds([placed({ path })]), [
+    [-75.18, 39.92],
+    [-75.17, 39.93],
+  ]);
 });

@@ -134,3 +134,42 @@ export function rejoinCollection(detail, color, now) {
   }
   return { type: "FeatureCollection", features };
 }
+
+/**
+ * The box around some detours' drawn geometry: start and rejoin points,
+ * skipped stretches, paths. For the camera (UI plan C1): a focused
+ * route's detours in effect, or one selected detour.
+ *
+ * @param {object[]} detours detour objects (route detail)
+ * @returns {[[number, number], [number, number]] | null}
+ *   `[[west, south], [east, north]]` as fitBounds takes; null when none
+ *   has any geometry (unplaced detours only, or none)
+ */
+export function detourBounds(detours) {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  const add = ([lon, lat]) => {
+    west = Math.min(west, lon);
+    south = Math.min(south, lat);
+    east = Math.max(east, lon);
+    north = Math.max(north, lat);
+  };
+  for (const detour of detours) {
+    for (const point of [detour.start_point, detour.rejoin_point]) {
+      if (point != null) {
+        add([point.lon, point.lat]);
+      }
+    }
+    for (const line of [detour.skipped, detour.path]) {
+      for (const position of line ?? []) {
+        add(position);
+      }
+    }
+  }
+  return west === Infinity ? null : [
+    [west, south],
+    [east, north],
+  ];
+}
