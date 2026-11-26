@@ -231,8 +231,8 @@ give a path, 65 rejoins, 51 stretches. Map side not yet checked by eye.
 made, facts measured, the contract's files, the JS module layout, the
 order of work, and **decisions still to confirm: ask before building
 those**). P1-P6 (Python) and W1-W6 are done (W6: check on a phone).
-Tier B is built (check the stretches by eye); its follow-ups and tier C
-are in `docs/geography-plan.md`. Next: pick from there, the web plan's
+Tiers B and C are built (check the stretches and paths by eye); their
+follow-ups are in `docs/geography-plan.md`. Next: pick from there, the web plan's
 "Later in the web part", or the backlog: ask which.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
