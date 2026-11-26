@@ -456,13 +456,25 @@ Web (plain JS):
      Overview); "Not on the map" only in the unfiltered list (blank
      search, every chip on; rejected: always shown, or searchable).
 10. **W4** (next) Focus: detail fetch + cache, map focus, panel with detour
-    cards, URL hash, Back/Escape. Move state into `state.js`. **Confirm
-    first**: D6 (ended detours in a collapsed group, or hidden); the
-    focused map styling ("network dimmed further", see "Route focused");
-    whether a focused route keeps the search/chips visible or replaces
-    the list; and how "location not found" cards look. Known gaps from
+    cards, URL hash, Back/Escape. Move state into `state.js`. Decided
+    2026-11-25: (a) D6: ended detours in a collapsed "Ended (n)" group
+    at the bottom of the panel (groups: active, upcoming, unknown, then
+    ended); (b) focused map: the network fainter still, other detoured
+    routes lose their color and their dots are hidden, the focused
+    route's shapes in color (covering thicker than short-turns) with its
+    own dots, map fits the route; (c) the route panel replaces search,
+    chips and list (status line stays); Back/Escape restores them as
+    they were; (d) an unplaced detour's card stays in its timing group
+    with a muted "Location not found on the map" line. Known gaps from
     W3 to fix with the state work: the per-minute rebuild closes opened
     "Not on the map" items and drops keyboard focus inside the list.
+    - Step 1: `state.js` (pure): the store (`subscribe`, setters) and
+      the URL hash (`parseHash`, `formatHash`).
+    - Step 2: `groupByTiming` (`detours.js`) + card text (`format.js`).
+    - Step 3: the route panel DOM (`sidebar.js`, HTML, CSS).
+    - Step 4: the focused map (`mapview.js`).
+    - Step 5: wiring (`main.js`): row/line/dot clicks focus, hash,
+      Back/Escape, the W3 gaps.
 11. **W5** Card <-> dot linking, the multi-route click chooser.
 12. **W6** Mobile bottom sheet, keyboard/a11y pass.
 
@@ -481,8 +493,8 @@ Web (plain JS):
 - **D4** (decided) Shapeless routes listed greyed. Rejected: omitted.
 - **D5** (decided) Unmatched detours in `status.json` + a "Not on the
   map" section. Rejected: only a count in the status line.
-- **D6** Ended detours shown in a collapsed "Ended" group (recommended)
-  vs. hidden.
+- **D6** (decided) Ended detours shown in a collapsed "Ended" group at
+  the bottom of the route panel. Rejected: hidden.
 - **D7** (decided, done) `export site` replaced `export detours` in W2.
 - **D8** (decided) Mode order metro, trolley, trackless, bus, rail; the
   faint network in one neutral grey (not route colors).
