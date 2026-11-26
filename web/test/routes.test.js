@@ -13,6 +13,7 @@ import {
   searchRoutes,
   timingCounts,
   visibleRoutes,
+  withRouteLabels,
 } from "../js/routes.js";
 
 /** A routes.json entry with just the fields routes.js reads. */
@@ -417,4 +418,53 @@ test("clickChoices: the same source_key on two routes is two choices", () => {
     clickChoices(dots, []).map((c) => c.key),
     ["bus-2", "bus-21"],
   );
+});
+
+// --- withRouteLabels --------------------------------------------------------
+
+/** A start dot as starts.geojson has it. */
+function startDot(key, sourceKey) {
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [-75.1716, 39.9385] },
+    properties: { key, source_key: sourceKey, color: "#1A1818", start: null, end: null },
+  };
+}
+
+test("withRouteLabels: each dot gets its route's short name", () => {
+  const routes = [
+    { key: "bus-49", short_name: "49" },
+    { key: "bus-L1_OWL", short_name: "L1 OWL" },
+  ];
+  const starts = {
+    type: "FeatureCollection",
+    features: [startDot("bus-L1_OWL", "a"), startDot("bus-49", "b"), startDot("bus-49", "c")],
+  };
+  const labelled = withRouteLabels(starts, routes);
+  assert.deepEqual(
+    labelled.features.map((f) => [f.properties.source_key, f.properties.label]),
+    [
+      ["a", "L1 OWL"],
+      ["b", "49"],
+      ["c", "49"],
+    ],
+  );
+  // Everything else is kept.
+  assert.deepEqual(labelled.features[1], {
+    ...startDot("bus-49", "b"),
+    properties: { ...startDot("bus-49", "b").properties, label: "49" },
+  });
+  assert.equal(labelled.type, "FeatureCollection");
+});
+
+test("withRouteLabels: an unknown route is labelled with its key", () => {
+  const starts = { type: "FeatureCollection", features: [startDot("bus-99", "a")] };
+  assert.equal(withRouteLabels(starts, []).features[0].properties.label, "bus-99");
+});
+
+test("withRouteLabels: the input isn't changed", () => {
+  const starts = { type: "FeatureCollection", features: [startDot("bus-49", "a")] };
+  const before = structuredClone(starts);
+  withRouteLabels(starts, [{ key: "bus-49", short_name: "49" }]);
+  assert.deepEqual(starts, before);
 });

@@ -194,3 +194,30 @@ export function clickChoices(dots, lines) {
   }
   return [...choices.values()];
 }
+
+/**
+ * A copy of a detour feature collection (starts.geojson) whose features
+ * also carry `label`: their route's short name ("49", "L1 OWL"), for the
+ * map's route-number markers (UI plan B1).
+ *
+ * A feature whose route isn't in `routes` (shouldn't happen: export
+ * checks) is labelled with its key, so it still shows. The input isn't
+ * changed.
+ *
+ * @param {{type: string, features: object[]}} collection
+ * @param {object[]} routes routes.json (`key`, `short_name`)
+ * @returns {{type: string, features: object[]}}
+ */
+export function withRouteLabels(collection, routes) {
+  const names = new Map(routes.map((route) => [route.key, route.short_name]));
+  return {
+    ...collection,
+    features: collection.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        label: names.get(feature.properties.key) ?? feature.properties.key,
+      },
+    })),
+  };
+}
