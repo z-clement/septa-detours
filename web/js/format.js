@@ -363,3 +363,20 @@ export function legendRows({ focused, zoom, detailZoom }) {
     { kind: "rejoin", text: "Back on route here" },
   ];
 }
+
+/**
+ * One step of a detour's path for its card's list (`route_steps`).
+ *
+ * The first step (`via`) is the regular route the bus is on when it
+ * turns off; the rest are turns: "Grays Ferry (regular route)",
+ * "Right on Washington". Streets as the message writes them.
+ *
+ * @param {{turn: "via" | "left" | "right", street: string}} step
+ * @returns {string}
+ */
+export function stepText({ turn, street }) {
+  if (turn === "via") {
+    return `${street} (regular route)`;
+  }
+  return `${turn === "left" ? "Left" : "Right"} on ${street}`;
+}

@@ -591,6 +591,27 @@ body {
   margin-top: 6px;
   white-space: pre-line;
 }
+/* The detour's turns, numbered. */
+.detour-card .steps {
+  margin: 6px 0 2px;
+  padding-left: 22px;
+}
+.detour-card .steps li {
+  padding: 1px 0;
+}
+/* The raw message, collapsed when the turns are listed. */
+.detour-card .original {
+  margin-top: 4px;
+  color: #444;
+}
+.detour-card .original summary {
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+}
+.detour-card .original .message {
+  margin-top: 2px;
+}
 .detour-card .issues {
   margin-top: 4px;
   color: #666;

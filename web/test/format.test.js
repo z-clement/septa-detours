@@ -21,6 +21,7 @@ import {
   rejoinText,
   routeLabel,
   statusLine,
+  stepText,
   timingHeading,
   timingSummary,
   unmatchedSummary,
@@ -477,4 +478,19 @@ test("legendRows: the threshold is the one given", () => {
     "marker",
   ]);
   assert.equal(legendRows({ focused: false, zoom: 12, detailZoom: 11 }).length, 4);
+});
+
+// --- stepText -------------------------------------------------------------------
+
+test("stepText: the route, then each turn (route 79's real message)", () => {
+  // "EB via Graysferry, Right on Washington, Right on 25th, Right on
+  // Snyder, Left on 29th, ..."
+  assert.deepEqual(
+    [
+      { turn: "via", street: "Graysferry" },
+      { turn: "right", street: "Washington" },
+      { turn: "left", street: "29th" },
+    ].map(stepText),
+    ["Graysferry (regular route)", "Right on Washington", "Left on 29th"],
+  );
 });

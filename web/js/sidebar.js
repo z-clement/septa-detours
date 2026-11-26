@@ -14,6 +14,7 @@ import {
   modeLabel,
   rejoinText,
   routeLabel,
+  stepText,
   timingHeading,
   timingSummary,
   unmatchedSummary,
@@ -215,8 +216,10 @@ export function createModeChips(container, modeOrder, onToggle) {
 }
 
 /**
- * One detour's card: where, when, why, where it's back on route (when
- * known), the raw message.
+ * One detour's card: where, when, why, the turns (when the message gives
+ * them), where it's back on route (when known), then the raw message:
+ * collapsed under "Original alert" when the turns are listed, shown
+ * when it's the only description.
  *
  * The headline is a `<button>` (the keyboard's way to select the card;
  * main.js handles clicks on the whole card through the panel).
@@ -227,9 +230,10 @@ export function createModeChips(container, modeOrder, onToggle) {
  * @param {object} detour a detour object
  * @param {object[]} directions the route detail's `directions`
  * @param {boolean} selected
+ * @param {boolean} originalOpen whether its "Original alert" was open
  * @returns {HTMLElement}
  */
-function detourCard(detour, directions, selected) {
+function detourCard(detour, directions, selected, originalOpen) {
   const card = element("article", "detour-card");
   card.dataset.sourceKey = detour.source_key;
   card.classList.toggle("selected", selected);
@@ -244,6 +248,12 @@ function detourCard(detour, directions, selected) {
     element("p", "when", `${formatTime(detour.start)} to ${formatTime(detour.end)}`),
     element("p", undefined, `Reason: ${detour.reason ?? "(none given)"}`),
   );
+  const steps = detour.route_steps;
+  if (steps.length > 0) {
+    const list = element("ol", "steps");
+    list.append(...steps.map((step) => element("li", undefined, stepText(step))));
+    card.append(list);
+  }
   const rejoin = rejoinText(detour);
   if (rejoin !== null) {
     card.append(element("p", "rejoin", rejoin));
@@ -251,7 +261,17 @@ function detourCard(detour, directions, selected) {
   if (detour.start_point === null) {
     card.append(element("p", "unplaced", "Location not found on the map"));
   }
-  card.append(element("p", "message", detour.message));
+  const message = element("p", "message", detour.message);
+  if (steps.length > 0) {
+    const original = element("details", "original");
+    original.open = originalOpen;
+    const summary = element("summary", undefined, "Original alert");
+    summary.dataset.focusId = `original:${detour.source_key}`;
+    original.append(summary, message);
+    card.append(original);
+  } else {
+    card.append(message);
+  }
   if (detour.issues.length > 0) {
     const notes = element("details", "issues");
     const list = element("ul");
@@ -341,6 +361,15 @@ export function renderRoutePanel(
   const endedWasOpen =
     container.dataset.key === route.key &&
     container.querySelector("details.timing-ended")?.open === true;
+  // Cards whose "Original alert" is open stay open across re-renders of
+  // the same route (the clock re-renders every minute).
+  const openOriginals = new Set(
+    container.dataset.key === route.key
+      ? [...container.querySelectorAll(".detour-card:has(details.original[open])")].map(
+          (card) => card.dataset.sourceKey,
+        )
+      : [],
+  );
   const focusId =
     container.dataset.key === route.key && container.contains(document.activeElement)
       ? document.activeElement.dataset.focusId
@@ -364,7 +393,12 @@ export function renderRoutePanel(
       group.append(
         ended ? summary : element("h3", "group-heading", heading),
         ...detours.map((d) =>
-          detourCard(d, detail.directions, d.source_key === selectedDetour),
+          detourCard(
+            d,
+            detail.directions,
+            d.source_key === selectedDetour,
+            openOriginals.has(d.source_key),
+          ),
         ),
       );
       if (ended) {

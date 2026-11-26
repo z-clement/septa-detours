@@ -724,3 +724,12 @@ Tests: 125 JS.
 - U7, contract 7 (2026-11-26): the detour object gains `route_steps`
   (`StepObject` list: `turn` via/left/right + `street` as written; `[]`
   when the message gives none).
+- U7, cards (2026-11-26; confirmed: steps + collapsed raw message, no
+  A/B markers): `format.stepText` (pure, tested: "Graysferry (regular
+  route)", "Right on Washington"); a card with `route_steps` lists them
+  (`ol.steps`) before "Back on route ...", and its message goes under a
+  closed "Original alert" (`details.original`, kept open across the
+  minute re-renders by `source_key`); without steps the message stays
+  in view. Page reads 7. Harness screenshot (route 79) checked. Known
+  gap until U8: daily hours ("7am - 3pm weekdays") now sit in the
+  collapsed alert.
