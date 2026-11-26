@@ -16,6 +16,17 @@ distances are within ~0.3% at Philadelphia's latitude: plenty for
 grouping, not for surveying."""
 
 
+def metres_between(p: Sequence[float], q: Sequence[float]) -> float:
+    """Approximate ground distance between two ``[lon, lat]`` points, in metres.
+
+    Equirectangular at the points' mean latitude, mean Earth radius.
+    """
+    mean_lat = math.radians((p[1] + q[1]) / 2)
+    dx = math.radians(q[0] - p[0]) * math.cos(mean_lat)
+    dy = math.radians(q[1] - p[1])
+    return EARTH_RADIUS_M * math.hypot(dx, dy)
+
+
 def distance_to_line_m(
     lon: float, lat: float, line: Sequence[Sequence[float]]
 ) -> float:

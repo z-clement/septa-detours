@@ -8,13 +8,12 @@ nodes are grouped into one ``Crossing``; far-apart groups stay separate
 for the caller to choose between (e.g. by distance to the route).
 """
 
-import math
 from collections.abc import Sequence
 from typing import NamedTuple
 
 import polars as pl
 
-from septa_detours.geo import EARTH_RADIUS_M, distance_to_line_m
+from septa_detours.geo import distance_to_line_m, metres_between
 
 CROSSING_RADIUS_M = 100.0
 """Shared nodes this close (to any node already in a group) join it.
@@ -116,7 +115,9 @@ def _group_nearby(points: list[_Point], radius_m: float) -> list[list[_Point]]:
         near = [
             group
             for group in groups
-            if any(_metres_between(point, member) <= radius_m for member in group)
+            if any(
+                metres_between(point[1:], member[1:]) <= radius_m for member in group
+            )
         ]
         merged = sorted([point, *(member for group in near for member in group)])
         groups = [group for group in groups if group not in near]
@@ -136,7 +137,7 @@ def _crossing(group: list[_Point]) -> Crossing:
         sum(lat for _, _, lat in group) / len(group),
     )
     node_id, lon, lat = min(
-        group, key=lambda point: (_metres_between(point, mean), point[0])
+        group, key=lambda point: (metres_between(point[1:], mean[1:]), point[0])
     )
     return Crossing(
         node_ids=tuple(point[0] for point in group),
@@ -144,14 +145,6 @@ def _crossing(group: list[_Point]) -> Crossing:
         lon=lon,
         lat=lat,
     )
-
-
-def _metres_between(p: _Point, q: _Point) -> float:
-    """Approximate ground distance (equirectangular, mean Earth radius)."""
-    mean_lat = math.radians((p[2] + q[2]) / 2)
-    dx = math.radians(q[1] - p[1]) * math.cos(mean_lat)
-    dy = math.radians(q[2] - p[2])
-    return EARTH_RADIUS_M * math.hypot(dx, dy)
 
 
 def crossings_near_route(

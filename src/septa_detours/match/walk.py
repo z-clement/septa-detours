@@ -11,14 +11,13 @@ carry their ``length_m``.
 """
 
 import itertools
-import math
 from collections.abc import Iterable, Sequence
 from typing import Literal
 
 import networkx as nx
 import polars as pl
 
-from septa_detours.geo import EARTH_RADIUS_M
+from septa_detours.geo import metres_between
 
 
 def street_graph(ways: pl.DataFrame, selected: pl.DataFrame) -> nx.Graph:
@@ -48,7 +47,7 @@ def street_graph(ways: pl.DataFrame, selected: pl.DataFrame) -> nx.Graph:
             zip(node_ids[1:], coordinates[1:], strict=True),
             strict=False,
         ):
-            graph.add_edge(a, b, length_m=_metres_between(a_point, b_point))
+            graph.add_edge(a, b, length_m=metres_between(a_point, b_point))
     return graph
 
 
@@ -141,19 +140,7 @@ def _point_along(points: Sequence[Sequence[float]]) -> Sequence[float]:
     """The first point at least ``TURN_LOOK_M`` along ``points``, else the last."""
     walked = 0.0
     for previous, point in itertools.pairwise(points):
-        walked += _metres_between(previous, point)
+        walked += metres_between(previous, point)
         if walked >= TURN_LOOK_M:
             return point
     return points[-1]
-
-
-def _metres_between(p: Sequence[float], q: Sequence[float]) -> float:
-    """Approximate ground distance between ``[lon, lat]`` points, in metres.
-
-    The same formula as ``crossings._metres_between`` (equirectangular,
-    mean Earth radius).
-    """
-    mean_lat = math.radians((p[1] + q[1]) / 2)
-    dx = math.radians(q[0] - p[0]) * math.cos(mean_lat)
-    dy = math.radians(q[1] - p[1])
-    return EARTH_RADIUS_M * math.hypot(dx, dy)
