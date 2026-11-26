@@ -4,13 +4,14 @@
 // (routes.js, format.js), which have the tests. Text always goes in through
 // `textContent`, never `innerHTML`, so names from the data can't inject markup.
 
-import { detourTiming, groupByTiming } from "./detours.js";
+import { detourTiming, groupByTiming, inHours } from "./detours.js";
 import { element, routeBadge } from "./dom.js";
 import {
   TIMING_WORDS,
   detourHeadline,
   directionSummary,
   formatTime,
+  hoursText,
   modeLabel,
   rejoinText,
   routeLabel,
@@ -231,9 +232,10 @@ export function createModeChips(container, modeOrder, onToggle) {
  * @param {object[]} directions the route detail's `directions`
  * @param {boolean} selected
  * @param {boolean} originalOpen whether its "Original alert" was open
+ * @param {Date} now for "not running now"
  * @returns {HTMLElement}
  */
-function detourCard(detour, directions, selected, originalOpen) {
+function detourCard(detour, directions, selected, originalOpen, now) {
   const card = element("article", "detour-card");
   card.dataset.sourceKey = detour.source_key;
   card.classList.toggle("selected", selected);
@@ -248,6 +250,14 @@ function detourCard(detour, directions, selected, originalOpen) {
     element("p", "when", `${formatTime(detour.start)} to ${formatTime(detour.end)}`),
     element("p", undefined, `Reason: ${detour.reason ?? "(none given)"}`),
   );
+  if (detour.hours !== null) {
+    // Within its dates but outside its hours: the map hides it (U8).
+    const timing = detourTiming(detour.start, detour.end, now);
+    const resting =
+      (timing === "active" || timing === "unknown") && !inHours(detour.hours, now);
+    const text = `Hours: ${hoursText(detour.hours)}`;
+    card.append(element("p", "hours", resting ? `${text} \u00b7 not running now` : text));
+  }
   const steps = detour.route_steps;
   if (steps.length > 0) {
     const list = element("ol", "steps");
@@ -398,6 +408,7 @@ export function renderRoutePanel(
             detail.directions,
             d.source_key === selectedDetour,
             openOriginals.has(d.source_key),
+            now,
           ),
         ),
       );

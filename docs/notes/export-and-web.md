@@ -747,3 +747,8 @@ Tests: 125 JS.
   now, hours)` now needs the hours too, so the map, rejoin dots and
   framing hide a detour outside them. `detours.test.js` sets
   `TZ=Asia/Tokyo` (its own process). Page reads 8.
+- U8, cards (2026-11-26): `format.hoursText` (pure, tested: "Weekdays
+  7am - 4pm", "Daily", "Mon - Wed", "Mon, Tue", 12am/12pm, `h:mm`); a
+  card with hours says "Hours: ..." after the reason, plus "not running
+  now" when within its dates but outside its hours (the map hides it
+  then). Harness screenshot: route 79 at 8 pm Thursday.

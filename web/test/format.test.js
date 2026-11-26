@@ -15,6 +15,7 @@ import {
   directionSummary,
   focusAnnouncement,
   formatTime,
+  hoursText,
   legendRows,
   modeLabel,
   plural,
@@ -492,5 +493,40 @@ test("stepText: the route, then each turn (route 79's real message)", () => {
       { turn: "left", street: "29th" },
     ].map(stepText),
     ["Graysferry (regular route)", "Right on Washington", "Left on 29th"],
+  );
+});
+
+// --- hoursText ------------------------------------------------------------------
+
+test("hoursText: real hours, as cards say them", () => {
+  const cases = [
+    // "7am - 4pm Mon thru Fri"
+    [{ days: [0, 1, 2, 3, 4], start: "07:00", end: "16:00" }, "Weekdays 7am \u2013 4pm"],
+    // "Mon - Fri 8:30am - 3pm"
+    [{ days: [0, 1, 2, 3, 4], start: "08:30", end: "15:00" }, "Weekdays 8:30am \u2013 3pm"],
+    // "7am -330pm until 11/25/26": every day
+    [{ days: [0, 1, 2, 3, 4, 5, 6], start: "07:00", end: "15:30" }, "Daily 7am \u2013 3:30pm"],
+    // "9am - 3pm, Mon & Tues"
+    [{ days: [0, 1], start: "09:00", end: "15:00" }, "Mon, Tue 9am \u2013 3pm"],
+    // "Monday thru Wednesday, 7:00PM to 5:00AM"
+    [{ days: [0, 1, 2], start: "19:00", end: "05:00" }, "Mon \u2013 Wed 7pm \u2013 5am"],
+  ];
+  for (const [hours, text] of cases) {
+    assert.equal(hoursText(hours), text);
+  }
+});
+
+test("hoursText: weekends, noon and midnight, a gap in the days", () => {
+  assert.equal(
+    hoursText({ days: [5, 6], start: "00:00", end: "12:00" }),
+    "Weekends 12am \u2013 12pm",
+  );
+  assert.equal(
+    hoursText({ days: [0, 2, 4], start: "12:05", end: "23:59" }),
+    "Mon, Wed, Fri 12:05pm \u2013 11:59pm",
+  );
+  assert.equal(
+    hoursText({ days: [3, 4, 5, 6], start: "06:00", end: "09:00" }),
+    "Thu \u2013 Sun 6am \u2013 9am",
   );
 });

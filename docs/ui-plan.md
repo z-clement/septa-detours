@@ -205,7 +205,9 @@ checked by eye with your screenshots. Rough sizes in brackets.
   start off the route; a lead-in from the route to the start point is
   logged in `geography-plan.md` (tier C follow-ups). Fit it in between
   UI steps.
-- **U8. Daily hours (E1, second half)** [large: parse windows from the
+- **U8. Daily hours (E1, second half)** (done 2026-11-26: `parse/hours.py`,
+  `DailyHours`, contract 8, map hides off-hours detours, cards say the
+  hours; not yet checked by eye) [large: parse windows from the
   message (`parse/`), model + contract changes (flagged), "running now"
   on the page]. Its own short plan first: the message formats seen,
   measured on the snapshots.

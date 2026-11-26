@@ -380,3 +380,44 @@ export function stepText({ turn, street }) {
   }
   return `${turn === "left" ? "Left" : "Right"} on ${street}`;
 }
+
+const SHORT_DAYS = Object.freeze(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+
+/** "07:00" -> "7am", "08:30" -> "8:30am", "12:00" -> "12pm", "00:00" -> "12am". */
+function clockText(hhmm) {
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  const half = hours < 12 ? "am" : "pm";
+  const hour = hours % 12 === 0 ? 12 : hours % 12;
+  return minutes === 0 ? `${hour}${half}` : `${hour}:${String(minutes).padStart(2, "0")}${half}`;
+}
+
+/** Weekdays (Monday = 0) as words: "Weekdays", "Daily", "Mon - Wed", "Mon, Tue". */
+function daysText(days) {
+  const key = days.join("");
+  if (key === "01234") {
+    return "Weekdays";
+  }
+  if (key === "56") {
+    return "Weekends";
+  }
+  if (key === "0123456") {
+    return "Daily";
+  }
+  const consecutive = days.every((day, i) => i === 0 || day === days[i - 1] + 1);
+  if (consecutive && days.length >= 3) {
+    return `${SHORT_DAYS[days[0]]} \u2013 ${SHORT_DAYS[days.at(-1)]}`;
+  }
+  return days.map((day) => SHORT_DAYS[day]).join(", ");
+}
+
+/**
+ * A detour's daily hours for its card (contract `hours`): "Weekdays 7am
+ * - 4pm", "Mon, Tue 9am - 3pm", "Mon - Wed 7pm - 5am"
+ * (overnight reads naturally). Times are SEPTA's local times.
+ *
+ * @param {{days: number[], start: string, end: string}} hours
+ * @returns {string}
+ */
+export function hoursText({ days, start, end }) {
+  return `${daysText(days)} ${clockText(start)} \u2013 ${clockText(end)}`;
+}
