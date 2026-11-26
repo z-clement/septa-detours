@@ -609,14 +609,18 @@ Tests: 125 JS.
   `skipped.geojson` (LineStrings, properties as `starts.geojson`;
   `skipped_collection`); `write.SITE_FILES` lists it. `data.js` reads
   3 and loads it. Real: 51 stretches, 456 points, 18 KB.
-- `mapview.js`: `skipped` source (`promoteId: source_key`), a white
-  casing layer then dashes (`line-dasharray [2, 1.2]`, butt caps so the
-  gaps stay open) by timing: red `#d32f2f` now, orange later, grey
-  ended; widths grow when hovered/selected. Same `line-offset` as the
-  route lines. Feature-state goes on dot and stretch alike
+- `mapview.js`: `skipped` source (`promoteId: source_key`), one
+  `skipped-fade` layer: white at `SKIPPED_FADE_OPACITY` 0.65 over the
+  route (which stays drawn whole), a bit wider than it (3 -> 8 px), butt
+  caps so the fade ends at the points; filtered to timing active/unknown
+  (an upcoming or ended stretch is served now). Replaced the first style
+  (white casing + timing-colored dashes) after review: you want the
+  regular route visible, the skipped part faded, and later the detour's
+  own path (tier C) beside it. Same `line-offset` as the route lines.
+  Feature-state goes on dot and stretch alike
   (`DETOUR_SOURCES`); a stretch click counts as a dot (`clickChoices`
   dedupes a detour's dot + stretch). Focus filters stretches to the
   route. `addLegend`: a top-left MapLibre control (route, skipped,
-  start); its red is repeated in app.css.
-- Not checked by eye yet: the drawn stretches (offset side, dash look
-  at each zoom, casing over route colors).
+  start); its fade is repeated in app.css.
+- Not checked by eye yet: the drawn stretches (offset side, how the
+  fade reads at each zoom and over dark route colors).

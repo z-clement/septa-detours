@@ -20,10 +20,9 @@ const ENDED_COLOR = "#9e9e9e";
 /** The ring around the selected detour's dot. */
 const SELECTED_RING_COLOR = "#111111";
 
-/** Skipped stretches' dashes by timing (ended uses ENDED_COLOR): red for
- * "closed now", orange for "closing later". app.css's legend repeats the red. */
-const SKIPPED_ACTIVE_COLOR = "#d32f2f";
-const SKIPPED_UPCOMING_COLOR = "#f57c00";
+/** The wash over a skipped stretch: white at this opacity leaves the route
+ * line showing at about a third of its color. app.css's legend repeats it. */
+const SKIPPED_FADE_OPACITY = 0.65;
 
 /** Rough centre of Philadelphia, [lon, lat], shown before the data arrives. */
 const PHILLY_CENTER = [-75.16, 39.95];
@@ -39,8 +38,7 @@ const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
 const FOCUS_LAYER = "focus-lines";
-const SKIPPED_CASING_LAYER = "skipped-casing";
-const SKIPPED_LAYER = "skipped-dashes";
+const SKIPPED_LAYER = "skipped-fade";
 const STARTS_LAYER = "start-dots";
 
 /** Sources whose features are detours (`key` + `source_key`): their
@@ -68,14 +66,15 @@ export function createMap(container) {
 
 /**
  * Draw the overview: the whole network faintly, detoured routes in color,
- * each detour's skipped stretch dashed over its route, and every placed
+ * the stretch each detour in effect skips faded out, and every placed
  * detour's start point on top. Returns the functions
  * that change it afterwards: `showFocus` (the overview or one focused
  * route) and the dot highlights `setHoveredDot` / `setSelectedDot`.
  *
  * Must run after the style has loaded (adding a source before then throws).
  * Layers draw in the order they're added: network, detoured, the focused
- * route (empty until one is focused), skipped stretches, dots.
+ * route (empty until one is focused), the fade over skipped stretches,
+ * dots.
  *
  * Expressions: MapLibre styles are small programs written as JSON arrays,
  * evaluated per feature. `["get", "color"]` reads a property; `coalesce`
@@ -175,55 +174,31 @@ export function addOverviewLayers(map, site) {
 
   // Hovered (a card under the pointer) or selected: bigger, and selected
   // gets a dark ring. `feature-state` is set per detour by the setters
-  // below, on its dot and its stretch alike.
+  // below, on its dot and its stretch alike (the fade doesn't use it).
   const hovered = ["boolean", ["feature-state", "hover"], false];
   const selected = ["boolean", ["feature-state", "selected"], false];
   const emphasized = ["any", hovered, selected];
 
-  // The stretch of regular route each detour skips (tier B): a white
-  // casing that knocks the route line out underneath, then dashes on top,
-  // by timing (red now, orange later, grey ended). Solid = served, dashed
-  // = skipped. Same offset as the route lines: a stretch is cut from its
-  // direction's shape, in travel order, so it lands on that side.
-  const skippedWidth = (narrow, wide) => [
-    "interpolate",
-    ["linear"],
-    ["zoom"],
-    10,
-    ["case", emphasized, narrow * 1.6, narrow],
-    16,
-    ["case", emphasized, wide * 1.6, wide],
-  ];
-  map.addLayer({
-    id: SKIPPED_CASING_LAYER,
-    type: "line",
-    source: SKIPPED_SOURCE,
-    layout: lineLayout,
-    paint: {
-      "line-color": "#ffffff",
-      "line-width": skippedWidth(3.5, 9),
-      "line-offset": offset,
-    },
-  });
+  // The stretch of regular route each detour skips (tier B), faded out:
+  // a semi-transparent white line over the route (still drawn whole
+  // underneath), a little wider than it so its edges fade too. Butt caps,
+  // so the fade ends exactly at the start and rejoin points. Same offset
+  // as the route lines: a stretch is cut from its direction's shape, in
+  // travel order, so it lands on that side.
+  //
+  // Only detours in effect (active, or unknown like the dots): an upcoming
+  // or ended detour's stretch is served right now.
+  const skippedFilter = ["match", ["get", "timing"], ["upcoming", "ended"], false, true];
   map.addLayer({
     id: SKIPPED_LAYER,
     type: "line",
     source: SKIPPED_SOURCE,
-    // Dashes need butt caps: round caps would fill the gaps in.
+    filter: skippedFilter,
     layout: { "line-cap": "butt", "line-join": "round" },
     paint: {
-      "line-color": [
-        "match",
-        ["get", "timing"],
-        "upcoming",
-        SKIPPED_UPCOMING_COLOR,
-        "ended",
-        ENDED_COLOR,
-        SKIPPED_ACTIVE_COLOR,
-      ],
-      "line-width": skippedWidth(2, 5),
-      // In line widths: dash 2, gap 1.2.
-      "line-dasharray": [2, 1.2],
+      "line-color": "#ffffff",
+      "line-opacity": SKIPPED_FADE_OPACITY,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 16, 8],
       "line-offset": offset,
     },
   });
@@ -286,8 +261,7 @@ export function addOverviewLayers(map, site) {
     map.setFilter(DETOURED_LAYER, only ?? detouredFilter);
     map.setLayoutProperty(DETOURED_LAYER, "visibility", detail === null ? "visible" : "none");
     map.setFilter(STARTS_LAYER, only);
-    map.setFilter(SKIPPED_CASING_LAYER, only);
-    map.setFilter(SKIPPED_LAYER, only);
+    map.setFilter(SKIPPED_LAYER, only === null ? skippedFilter : ["all", only, skippedFilter]);
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
   }
 

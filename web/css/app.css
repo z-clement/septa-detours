@@ -358,17 +358,19 @@ body {
   flex: none;
   width: 24px;
 }
-/* A solid route line; the skipped stretch's red dashes (mapview.js's
-   SKIPPED_ACTIVE_COLOR); a start dot (white ring, as drawn). */
+/* A solid route line; a route line with its middle faded (mapview.js's
+   white wash at SKIPPED_FADE_OPACITY: 35% of the color shows); a start dot
+   (white ring, as drawn). */
 .legend-route {
   border-top: 4px solid #333;
 }
 .legend-skipped {
   height: 4px;
-  background: repeating-linear-gradient(
+  background: linear-gradient(
     to right,
-    #d32f2f 0 8px,
-    transparent 8px 13px
+    #333 0 6px,
+    rgb(51 51 51 / 35%) 6px 18px,
+    #333 18px
   );
 }
 .legend-start {

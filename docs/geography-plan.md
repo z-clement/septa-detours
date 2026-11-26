@@ -85,9 +85,14 @@ Results and decisions made while building (tier B):
   3x its ends' distance + 100 m (drops route 97's 7.6 km for 1.9 km).
   First affected shape that gives one (lengths differ between shapes in
   5 of 51). 51 stretches, 2 m simplified: 456 points, 18 KB.
-- Map: white casing + dashes (red now, orange later, grey ended) over
-  the solid route, same offset; stretches act like dots (hover, select,
-  click); legend top left.
+- Map: the route drawn whole, its skipped stretch faded out (a white
+  wash at 65% over it, butt caps), only for detours in effect (active or
+  unknown: an upcoming or ended stretch is served now); same offset;
+  stretches click like dots; legend top left. (First tried: white
+  casing + timing-colored dashes, then dashes down the route's middle;
+  you wanted the regular route visible and the skipped part faded.)
+- Next (your choice, 2026-11-26): tier C, the detour's own path, drawn
+  in its own style next to the faded stretch.
 
 Tier B follow-ups (not built):
 - A rejoin when the last street isn't the route (98 crossings sat
