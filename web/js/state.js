@@ -5,6 +5,8 @@
 // PURE: no DOM, no `maplibregl`, no fetch (main.js reads and writes
 // `location.hash`; this module only parses and formats it).
 
+import { SHEET_START, nextSheet, raisedSheet } from "./sheet.js";
+
 /**
  * @typedef {object} State
  * @property {string | null} focus the focused route's key, or null (overview)
@@ -13,6 +15,8 @@
  * @property {string} search the search box's text
  * @property {ReadonlySet<string>} modes the modes switched on
  * @property {Date} now the time detour timing is computed at
+ * @property {string} sheet the mobile bottom sheet's height (sheet.js);
+ *   kept on wide screens too, where it does nothing
  */
 
 /**
@@ -25,7 +29,7 @@
  * nothing notifies no one.
  *
  * @param {{modes: Iterable<string>, now: Date}} initial every mode starts on;
- *   no route focused, blank search
+ *   no route focused, blank search, the sheet at `SHEET_START`
  * @returns {{
  *   get: () => State,
  *   subscribe: (listener: (state: State, changed: Set<string>) => void) => () => void,
@@ -33,6 +37,8 @@
  *   setSearch: (text: string) => void,
  *   toggleMode: (mode: string) => void,
  *   setNow: (now: Date) => void,
+ *   cycleSheet: () => void,
+ *   raiseSheet: (atLeast: string) => void,
  * }}
  */
 export function createState({ modes, now }) {
@@ -42,6 +48,7 @@ export function createState({ modes, now }) {
     search: "",
     modes: new Set(modes),
     now,
+    sheet: SHEET_START,
   });
   const listeners = new Set();
 
@@ -89,6 +96,14 @@ export function createState({ modes, now }) {
       if (date.getTime() !== state.now.getTime()) {
         update({ now: date });
       }
+    },
+    // The sheet's handle: the next height in tap order.
+    cycleSheet() {
+      update({ sheet: nextSheet(state.sheet) });
+    },
+    // Make room for something (a focused route, the search box); never lowers.
+    raiseSheet(atLeast) {
+      update({ sheet: raisedSheet(state.sheet, atLeast) });
     },
   };
 }

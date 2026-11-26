@@ -20,7 +20,7 @@ test("createState starts on the overview with every mode on", () => {
   const state = createState({ modes: MODES, now: NOW }).get();
   assert.deepEqual(
     { ...state, modes: [...state.modes] },
-    { focus: null, selectedDetour: null, search: "", modes: MODES, now: NOW },
+    { focus: null, selectedDetour: null, search: "", modes: MODES, now: NOW, sheet: "half" },
   );
   assert.ok(Object.isFrozen(state));
 });
@@ -98,6 +98,30 @@ test("toggleMode switches a mode off and on with a new Set each time", () => {
     calls.map(([changed]) => changed),
     [["modes"], ["modes"]],
   );
+});
+
+test("cycleSheet steps half -> full -> peek -> half, notifying sheet", () => {
+  const { store, calls } = recorded();
+  const seen = [];
+  for (let i = 0; i < 3; i += 1) {
+    store.cycleSheet();
+    seen.push(store.get().sheet);
+  }
+  assert.deepEqual(seen, ["full", "peek", "half"]);
+  assert.deepEqual(
+    calls.map(([changed]) => changed),
+    [["sheet"], ["sheet"], ["sheet"]],
+  );
+});
+
+test("raiseSheet raises, and a raise that doesn't change it notifies no one", () => {
+  const { store, calls } = recorded();
+  store.raiseSheet("half"); // already half
+  store.raiseSheet("peek"); // never lowers
+  assert.equal(calls.length, 0);
+  store.raiseSheet("full");
+  assert.equal(store.get().sheet, "full");
+  assert.deepEqual(calls[0][0], ["sheet"]);
 });
 
 test("every snapshot is frozen and earlier ones don't change", () => {
