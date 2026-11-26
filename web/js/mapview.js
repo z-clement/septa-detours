@@ -17,6 +17,10 @@ const NETWORK_COLOR = "#9aa0a6";
 /** Start dots of detours that have ended. */
 const ENDED_COLOR = "#9e9e9e";
 
+/** The ring around a rejoin dot: dark, so it reads as an end, unlike the
+ * start dots' white ring. app.css's legend repeats it. */
+const REJOIN_RING_COLOR = "#333333";
+
 /** The ring around the selected detour's dot. */
 const SELECTED_RING_COLOR = "#111111";
 
@@ -35,6 +39,7 @@ const NETWORK_SOURCE = "network";
 const STARTS_SOURCE = "starts";
 const SKIPPED_SOURCE = "skipped";
 const PATHS_SOURCE = "paths";
+const REJOINS_SOURCE = "rejoins";
 const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
@@ -42,11 +47,12 @@ const FOCUS_LAYER = "focus-lines";
 const SKIPPED_LAYER = "skipped-fade";
 const PATH_CASING_LAYER = "path-casing";
 const PATH_LAYER = "path-dashes";
+const REJOIN_LAYER = "rejoin-dots";
 const STARTS_LAYER = "start-dots";
 
 /** Sources whose features are detours (`key` + `source_key`): their
  * hover/selected feature-state goes on both. */
-const DETOUR_SOURCES = [STARTS_SOURCE, SKIPPED_SOURCE, PATHS_SOURCE];
+const DETOUR_SOURCES = [STARTS_SOURCE, SKIPPED_SOURCE, PATHS_SOURCE, REJOINS_SOURCE];
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
@@ -78,7 +84,7 @@ export function createMap(container) {
  * Must run after the style has loaded (adding a source before then throws).
  * Layers draw in the order they're added: network, detoured, the focused
  * route (empty until one is focused), the fade over skipped stretches,
- * detour paths, dots.
+ * detour paths, the focused route's rejoin dots, start dots.
  *
  * Expressions: MapLibre styles are small programs written as JSON arrays,
  * evaluated per feature. `["get", "color"]` reads a property; `coalesce`
@@ -122,6 +128,11 @@ export function addOverviewLayers(map, site) {
     promoteId: "source_key",
   });
   map.addSource(FOCUS_SOURCE, { type: "geojson", data: EMPTY_COLLECTION });
+  map.addSource(REJOINS_SOURCE, {
+    type: "geojson",
+    data: EMPTY_COLLECTION,
+    promoteId: "source_key",
+  });
 
   const routeColor = ["coalesce", ["get", "color"], FALLBACK_COLOR];
   const offset = ["interpolate", ["linear"], ["zoom"], 10, 1, 16, 4];
@@ -253,6 +264,30 @@ export function addOverviewLayers(map, site) {
     },
   });
 
+  // Where each of the focused route's detours in effect is back on route
+  // (`rejoinCollection`; empty on the overview): smaller than a start dot,
+  // route color with a dark ring, so start and end read apart. Bigger
+  // when hovered or selected, like its start dot.
+  map.addLayer({
+    id: REJOIN_LAYER,
+    type: "circle",
+    source: REJOINS_SOURCE,
+    paint: {
+      "circle-color": routeColor,
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        ["case", emphasized, 5, 3],
+        16,
+        ["case", emphasized, 9, 6],
+      ],
+      "circle-stroke-color": REJOIN_RING_COLOR,
+      "circle-stroke-width": 2,
+    },
+  });
+
   // Styled by `timing` (computed at export time; the page will recompute
   // it in W3): active solid in the route color, upcoming hollow (white
   // fill, route-color ring), ended grey. `unknown` looks like active.
@@ -294,11 +329,13 @@ export function addOverviewLayers(map, site) {
    * Show the overview (`null`) or one focused route.
    *
    * Focused: the network fainter, other routes' colored lines and dots
-   * hidden, the route's own dots kept. Its shapes come from `detail`;
+   * hidden, the route's own dots kept, its rejoin dots shown
+   * (`rejoins`, built from `detail`). Its shapes come from `detail`;
    * while that's loading (null), its network lines stay in color so the
    * route doesn't vanish meanwhile. Doesn't move the camera (`fitRoute`).
    *
-   * @param {{key: string, detail: object | null} | null} focus
+   * @param {{key: string, detail: object | null, rejoins: object | null} | null} focus
+   *   `rejoins`: `rejoinCollection`'s, null while the detail loads
    */
   function showFocus(focus) {
     const only = focus === null ? null : ["==", ["get", "key"], focus.key];
@@ -316,6 +353,7 @@ export function addOverviewLayers(map, site) {
       map.setFilter(layer, detourFilter);
     }
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
+    map.getSource(REJOINS_SOURCE).setData(focus?.rejoins ?? EMPTY_COLLECTION);
   }
 
   return {
@@ -327,7 +365,7 @@ export function addOverviewLayers(map, site) {
 
 /**
  * A setter that puts feature-state `name` on one detour at a time: its
- * start dot, skipped stretch and path (`DETOUR_SOURCES`).
+ * start dot, skipped stretch, path and rejoin dot (`DETOUR_SOURCES`).
  *
  * Each call clears it from the previous detour. A key with no dot or no
  * stretch just clears: feature-state on a missing id is ignored.
@@ -406,6 +444,7 @@ export function addLegend(map) {
     row("legend-skipped", "Skipped by a detour"),
     row("legend-path", "Detour path"),
     row("legend-start", "Detour starts here"),
+    row("legend-rejoin", "Back on route here"),
   );
   map.addControl(
     {
@@ -493,7 +532,7 @@ export function addClickHandler(map, routes, loadDetail, onFocus) {
     // A skipped stretch or a path is a detour too (key + source_key): it
     // counts as a dot, selecting its detour.
     const dots = map.queryRenderedFeatures(event.point, {
-      layers: [STARTS_LAYER, SKIPPED_LAYER, PATH_LAYER],
+      layers: [STARTS_LAYER, REJOIN_LAYER, SKIPPED_LAYER, PATH_LAYER],
     });
     const lines =
       dots.length > 0
@@ -517,7 +556,14 @@ export function addClickHandler(map, routes, loadDetail, onFocus) {
       .addTo(map);
   });
 
-  for (const layerId of [NETWORK_LAYER, DETOURED_LAYER, SKIPPED_LAYER, PATH_LAYER, STARTS_LAYER]) {
+  for (const layerId of [
+    NETWORK_LAYER,
+    DETOURED_LAYER,
+    SKIPPED_LAYER,
+    PATH_LAYER,
+    REJOIN_LAYER,
+    STARTS_LAYER,
+  ]) {
     map.on("mouseenter", layerId, () => {
       map.getCanvas().style.cursor = "pointer";
     });

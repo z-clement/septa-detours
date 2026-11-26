@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { TIMING_ORDER, detourTiming, groupByTiming } from "../js/detours.js";
+import { TIMING_ORDER, detourTiming, groupByTiming, rejoinCollection } from "../js/detours.js";
 
 // Route 2's real window (its first routes.json window), Philadelphia time;
 // the same cases as Python's test_detour_timing. "now" values are in UTC,
@@ -132,4 +132,50 @@ test("groupByTiming: leaves out empty groups; none for no detours", () => {
 test("TIMING_ORDER covers every detourTiming result, ended last", () => {
   assert.deepEqual(TIMING_ORDER, ["active", "upcoming", "unknown", "ended"]);
   assert.ok(Object.isFrozen(TIMING_ORDER));
+});
+
+// --- rejoinCollection ---------------------------------------------------------
+
+/** A detour with a rejoin point at `[lon, lat]` (or none: null). */
+function rejoining(sourceKey, start, end, lonLat) {
+  const point = lonLat === null ? null : { lon: lonLat[0], lat: lonLat[1], node_id: 1 };
+  return { ...detour(sourceKey, start, end), rejoin_point: point };
+}
+
+function rejoinFeature(sourceKey, lon, lat, color) {
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [lon, lat] },
+    properties: { key: "bus-2", source_key: sourceKey, color },
+  };
+}
+
+test("rejoinCollection: detours in effect with a rejoin, snapshot order", () => {
+  // Route 2's Passyunk & 17th, and points beside it.
+  const detail = {
+    key: "bus-2",
+    detours: [
+      rejoining("unknown-1", START, null, [-75.17462, 39.92456]),
+      rejoining("ended-1", "2026-11-01T00:00:00-05:00", "2026-11-20T00:00:00-05:00", [-75.1, 39.9]),
+      rejoining("active-none", START, END, null),
+      rejoining("upcoming-1", "2026-12-01T00:00:00-05:00", "2026-12-02T00:00:00-05:00", [-75.2, 39.8]),
+      rejoining("active-1", START, END, [-75.16963, 39.937]),
+    ],
+  };
+  assert.deepEqual(rejoinCollection(detail, "#1A1818", NOW), {
+    type: "FeatureCollection",
+    features: [
+      rejoinFeature("unknown-1", -75.17462, 39.92456, "#1A1818"),
+      rejoinFeature("active-1", -75.16963, 39.937, "#1A1818"),
+    ],
+  });
+});
+
+test("rejoinCollection: none, and a null color passes through", () => {
+  assert.deepEqual(rejoinCollection({ key: "bus-2", detours: [] }, null, NOW), {
+    type: "FeatureCollection",
+    features: [],
+  });
+  const detail = { key: "bus-2", detours: [rejoining("a", START, END, [-75.17, 39.93])] };
+  assert.equal(rejoinCollection(detail, null, NOW).features[0].properties.color, null);
 });

@@ -5,6 +5,7 @@
 // `maplibregl` exists for mapview.js).
 
 import { loadSite, routeDetailLoader } from "./data.js";
+import { rejoinCollection } from "./detours.js";
 import { focusAnnouncement, statusLine } from "./format.js";
 import {
   addClickHandler,
@@ -156,7 +157,11 @@ async function main() {
   let loaded = { key: null, detail: null, error: null };
   const renderFocus = (state) => {
     const detail = loaded.key === state.focus ? loaded.detail : null;
-    showFocus(state.focus === null ? null : { key: state.focus, detail });
+    const rejoins =
+      detail === null
+        ? null
+        : rejoinCollection(detail, routesByKey.get(state.focus)?.color ?? null, state.now);
+    showFocus(state.focus === null ? null : { key: state.focus, detail, rejoins });
     if (state.focus !== null) {
       renderRoutePanel(panelElement, {
         route: routesByKey.get(state.focus),

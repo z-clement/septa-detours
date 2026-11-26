@@ -650,3 +650,11 @@ Tests: 125 JS.
 - Card (2026-11-26): `format.rejoinText` ("Back on route at A & B" /
   "via A" / `null`: no line) after the reason. Checked in the harness on
   real route 124 (both kinds).
+- Rejoin dots (2026-11-26; your choices: focused route only, a small
+  end dot): `detours.rejoinCollection(detail, color, now)` (pure:
+  in-effect detours with a `rejoin_point`, page-time timing like the
+  cards) -> `showFocus({..., rejoins})` -> `rejoins` source (in
+  `DETOUR_SOURCES`) + `rejoin-dots` layer (route color, `#333` ring,
+  3-6 px, x~1.6 when emphasized), under the start dots; clickable like
+  a dot. Legend row "Back on route here" (harness checked). Map side not
+  checked by eye.

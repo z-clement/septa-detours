@@ -395,6 +395,15 @@ body {
   background: #333;
   box-shadow: 0 0 0 1px #999;
 }
+.legend-rejoin {
+  box-sizing: border-box; /* 10 px with its border; + margins = 24 px */
+  width: 10px;
+  height: 10px;
+  margin: 0 7px;
+  border: 2px solid #333; /* mapview.js's REJOIN_RING_COLOR */
+  border-radius: 50%;
+  background: #888; /* stands for the route color; lighter, so the ring shows */
+}
 
 /* --- The route panel ---------------------------------------------------- */
 

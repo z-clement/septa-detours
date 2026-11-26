@@ -69,3 +69,35 @@ export function groupByTiming(detours, now) {
     detours: groups.get(timing),
   }));
 }
+
+/**
+ * The focused route's rejoin points, for the map: where each detour in
+ * effect gets back on its route.
+ *
+ * In effect = `detourTiming` "active" or "unknown", the same rule as the
+ * map's fade and paths (upcoming and ended detours aren't driven now).
+ * Detours without a `rejoin_point` are left out. Feature properties:
+ * `key` (the route), `source_key` (the detour: the map's feature id, as
+ * for start dots), `color` (the route's, or null).
+ *
+ * @param {object} detail a route detail file (`key`, `detours`)
+ * @param {string | null} color the route's color (routes.json)
+ * @param {Date} now
+ * @returns {{type: "FeatureCollection", features: object[]}}
+ */
+export function rejoinCollection(detail, color, now) {
+  const features = [];
+  for (const detour of detail.detours) {
+    const point = detour.rejoin_point;
+    const timing = detourTiming(detour.start, detour.end, now);
+    if (point === null || timing === "upcoming" || timing === "ended") {
+      continue;
+    }
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [point.lon, point.lat] },
+      properties: { key: detail.key, source_key: detour.source_key, color },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}

@@ -102,8 +102,9 @@ Tier B follow-ups (not built):
   the start crossing itself (two-step paths like "via Harbison, Right
   on Frankford"): maybe "the route between start and the next crossing
   of the last street" (tier C territory).
-- Show the rejoin on the focused map and name it on the card ("Back on
-  route at Passyunk & 17th": the steps' last two streets).
+- ~~Show the rejoin on the focused map and name it on the card~~ (done
+  2026-11-26: `RouteMatch.rejoin_by`, contract 5 `rejoin_streets`, "Back
+  on route at A & B" / "via A", a small end dot on the focused map).
 
 ## Tier C (started 2026-11-26)
 
