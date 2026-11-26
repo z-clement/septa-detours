@@ -10,7 +10,7 @@ which runs diagonally).
 import polars as pl
 import pytest
 
-from septa_detours.match.path import Leg, walk_turns
+from septa_detours.match.path import Leg, walk_to_route, walk_turns
 from septa_detours.match.streets import street_key_table
 from septa_detours.model import Step, Turn
 from septa_detours.streets.load import STREET_WAYS_SCHEMA
@@ -206,3 +206,79 @@ def test_a_turn_that_cant_be_told_is_accepted() -> None:
     legs, corner = result
     assert [leg.nodes for leg in legs] == [(START,), (START, node(1, -1))]
     assert corner == frozenset({node(1, -1)})
+
+
+# walk_to_route. Route lines as [lon, lat] lists, along grid streets.
+ON_17TH = [list(point(0, 2)), list(point(0, -2))]
+ON_BROAD = [list(point(2, 2)), list(point(2, -2))]
+
+
+def test_known_rejoin_at_the_corner_is_a_one_node_leg() -> None:
+    # Route 2: "..., Right on Reed, Left on 17th": back on 17th at Reed.
+    rejoin = node(0, -1)
+    assert walk_to_route(ROUTE_2, {rejoin}, GRID, KEYS, [ON_17TH], rejoin) == leg(
+        "17th", (0, -1)
+    )
+
+
+def test_known_rejoin_further_along_the_last_street() -> None:
+    assert walk_to_route(
+        ROUTE_2, {node(0, -1)}, GRID, KEYS, [ON_17TH], node(0, -2)
+    ) == leg("17th", (0, -1), (0, -2))
+
+
+def test_known_rejoin_off_the_last_street_is_no_leg() -> None:
+    assert (
+        walk_to_route(ROUTE_2, {node(0, -1)}, GRID, KEYS, [ON_17TH], node(2, -1))
+        is None
+    )
+
+
+# Route on Broad; the detour comes down 17th and turns onto Reed, which
+# isn't the route: Reed is walked east until it's back on Broad.
+VIA_BROAD = steps(
+    ("via", "Broad"), ("right", "Washington"), ("left", "17th"), ("left", "Reed")
+)
+
+
+def test_no_rejoin_walks_the_last_street_back_to_the_route() -> None:
+    assert walk_to_route(VIA_BROAD, {node(0, -1)}, GRID, KEYS, [ON_BROAD], None) == leg(
+        "Reed", (0, -1), (1, -1), (2, -1)
+    )
+
+
+def test_no_rejoin_the_route_counts_within_the_rejoin_radius() -> None:
+    # A line 0.0002 deg (~17 m) east of Broad: Broad's nodes are in reach.
+    near = [[lon + 0.0002, lat] for lon, lat in ON_BROAD]
+    assert walk_to_route(VIA_BROAD, {node(0, -1)}, GRID, KEYS, [near], None) == leg(
+        "Reed", (0, -1), (1, -1), (2, -1)
+    )
+    # ~51 m east (0.0006 deg): out of reach, and so is x=3 (~34 m beyond).
+    far = [[lon + 0.0006, lat] for lon, lat in ON_BROAD]
+    assert walk_to_route(VIA_BROAD, {node(0, -1)}, GRID, KEYS, [far], None) is None
+
+
+def test_no_rejoin_any_line_will_do() -> None:
+    assert walk_to_route(
+        VIA_BROAD, {node(0, -1)}, GRID, KEYS, [ON_17TH[:1] * 2, ON_BROAD], None
+    ) == leg("Reed", (0, -1), (1, -1), (2, -1))
+
+
+def test_no_rejoin_and_no_lines_is_no_leg() -> None:
+    assert walk_to_route(VIA_BROAD, {node(0, -1)}, GRID, KEYS, [], None) is None
+
+
+def test_no_rejoin_from_a_corner_on_the_route_is_no_leg() -> None:
+    # "via 17th, Left on Washington": the corner is on 17th, the route; where
+    # the bus gets back on isn't said. (Washington meets 17th only there.)
+    path = steps(("via", "17th"), ("left", "Washington"))
+    assert walk_to_route(path, {START}, GRID, KEYS, [ON_17TH], None) is None
+    # Even when the street reaches the route again further on.
+    assert walk_to_route(path, {START}, GRID, KEYS, [ON_17TH, ON_BROAD], None) is None
+
+
+def test_corner_may_be_any_iterable() -> None:
+    corner = (n for n in [node(0, -1)])
+    assert walk_to_route(VIA_BROAD, corner, GRID, KEYS, [ON_BROAD], None) == leg(
+        "Reed", (0, -1), (1, -1), (2, -1)
+    )

@@ -305,3 +305,15 @@ The mutation runner is now a scratch script taking a mutations file
   isn't checked there. Tests: a grid (17th/Broad x Washington/Reed),
   plus a slip road (a wide crossing: the next leg starts from its
   nearer node) and a diagonal Passyunk (a one-node leg).
+- `path.walk_to_route(steps, corner, ways, keys, lines, rejoin_node)`
+  (step 3c): the last street from `corner`. Known rejoin: the walk must
+  end on it (usually a one-node leg: tier B's rejoin is the last two
+  streets' crossing, i.e. the corner). None: to the nearest node within
+  `REJOIN_RADIUS_M` of the affected lines (the extension you chose), but
+  **no leg when the corner is itself that near** (decided from real
+  data, `121123Z`: of 30 walks without a rejoin, 23 corners sit 89-462 m
+  off the route, 6 within 30 m, 5 of those two-street paths like "via
+  Harbison ave, Right on Frankford", where the message doesn't say where
+  the bus gets back on). First tried "near nodes not connected to the
+  corner through near nodes": wrong with sparse OSM nodes (two near
+  nodes joined by a 111 m edge that leaves the route).
