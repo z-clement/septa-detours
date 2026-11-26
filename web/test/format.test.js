@@ -13,6 +13,7 @@ import {
   detourHeadline,
   detourPlaces,
   directionLabel,
+  directionSummary,
   formatTime,
   modeLabel,
   plural,
@@ -359,6 +360,11 @@ test("directionLabel: falls back to the API's text, then null", () => {
   assert.equal(directionLabel({ ...BUS_2_SB, direction_id: 7 }, BUS_2_DIRECTIONS), "SB");
   assert.equal(directionLabel(BUS_2_SB, []), "SB");
   assert.equal(
+    directionLabel(BUS_2_SB, [{ direction_id: 0, name: null, destination: null }]),
+    "SB",
+    "a direction without a name",
+  );
+  assert.equal(
     directionLabel({ ...BUS_2_SB, direction: null, direction_id: null }, BUS_2_DIRECTIONS),
     null,
   );
@@ -385,4 +391,14 @@ test("timingHeading: each group's heading with its count", () => {
     ],
     ["In effect (2)", "Upcoming (1)", "Dates unknown (3)", "Ended (9)"],
   );
+});
+
+test("directionSummary: name to destination; either may be missing", () => {
+  assert.equal(directionSummary(BUS_2_DIRECTIONS[0]), "Southbound to 20th-Johnston");
+  assert.equal(directionSummary({ ...BUS_2_DIRECTIONS[1], destination: null }), "Northbound");
+  assert.equal(
+    directionSummary({ ...BUS_2_DIRECTIONS[1], name: null }),
+    "Direction 1 to Pulaski-Hunting Park",
+  );
+  assert.equal(directionSummary({ direction_id: 0, name: null, destination: null }), "Direction 0");
 });

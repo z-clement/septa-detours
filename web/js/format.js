@@ -204,18 +204,33 @@ export function unmatchedSummary(detour) {
  * A detour's direction as the route names it: "Southbound".
  *
  * Looked up by `direction_id` in the route detail's `directions`. When
- * that's null (match couldn't tell, or its shapes disagree) or not in the
- * list, the API's own text is shown ("EB"); null when there's neither.
+ * that's null (match couldn't tell, or its shapes disagree), not in the
+ * list, or has no name, the API's own text is shown ("EB"); null when
+ * there's neither.
  *
  * @param {object} detour a detour object
- * @param {{direction_id: number, name: string}[]} directions the route
- *   detail's `directions`
+ * @param {{direction_id: number, name: string | null}[]} directions the
+ *   route detail's `directions`
  * @returns {string | null}
  */
 export function directionLabel(detour, directions) {
   // A null direction_id finds nothing: directions' ids are always 0 or 1.
   const named = directions.find((d) => d.direction_id === detour.direction_id);
-  return named === undefined ? detour.direction : named.name;
+  return named?.name ?? detour.direction;
+}
+
+/**
+ * One direction for the route panel's header: "Southbound to 20th-Johnston".
+ *
+ * Just the name without a destination; "Direction 0" without a name
+ * (the contract allows nulls; today's data has none).
+ *
+ * @param {{direction_id: number, name: string | null, destination: string | null}} direction
+ * @returns {string}
+ */
+export function directionSummary({ direction_id: id, name, destination }) {
+  const label = name ?? `Direction ${id}`;
+  return destination === null ? label : `${label} to ${destination}`;
 }
 
 /**

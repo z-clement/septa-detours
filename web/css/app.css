@@ -32,6 +32,24 @@ body {
   flex: 1; /* everything the sidebar doesn't use */
 }
 
+/* The `hidden` attribute is only a browser default (display: none), which
+   any `display` rule here would beat; make it always win. */
+[hidden] {
+  display: none !important;
+}
+
+/* The two views below the status line (main.js shows one): the browse
+   column (search, chips, list) and the route panel. Both fill the rest
+   of the sidebar; `min-height: 0` lets them shrink so their insides
+   scroll (see #route-list). */
+#browse,
+#route-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Error banner over the map. `:empty` hides it until showError()
    puts text in it, so no JS is needed to toggle visibility. */
 #error {
@@ -150,7 +168,7 @@ body {
 
 /* The defaults here are the fallback for a null color/text_color; the
    route's own colors are set inline by sidebar.js when present. */
-.route-row .badge {
+.badge {
   flex: none;
   min-width: 2.6em;
   padding: 1px 5px;
@@ -209,6 +227,112 @@ body {
 /* Routes without shapes (D4): listed, but greyed. */
 .route-row.no-shapes {
   opacity: 0.5;
+}
+
+/* --- The route panel ---------------------------------------------------- */
+
+.panel-header {
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+}
+.panel-header .back {
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: #1a4fd6;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.panel-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+  font-size: 16px;
+}
+.panel-header .directions {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #555;
+  font-size: 12px;
+}
+
+/* The scrolling part, like #route-list. */
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.panel-note {
+  margin: 12px;
+  color: #777;
+}
+.panel-note.error {
+  color: #b00020;
+  white-space: pre-line;
+}
+
+/* Group headings look like the list's section headings. */
+.timing-group .group-heading,
+.timing-group > summary {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 8px 12px 4px;
+  background: #f4f4f4;
+  color: #444;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.timing-group > summary {
+  cursor: pointer;
+}
+.timing-ended .detour-card {
+  color: #666;
+}
+
+.detour-card {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+}
+.detour-card.selected {
+  background: #fff7d6;
+}
+.detour-card h3 {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+.detour-card p {
+  margin: 2px 0;
+}
+.detour-card .when {
+  color: #555;
+}
+.detour-card .unplaced {
+  color: #8a6d00;
+  font-style: italic;
+}
+.detour-card .message {
+  margin-top: 6px;
+  white-space: pre-line;
+}
+.detour-card .issues {
+  margin-top: 4px;
+  color: #777;
+  font-size: 12px;
+}
+.detour-card .issues summary {
+  cursor: pointer;
+}
+.detour-card .issues ul {
+  margin: 2px 0;
+  padding-left: 18px;
 }
 
 /* Popup text keeps its line breaks (describeStart joins with \n). */
