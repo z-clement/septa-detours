@@ -458,7 +458,7 @@ Web (plain JS):
      by timing ("3 now, 4 later", not a total); search ranking (see
      Overview); "Not on the map" only in the unfiltered list (blank
      search, every chip on; rejected: always shown, or searchable).
-10. **W4** (built; map side to check by eye) Focus: detail fetch + cache, map focus, panel with detour
+10. **W4** (done) Focus: detail fetch + cache, map focus, panel with detour
     cards, URL hash, Back/Escape. Move state into `state.js`. Decided
     2026-11-25: (a) D6: ended detours in a collapsed "Ended (n)" group
     at the bottom of the panel (groups: active, upcoming, unknown, then
@@ -478,7 +478,7 @@ Web (plain JS):
     - Step 4 (done): the focused map (`mapview.js`).
     - Step 5 (done): wiring (`main.js`): row/line/dot clicks focus, hash,
       Back/Escape, the W3 gaps.
-11. **W5** (next) Card <-> dot linking, the multi-route click chooser.
+11. **W5** (built; map side to check by eye) Card <-> dot linking, the multi-route click chooser.
     Decided 2026-11-25: (a) hovering a card highlights its dot; clicking
     a card selects it (highlighted card, selected dot style, URL hash)
     and pans the map to its dot only if it's off screen, no zoom
@@ -488,12 +488,12 @@ Web (plain JS):
     badge + headline, from the route files); only lines give one button
     per route (badge + name); a button focuses that route (and selects
     that detour). Every hit on one route focuses it directly (as W4).
-    - Step 1: `clickChoices` (pure, `routes.js`).
-    - Step 2: the chooser popup (DOM), replacing the text popups.
-    - Step 3: dot states (hover, selected) on the map.
-    - Step 4: cards: hover/click/keyboard, scroll to the selected card,
+    - Step 1 (done): `clickChoices` (pure, `routes.js`).
+    - Step 2 (done): the chooser popup (DOM), replacing the text popups.
+    - Step 3 (done): dot states (hover, selected) on the map.
+    - Step 4 (done): cards: hover/click/keyboard, scroll to the selected card,
       pan to its dot.
-12. **W6** Mobile bottom sheet, keyboard/a11y pass.
+12. **W6** (next) Mobile bottom sheet, keyboard/a11y pass.
 
 ## Decisions to confirm (with recommendations)
 

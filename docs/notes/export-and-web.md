@@ -519,3 +519,43 @@ step without review (allowed for this session).
   it renders before the screenshot's `load`). The map side (focus
   styling, clicks, Back) still needs a look in a real browser.
 Tests: 107 JS.
+
+## W5: card <-> dot linking, the chooser (2026-11-25)
+
+Decided first (yours): clicking a card selects it and pans to its dot
+only if off screen (no zoom); the chooser gives one button per detour
+when dots were hit, else one per route. Also yours, for later: detoured
+lines in a different line style (in `web-plan.md`'s "Later").
+
+- Found: `source_key` collides for direction twins (route L1 OWL's EB/WB
+  stop closures at 5th & Market share `a08563ebaa011c5d`; 1 pair in 134
+  dots). Parse's decision, so not changed: logged in `backlog.md`. The
+  page tolerates it (one chooser choice, one dot; selecting highlights
+  both cards).
+- `routes.js`: `clickChoices(dots, lines)` (pure, tested): dots win;
+  one choice per `(key, source_key)` (JSON-keyed), else per route.
+  Mutations: two survivors were `has` checks made dead by `Map.set`
+  keeping first position, so they were removed.
+- `format.js`: `choiceText(choice, route, detail)`; `describeDetour`,
+  `describeRoute` (and `mapview`'s `describeDots`) removed with their
+  tests, unused once the chooser replaced the text popups. `plural`
+  kept (own tests, general).
+- `dom.js` (new, DOM): `element`, `routeBadge`, moved from `sidebar.js`
+  for the chooser.
+- `mapview.js`: the chooser popup (`setDOMContent`, buttons; detour
+  headlines fill in as route files load; a new click closes the old
+  popup). The starts source has `promoteId: "source_key"`; dots grow
+  when `hover`/`selected` and get a dark ring when selected (the state
+  goes inside each `interpolate` stop: `zoom` must be its input).
+  `addOverviewLayers` returns `{showFocus, setHoveredDot,
+  setSelectedDot}`; `panToDot` pans only when off screen.
+- `sidebar.js`: a card's headline is a `<button aria-pressed>`.
+  `main.js` delegates on the panel: click selects (not inside "Parser
+  notes"), `mouseover`/`mouseleave` drive the hovered dot (cleared on
+  focus change: removed cards fire no `mouseleave`). On a selection
+  change: dot state, `scrollIntoView({block: "nearest"})` (again when a
+  shared link's detail arrives), and a pan only when the route didn't
+  change too (a new route was just fitted).
+- Checked: chooser and panel DOM in the scratch harness; the map side
+  needs a real browser.
+Tests: 111 JS.
