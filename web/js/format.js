@@ -165,15 +165,17 @@ export function apiRouteName(apiRouteId) {
 /**
  * Where a detour runs: "17th & Washington to 17th & Mifflin".
  *
- * A missing location leaves out its half ("17th & Washington", or "to
- * 17th & Mifflin"); none at all says "location not given".
+ * The same place at both ends (a stop closure: "Market & Schuylkill Ave"
+ * twice) is said once. A missing location leaves out its half ("17th &
+ * Washington", or "to 17th & Mifflin"); none at all says "location not
+ * given".
  *
  * @param {object} detour a detour object
  * @returns {string}
  */
 export function detourPlaces(detour) {
   const { location_start: from, location_end: to } = detour;
-  if (from !== null && to !== null) {
+  if (from !== null && to !== null && from !== to) {
     return `${from} to ${to}`;
   }
   if (from !== null) {

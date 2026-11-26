@@ -346,6 +346,16 @@ test("detourPlaces: both, one, or neither location", () => {
   );
 });
 
+test("detourPlaces: the same place at both ends is said once", () => {
+  // Route 49's real stop closure.
+  const closure = {
+    ...BUS_2_SB,
+    location_start: "Market & Schuylkill Ave",
+    location_end: "Market & Schuylkill Ave",
+  };
+  assert.equal(detourPlaces(closure), "Market & Schuylkill Ave");
+});
+
 test("directionLabel: the route's name for direction_id, not the API's text", () => {
   assert.equal(directionLabel(BUS_2_SB, BUS_2_DIRECTIONS), "Southbound");
   // direction_id 1 with a mismatched API word: the id wins.
