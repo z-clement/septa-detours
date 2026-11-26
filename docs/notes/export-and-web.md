@@ -721,3 +721,6 @@ Tests: 125 JS.
   swatches: route-focused, skipped-focused, arrows. All five states
   screenshot-checked (a static page built in Node from `legendRows`: a
   module-script harness page screenshotted blank this time).
+- U7, contract 7 (2026-11-26): the detour object gains `route_steps`
+  (`StepObject` list: `turn` via/left/right + `street` as written; `[]`
+  when the message gives none).

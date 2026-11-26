@@ -31,16 +31,17 @@ and ``skipped``, and ``skipped.geojson`` is new (the page draws them);
 4, tier C: the detour object gains ``path``, and ``paths.geojson`` is
 new; 5, the detour object gains ``rejoin_streets`` (the card names the
 rejoin); 6, detour features (starts, skipped, paths) trade ``timing``
-for ``start``/``end``: the page times them with its own clock.
+for ``start``/``end``: the page times them with its own clock; 7, the
+detour object gains ``route_steps`` (the card lists the turns).
 """
 
 from typing import Final, Literal, TypedDict
 
 from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
-from septa_detours.model import Direction, NoticeStatus
+from septa_detours.model import Direction, NoticeStatus, Turn
 
-SCHEMA_VERSION: Final = 6
+SCHEMA_VERSION: Final = 7
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -51,6 +52,14 @@ type Timing = Literal["active", "upcoming", "ended", "unknown"]
 
 type Bounds = tuple[Position, Position]
 """``([west, south], [east, north])``, as MapLibre's ``fitBounds`` takes."""
+
+
+class StepObject(TypedDict):
+    """One turn of a detour's path, as the message says it (``model.Step``)."""
+
+    turn: Turn
+    street: str
+    """As written in the message: ``"Washington"``, ``"S Penn Sq"``."""
 
 
 class StartPointObject(TypedDict):
@@ -98,6 +107,10 @@ class DetourObject(TypedDict):
     """Where the detour goes (tier C), start to rejoin, ``[lon, lat]`` in
     travel order (simplified and rounded as ``skipped``), or ``None``
     when unknown."""
+    route_steps: list[StepObject]
+    """The message's path, in order: ``via`` the route street, then each
+    turn; ``[]`` when the message gives none (stop closures, layovers,
+    messages parse can't read)."""
     shape_ids: list[str]
     """The matched shapes, in match order; ``[]`` when unmatched."""
 

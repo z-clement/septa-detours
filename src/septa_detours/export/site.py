@@ -238,6 +238,9 @@ def detour_object(detour: Detour) -> DetourObject:
         "rejoin_streets": rejoin_streets(detour),
         "skipped": skipped_line(detour),
         "path": path_line(detour),
+        "route_steps": [
+            {"turn": step.turn, "street": step.street} for step in notice.route_steps
+        ],
         "shape_ids": [shape.shape_id for shape in shapes],
     }
 

@@ -471,6 +471,13 @@ def test_detour_object_matched_and_placed(notices) -> None:
         "rejoin_streets": ["Passyunk", "17th"],
         "skipped": [[-75.17158, 39.93846], [-75.17461, 39.92456]],
         "path": [[-75.1716, 39.9385], [-75.1696, 39.9385], [-75.16963, 39.937]],
+        "route_steps": [
+            {"turn": "via", "street": "17th"},
+            {"turn": "left", "street": "Washington"},
+            {"turn": "right", "street": "Broad"},
+            {"turn": "right", "street": "Passyunk"},
+            {"turn": "left", "street": "17th"},
+        ],
         "shape_ids": ["317310"],
     }
 
@@ -497,6 +504,7 @@ def test_detour_object_unmatched(notices) -> None:
         "rejoin_streets": None,
         "skipped": None,
         "path": None,
+        "route_steps": [],
         "shape_ids": [],
     }
 
@@ -632,7 +640,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 6,
+        "schema_version": 7,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1355,7 +1363,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 6,
+        "schema_version": 7,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",
