@@ -194,15 +194,18 @@ builders in `export/site.py`, geometry in `export/simplify.py`). Real
 run: 185 files, 3.6 MB; the page loads ~1.05 MB up front (network
 0.97 MB) plus one route file (<= 109 KB) on focus. Since W2 the page
 draws it: grey network, detoured routes in color, start dots by timing,
-the status line from `status.json`. Next up: the sidebar (see "Next").
+the status line from `status.json`. W3 (the sidebar) is under way:
+`routes.json` carries detour windows (schema 2), and the sidebar's pure
+logic is in `detours.js`/`routes.js` with tests; its DOM is next.
 
 ## Next
 
 **The web app**: `docs/web-plan.md` holds the whole plan (decisions
 made, facts measured, the contract's files, the JS module layout, the
 order of work, and **decisions still to confirm: ask before building
-those**). P1-P6 (Python), W1 and W2 are done; continue at its "Order
-of work", step W3.
+those**). P1-P6 (Python), W1, W2 and W3 steps 1-2 are done; continue
+at its "Order of work", W3 step 3 (the sidebar DOM): confirm its four
+open proposals (layout, chips, `now`, row clicks) before building.
 
 Other open work: `docs/backlog.md` (parse's open questions, snapshot
 collection, small follow-ups) and `docs/geography-plan.md` (tier A step

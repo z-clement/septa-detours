@@ -377,3 +377,35 @@ listed greyed), D5 ("Not on the map" section). Real: 161 windows, none
 with a missing time, `routes.json` ~60 KB. Mutation check: start/end
 swapped, reversed order, placed-only windows, end = start, UTC
 conversion, `""` for `None`, either version number reverted: all caught.
+
+Done (2026-11-25): **W3 step 2, the sidebar's pure logic** (no DOM yet).
+- `detours.js` `detourTiming(start, end, now)`: Python's `detour_timing`
+  rule (inclusive ends; `unknown` for a missing time or end < start),
+  plus one JS-only case: an unparseable time is `unknown`. Takes the two
+  times, not a detour, so it serves both windows and detour objects. A
+  `parseTime` helper was dropped: `Date.parse` already gives NaN for
+  `null`/`undefined` (unlike `new Date(null)`, 1970), so the helper was
+  untestable. Mutation lesson: deleting the `instanceof Date` check
+  survived, since a string `now` still threw a `TypeError` (the engine's
+  "getTime is not a function"); the test now checks our message and
+  passes a fake with its own `getTime`.
+- `routes.js`: `timingCounts(route, now)` (the four timings, adding up to
+  `total`), `detouredNow(routes, now)` (`[{route, active}]`, most active
+  first, ties in catalog order via stable `sort`). Real, at snapshot
+  time: 49 of 55 detoured routes are detoured now (64 leads with 6). Test
+  data: route 2's 7 real windows at 14:00Z split 2/4/1 (unequal counts).
+- `groupByMode(routes)`: groups by first appearance, so JS doesn't repeat
+  Python's mode order. Real: metro 5, trolley 8, trackless 3, bus 152,
+  rail 13. An equivalent survivor: `Map.set` on an existing key keeps its
+  insertion place (checked in Node, not assumed).
+- `format.js` `modeLabel` (Metro, Trolleys, Trackless Trolleys, Buses,
+  Regional Rail; unknown -> itself, via `Object.hasOwn` so "toString"
+  isn't a prototype method).
+- `searchRoutes(routes, query)` (the user's rule: a number matches only
+  at the start). First built with numbers matching the start of *either*
+  name; the real catalog showed `2` finding route 5 ("2nd-Market...")
+  and `69` finding nothing (long names hold "69th St TC" mid-name), so
+  numbers now match `short_name` only. Equivalent survivor: the blank
+  query branch (`includes("")` is always true); kept as stated intent.
+Tests: 60 JS (`format`, `data`, `routes`, `detours`). Suggested, not
+done: Python's `detour_timing` docstring could name `web/js/detours.js`.

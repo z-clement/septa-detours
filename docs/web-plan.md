@@ -1,7 +1,8 @@
 # Web plan: data contract and map app
 
 Status: **P1-P6, W1, W2 done** (the page draws the data contract); W3 in
-progress (step 1, `routes.json` windows + schema 2, done). Written
+progress: steps 1-2 done (`routes.json` windows + schema 2; the pure
+sidebar logic), step 3 (the sidebar DOM) next, after its open decisions. Written
 2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
 increments, tests from real data, mutation checks, stop for review after
 each). Items marked **Confirm** are proposals the user hasn't approved
@@ -316,8 +317,10 @@ web/
   js/mapview.js       MapLibre sources/layers/events (the only module
                       that touches maplibregl)
   js/sidebar.js       renders the route list and the route panel (DOM)
-  js/routes.js        PURE: group by mode, detoured-first, search filter
-  js/detours.js       PURE: timing(detour, now), sort, summaries
+  js/routes.js        PURE: timingCounts, detouredNow, groupByMode,
+                      searchRoutes (+ W2's detouredRoutes, routesBounds)
+  js/detours.js       PURE: detourTiming(start, end, now); later sort,
+                      summaries
   js/format.js        PURE: times (America/New_York), labels, plurals
   test/*.test.js      node --test for the PURE modules
 ```
@@ -353,10 +356,22 @@ that then notify subscribers (sidebar and map re-render from state):
   full route color and thicker, `starts.geojson` dots on top, styled by
   `timing` (active solid, upcoming hollow, ended grey).
 - Sidebar: search box, mode filter chips, then "Detoured now" (routes
-  with active detours by `detours.windows`, by count), then every route grouped by mode in
-  `routes.json` order, each row: colored badge with `short_name`,
-  `long_name`, detour count. Shapeless routes greyed. A "Not on the map"
-  section lists `status.unmatched`.
+  with at least one active detour by `detours.windows`, most active
+  first, ties in catalog order; routes with only upcoming/ended/unknown
+  detours stay in their mode group), then every route grouped by mode in
+  `routes.json` order (groups in the order Python wrote; headings from
+  `modeLabel`: Metro, Trolleys, Trackless Trolleys, Buses, Regional
+  Rail), each row: colored badge with `short_name`, `long_name`, detour
+  count. Shapeless routes greyed. A "Not on the map" section lists
+  `status.unmatched`.
+- Search (decided): case and surrounding spaces ignored, blank keeps
+  all. A number (digits only) is a route number: it matches only at the
+  start of `short_name` (`2` finds 2, 21, 204; not 12, and not route 5,
+  whose long name is "2nd-Market to ..."). Anything else matches anywhere
+  in `short_name` or `long_name` (`owl` finds both OWL buses). Open: a
+  single letter is noisy (`k` matches 62 routes via "Frankford"; route K
+  is buried); maybe rank route-number matches first. Try it on the drawn
+  sidebar before deciding.
 - Click a line or dot on the map, or a sidebar row -> focus that route
   (a dot also selects its detour). If several routes' lines are under the
   click, show a small chooser popup instead of guessing.
@@ -413,8 +428,20 @@ Web (plain JS):
    `network`, `starts`; overview map + status line. Then remove `export
    detours` (D7: done).
 9. **W3** Sidebar: grouped list, search, mode chips, "Detoured now",
-   "Not on the map". `routes.js` + `detours.js` with tests. Step 1
-   (done): `routes.json` `detours.windows` + schema 2 (Python, `data.js`).
+   "Not on the map". `routes.js` + `detours.js` with tests.
+   - Step 1 (done): `routes.json` `detours.windows` + schema 2 (Python,
+     `data.js`).
+   - Step 2 (done): the pure logic: `detourTiming` (`detours.js`),
+     `timingCounts`, `detouredNow`, `groupByMode`, `searchRoutes`
+     (`routes.js`), `modeLabel` (`format.js`). 60 JS tests.
+   - Step 3 (next): the sidebar DOM (`sidebar.js`, HTML, CSS). **Confirm
+     first** (proposals, not yet discussed): (a) layout: a fixed left
+     panel ~320 px, map fills the rest, the status line moves to the top
+     of the panel; (b) mode chips toggle modes and combine with search;
+     a chip with no matching routes is greyed, not hidden; (c) state
+     stays in `main.js` until `state.js` (W4); `now` refreshes every
+     minute and re-renders "Detoured now"; (d) clicking a row does
+     nothing yet (focus is W4).
 10. **W4** Focus: detail fetch + cache, map focus, panel with detour
     cards, URL hash, Back/Escape.
 11. **W5** Card <-> dot linking, the multi-route click chooser.
