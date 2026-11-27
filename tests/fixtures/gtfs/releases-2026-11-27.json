@@ -8,7 +8,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202611220/gtfs_public.zip",
-    "size": 26479721
+    "size": 26479721,
+    "digest": "sha256:b2733d776a03e027ac13b7cee01b578326a0e7f3b9ed1fb333b821c47b4cf078"
    }
   ]
  },
@@ -21,7 +22,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202611010/gtfs_public.zip",
-    "size": 26745416
+    "size": 26745416,
+    "digest": "sha256:acff1b8757dd33fd195bd0e2fed75076d4e5be1bda5441c64aa85a259ab22813"
    }
   ]
  },
@@ -34,7 +36,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609271/gtfs_public.zip",
-    "size": 22054851
+    "size": 22054851,
+    "digest": "sha256:be30733a8bc64cbb6ddbc8fdeba0f83633511240ae72070fd4c3b8e206f6fc07"
    }
   ]
  },
@@ -47,7 +50,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609270/gtfs_public.zip",
-    "size": 22054912
+    "size": 22054912,
+    "digest": "sha256:7429cadd954a26596e49e6f7ab6831173d2becf7760ac0a3c8bb422c8d190092"
    }
   ]
  },
@@ -60,7 +64,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609061/gtfs_public.zip",
-    "size": 21675909
+    "size": 21675909,
+    "digest": "sha256:72a6797155d28e5c26615d945358287252e0da5b8d5396c242190cc13158aaf7"
    }
   ]
  },
@@ -73,7 +78,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609060/gtfs_public.zip",
-    "size": 21555258
+    "size": 21555258,
+    "digest": "sha256:4d3fa20ea094937a9bb6389ad52017e1ac90a564aee497f318797e1b1e4f07ab"
    }
   ]
  },
@@ -86,7 +92,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608233/gtfs_public.zip",
-    "size": 22774259
+    "size": 22774259,
+    "digest": "sha256:85a6788119b2dcde5bb43e35640c2b41f0d3c45eda7289eedd77ee7f0fc2b8b6"
    }
   ]
  },
@@ -99,7 +106,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608232/gtfs_public.zip",
-    "size": 22453789
+    "size": 22453789,
+    "digest": "sha256:c7266dd0df5d6a58846c75b3839413e9957799c42380b82a95b8270cf56648c6"
    }
   ]
  },
@@ -112,7 +120,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608091/gtfs_public.zip",
-    "size": 20767915
+    "size": 20767915,
+    "digest": "sha256:49c9f139dac1e13a3bce93a0bf6bc31ecc709a9784ba3973f9c425e231c76fe9"
    }
   ]
  },
@@ -125,7 +134,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608090/gtfs_public.zip",
-    "size": 20767898
+    "size": 20767898,
+    "digest": "sha256:1f69e4ad887dd97af3905e49ae7d27fb341401e156adbc809f8ef6890de7cd8d"
    }
   ]
  },
@@ -138,7 +148,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202607261/gtfs_public.zip",
-    "size": 20716970
+    "size": 20716970,
+    "digest": "sha256:7deb9596c49bda8c073a92ae792f702feaa2aaa28c317f8a81657a1d1605ce6a"
    }
   ]
  },
@@ -151,7 +162,8 @@
    {
     "name": "gtfs_public.zip",
     "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202607120/gtfs_public.zip",
-    "size": 20668553
+    "size": 20668553,
+    "digest": "sha256:88b17d7baa7edf03ea3c2f2dd185e711a54c9db6ccc0afe78debd77875f01414"
    }
   ]
  }

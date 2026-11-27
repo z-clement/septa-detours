@@ -152,3 +152,23 @@ trimmed to the fields read). Tests: `tests/test_ingest_gtfs.py` (23).
 Mutants: 19, all killed; the revision tiebreak survived at first
 (max keeps the first of equal keys, and the winner was listed first), so
 the revision tests run in both list orders.
+
+Done: `fetch_releases` / `fetch_gtfs(client, today, root, token)` and
+`python -m septa_detours.ingest gtfs` -> `data/raw/gtfs/gtfs_public-<tag>.zip`
+(untouched). GitHub's API gives each asset's `size` and `digest`
+(`sha256:<hex>`, added by GitHub in 2025; all 12 fixture releases have
+one, and it matched the real zip), so the download streams through a
+size + SHA-256 check into `write_chunks_atomic` (no file on a mismatch;
+an older file untouched); a digest that isn't exactly `sha256:<64
+lowercase hex>` -> size only. An existing file that checks out is not
+downloaded again (returns `downloaded=False`; the job's cache relies on
+it); one that fails is replaced. `GITHUB_TOKEN` (optional) goes with
+the API request only, never with the download (which redirects to
+`objects.githubusercontent.com`). The CLI uses New York's date
+(`_new_york_today`): at 02:00 UTC on a start day it's still the day
+before there. Prints `wrote`/`have <path> (<tag>, in effect since
+<date>)`. Real run: ~2 s for 26 MB; second run `have`. Fixture
+refreshed with `digest` (other fields checked unchanged). Tests: 15
+more in `tests/test_ingest_gtfs.py` (fake GitHub with redirected
+downloads). Mutants: 23, all killed (after adding malformed-digest
+cases).

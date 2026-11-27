@@ -44,7 +44,8 @@ there changes, flag it, since every stage depends on them.
 
 ```
 data/raw/        untouched downloads (gitignored); alerts/ holds API snapshots,
-                 osm/ holds Geofabrik extracts (<region>-<YYMMDD>.osm.pbf)
+                 osm/ holds Geofabrik extracts (<region>-<YYMMDD>.osm.pbf),
+                 gtfs/ holds SEPTA's releases (gtfs_public-<tag>.zip)
 data/gtfs/       SEPTA static GTFS (gitignored)
 data/processed/  pipeline output (gitignored; sample_* files may be
                  committed): detours-<snapshot stamp>.json = match output
@@ -118,6 +119,9 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
   `uv run python -m septa_detours.gtfs pack` -> `data/processed/gtfs.zip`
 - Store a snapshot on the `snapshots` branch (hosted job only; pushes):
   `uv run python -m septa_detours.ingest store <snapshot>`
+- Fetch SEPTA's GTFS release in effect (skips it if already saved):
+  `uv run python -m septa_detours.ingest gtfs` ->
+  `data/raw/gtfs/gtfs_public-<tag>.zip`
 - Fetch OSM extracts (occasionally, ~540 MB):
   `uv run python -m septa_detours.ingest osm` ->
   `data/raw/osm/{pennsylvania,new-jersey,delaware}-<YYMMDD>.osm.pbf`
