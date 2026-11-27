@@ -108,6 +108,61 @@ export function statusLine(status) {
   return `Detours ${when}: ${parts.join(", ")}`;
 }
 
+/**
+ * How old the detours can get before the page warns (hosting plan step 3).
+ * The job runs every 15 minutes and GitHub's timer can run 5-15 minutes
+ * late, so an hour means several runs in a row didn't publish.
+ */
+export const STALE_AFTER_MS = 60 * 60_000;
+
+const HOUR_MS = 60 * 60_000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * A rounded-down age: "45 minutes", "1 hour", "5 hours", then whole days
+ * from 48 hours ("2 days"), so "36 hours" stays exact.
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
+function ageText(ms) {
+  const [count, unit] =
+    ms >= 2 * DAY_MS
+      ? [Math.floor(ms / DAY_MS), "day"]
+      : ms >= HOUR_MS
+        ? [Math.floor(ms / HOUR_MS), "hour"]
+        : [Math.floor(ms / 60_000), "minute"];
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * A warning when the detours are old, or `null` while they're fresh.
+ *
+ * Old means the alerts were fetched more than `maxAgeMs` before `now`:
+ * the job has stopped or is failing, or this page has been open since an
+ * older export (it loads the data once). A hand-named snapshot has no
+ * fetch time, and a fetch time ahead of `now` (a skewed clock) can't be
+ * judged: both give `null`, as nothing is known to be wrong.
+ *
+ * @param {object} status status.json
+ * @param {Date} now
+ * @param {number} [maxAgeMs]
+ * @returns {string | null}
+ */
+export function staleNotice(status, now, maxAgeMs = STALE_AFTER_MS) {
+  if (status.snapshot_fetched_at === null) {
+    return null;
+  }
+  const age = now.getTime() - new Date(status.snapshot_fetched_at).getTime();
+  if (!(age > maxAgeMs)) {
+    return null;
+  }
+  return (
+    `Last updated ${ageText(age)} ago. Detours may have changed since; ` +
+    "reloading may show newer ones."
+  );
+}
+
 /** The sidebar's word for each `detourTiming` result. */
 export const TIMING_WORDS = Object.freeze({
   active: "now",

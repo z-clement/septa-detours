@@ -21,6 +21,8 @@ import {
   plural,
   rejoinText,
   routeLabel,
+  STALE_AFTER_MS,
+  staleNotice,
   statusLine,
   stepText,
   timingHeading,
@@ -148,6 +150,51 @@ test("statusLine: no detours", () => {
 test("statusLine: a hand-named snapshot shows its name", () => {
   const mine = { ...STATUS, snapshot: "mine.json", snapshot_fetched_at: null };
   assert.equal(statusLine(mine).split(":")[0], "Detours in mine.json");
+});
+
+// --- staleNotice --------------------------------------------------------------
+
+// STATUS's alerts were fetched at 12:11:23Z.
+const FETCHED = Date.parse("2026-11-25T12:11:23Z");
+const after = (ms) => new Date(FETCHED + ms);
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const notice = (age) =>
+  `Last updated ${age} ago. Detours may have changed since; ` +
+  "reloading may show newer ones.";
+
+test("staleNotice: one hour by default", () => {
+  assert.equal(STALE_AFTER_MS, HOUR);
+});
+
+test("staleNotice: fresh data, up to exactly the limit, gives null", () => {
+  assert.equal(staleNotice(STATUS, after(0)), null);
+  assert.equal(staleNotice(STATUS, after(20 * MINUTE)), null);
+  assert.equal(staleNotice(STATUS, after(HOUR)), null);
+});
+
+test("staleNotice: past the limit, the age rounded down", () => {
+  assert.equal(staleNotice(STATUS, after(HOUR + 1)), notice("1 hour"));
+  assert.equal(staleNotice(STATUS, after(2 * HOUR - 1)), notice("1 hour"));
+  assert.equal(staleNotice(STATUS, after(5 * HOUR + 59 * MINUTE)), notice("5 hours"));
+  assert.equal(staleNotice(STATUS, after(47 * HOUR)), notice("47 hours"));
+  assert.equal(staleNotice(STATUS, after(48 * HOUR)), notice("2 days"));
+  assert.equal(staleNotice(STATUS, after(73 * HOUR)), notice("3 days"));
+});
+
+test("staleNotice: a smaller limit shows minutes", () => {
+  assert.equal(staleNotice(STATUS, after(MINUTE), 30_000), notice("1 minute"));
+  assert.equal(staleNotice(STATUS, after(45 * MINUTE), 30_000), notice("45 minutes"));
+  assert.equal(staleNotice(STATUS, after(HOUR - 1), 30_000), notice("59 minutes"));
+  assert.equal(staleNotice(STATUS, after(HOUR), 30_000), notice("1 hour"));
+  assert.equal(staleNotice(STATUS, after(45 * MINUTE), 45 * MINUTE), null);
+});
+
+test("staleNotice: nothing to judge gives null", () => {
+  const mine = { ...STATUS, snapshot: "mine.json", snapshot_fetched_at: null };
+  assert.equal(staleNotice(mine, after(10 * HOUR)), null);
+  // A fetch time ahead of the page's clock.
+  assert.equal(staleNotice(STATUS, after(-3 * HOUR)), null);
 });
 
 // --- modeLabel --------------------------------------------------------------
