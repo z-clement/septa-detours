@@ -229,9 +229,15 @@ permissions `contents: write`, `pages: write`, `id-token: write`;
 4. After the deploy, `ingest store <snapshot>` with `continue-on-error`.
 
 Step outputs reach shell scripts through `env:`, not `${{ }}` pasted
-into them. Actions pinned to major tags (`checkout@v4`, `setup-uv@v6`,
-`cache@v4`, `configure-pages@v5`, `upload-pages-artifact@v3`,
-`deploy-pages@v4`); newer majors may exist.
+into them. Actions: `checkout@v7`, `cache@v6`, `configure-pages@v6`,
+`upload-pages-artifact@v5`, `deploy-pages@v5` (major tags), and
+`setup-uv@v10.3.3` (exact: setup-uv publishes no major tags since v8).
+First run (2026-11-27) failed at the deploy with the first pins
+(`deploy-pages@v4` from 2024, `upload-pages-artifact@v3`): "No artifacts
+named github-pages were found", though the run *had* the artifact
+(457 KB). Every action was 1-4 majors behind; all were updated
+(checked: each tag exists; checkout v6+ still persists credentials,
+now in a separate included file, which `ingest store`'s push uses).
 
 Checked locally (Actions itself can't run here): the YAML parses
 (`uvx --from pyyaml`); the GTFS and pipeline steps' shell, run with
