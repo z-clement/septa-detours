@@ -88,8 +88,20 @@ export function createMap(container) {
     style: BASEMAP_STYLE,
     center: PHILLY_CENTER,
     zoom: 11,
+    attributionControl: false,
   });
   map.addControl(new maplibregl.NavigationControl());
+  // Compact: an (i) button that opens the credits, not a two-line box
+  // across the bottom of a phone's map (render sweep finding 6). MapLibre
+  // shows it open at first; close it once the map has loaded.
+  const attribution = new maplibregl.AttributionControl({ compact: true });
+  map.addControl(attribution);
+  map.once("load", () => {
+    map
+      .getContainer()
+      .querySelector(".maplibregl-ctrl-attrib")
+      ?.classList.remove("maplibregl-compact-show");
+  });
   return map;
 }
 
