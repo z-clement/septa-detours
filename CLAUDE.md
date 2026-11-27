@@ -112,7 +112,7 @@ tools/           local helper scripts (gitignored): shot.mjs, headless
 ## Commands
 
 - Run tests: `uv run pytest`; JS (pure modules only, no npm):
-  `node --test web/test/`
+  `node --test web/test/*.test.js`
 - Lint/format: `uv run ruff check . && uv run ruff format .`
 - Run everything from the repo root (default paths are relative to it).
   The map pipeline: `ingest` -> `match` -> `export site` -> serve.
@@ -265,7 +265,7 @@ Details and their origins are in `docs/notes/`; the short version:
   2026-11-27; one more per new `DetourNotice` field from `test_model.py`'s
   untyped `make_notice` helper), mostly `**dict` test helpers and `dict`
   invariance vs `Properties`; don't add more.
-- JS: `node --test web/test/` for pure modules (no DOM, no
+- JS: `node --test web/test/*.test.js` for pure modules (no DOM, no
   `maplibregl`). Tests set `process.env.TZ = "Asia/Tokyo"`: this machine
   is on New York time, so a missing `timeZone` would otherwise pass. The
   drawn map can't be checked headless; check it by eye.

@@ -927,3 +927,9 @@ gave Claude a free hand on these, with your decisions on the open ones.
   page at 2 s and 8 s and prints the credits' state; edit it for other
   checks. This pass used scratch variants of it (steps: wait, evaluate,
   screenshot, run a shell command).
+- First CI run (2026-11-27): `test` failed at the JS step. The runner's
+  Node is newer than this machine's 20, and newer Node (checked on 24)
+  takes `node --test`'s arguments as files or globs, not folders, so
+  `web/test/` was loaded as a module (`MODULE_NOT_FOUND`). The command is now `node --test
+  web/test/*.test.js` (the shell expands it), checked on Node 20 and 24:
+  179 pass on both.

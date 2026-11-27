@@ -1,4 +1,4 @@
-// Tests for web/js/data.js's contract loaders. Run: node --test web/test/
+// Tests for web/js/data.js's contract loaders. Run: node --test web/test/*.test.js
 //
 // `fetch` is replaced by a fake that serves files from a dictionary and
 // records every URL asked for, in order, and every request's options.

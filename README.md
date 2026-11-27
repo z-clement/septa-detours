@@ -79,7 +79,7 @@ Tests and lint:
 
 ```sh
 uv run pytest
-node --test web/test/
+node --test web/test/*.test.js
 uv run ruff check . && uv run ruff format --check .
 ```
 

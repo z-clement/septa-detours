@@ -1,4 +1,4 @@
-// Tests for web/js/format.js. Run from the repo root: node --test web/test/
+// Tests for web/js/format.js. Run from the repo root: node --test web/test/*.test.js
 //
 // Uses Node's built-in test runner and assert (no npm, no dependencies).
 

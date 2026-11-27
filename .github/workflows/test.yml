@@ -39,4 +39,4 @@ jobs:
 
       # The runner image ships Node; the tests use only node:test.
       - name: JS tests
-        run: node --test web/test/
+        run: node --test web/test/*.test.js

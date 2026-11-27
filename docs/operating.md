@@ -23,7 +23,7 @@ to be (decisions, terms checked, the first runs): `hosting-plan.md`.
   Any failed step before the deploy stops the run, and the last good
   site stays up.
 - **`test`** (`.github/workflows/test.yml`), on every push to `main` and
-  every pull request: ruff, pytest, `node --test web/test/`.
+  every pull request: ruff, pytest, `node --test web/test/*.test.js`.
 - **Dependabot** (`.github/dependabot.yml`): one grouped pull request
   for action updates (weekly) and one for Python packages (monthly).
   Merge when `test` is green. `astral-sh/setup-uv` is pinned to an exact

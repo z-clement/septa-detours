@@ -1,7 +1,7 @@
 // Text for the page: times, labels, plurals.
 //
 // PURE: no DOM, no `maplibregl`, no fetch. That keeps it runnable under
-// `node --test web/test/` (see web/test/format.test.js).
+// `node --test web/test/*.test.js` (see web/test/format.test.js).
 
 /** Detour times are SEPTA local time; show them that way on any machine. */
 export const SEPTA_TIME_ZONE = "America/New_York";

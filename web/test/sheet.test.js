@@ -1,4 +1,4 @@
-// Tests for web/js/sheet.js. Run: node --test web/test/
+// Tests for web/js/sheet.js. Run: node --test web/test/*.test.js
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
