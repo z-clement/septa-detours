@@ -78,3 +78,19 @@ a real day; `strptime` would take `2027220`). Always exits 0: old GTFS
 must never stop the site. Each feed is loaded separately, so one broken
 file doesn't hide the other. Tests: `tests/test_expiry.py` (18),
 `tests/test_gtfs_main.py` (9); 25 mutants, all killed.
+
+Done (2026-11-27, hosting step 4): `gtfs/pack.py::pack_gtfs` and
+`python -m septa_detours.gtfs pack [out]` (default
+`data/processed/gtfs.zip`). Decided (me): pack our own zip rather than
+upload SEPTA's download as is; I upload it by hand on the GitHub website
+(no `gh`). Members `bus/<table>.txt`, `rail/<table>.txt` (every `.txt`
+directly in each feed directory, sorted; no subdirectories or stray
+zips), so `unzip gtfs.zip -d data/gtfs` restores the layout. Byte-identical
+for the same tables (fixed 1980-01-01 timestamps, mode 0644, sorted):
+compare SHA-256 with the release asset to see if an upload is needed.
+Each table is streamed in; the zip is built in memory, then
+`write_bytes_atomic`. Missing or `.txt`-less feed directory ->
+`FileNotFoundError`, exit 1, nothing written. Real feeds: 39 files,
+26.4 MB, ~4 s; packing twice gave the same SHA-256, and `unzip` gave a
+tree identical to `data/gtfs/`. Tests: `tests/test_gtfs_pack.py` (11);
+17 mutants, all killed.

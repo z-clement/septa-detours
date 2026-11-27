@@ -140,13 +140,14 @@ Next, in order:
    Note: the commits' author email becomes public with the repo; if
    that's unwanted, set GitHub's noreply address (and decide whether to
    rewrite existing history) before the first push.
-2. **Step 4, reference data** (fresh session): an upload script (zip
-   both GTFS feeds as `gtfs.zip` + `streets.parquet` -> the `reference`
-   release via `gh release upload reference <file> --clobber`; tested
-   against a fake `gh`, run for real by me once the repo exists), the
-   job's download + unpack, and a pure, tested GTFS end-date check
-   (warn within 14 days of / past `feed_end_date`, never fail). Today's
-   feeds end 2027-02-20.
+2. **Step 4, reference data**: done so far (2026-11-27):
+   `python -m septa_detours.gtfs check` (end-date warnings as
+   `::warning::` lines, always exit 0) and `python -m
+   septa_detours.gtfs pack` (`data/processed/gtfs.zip`, byte-identical
+   for the same tables). Decided: no upload script; I upload `gtfs.zip`
+   and `streets.parquet` by hand on the GitHub website (instructions
+   when we get there). Left: the job's download + unpack (in the
+   workflow, step 6).
 3. **Step 5, snapshot store**: commit a snapshot to the orphan
    `snapshots` branch only when its bytes differ from the newest stored.
 4. **Step 6, the workflow** `.github/workflows/publish.yml` (every 15
