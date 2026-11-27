@@ -132,46 +132,77 @@ exports, or run old JS against new data. Fix (already planned, web plan
    `reference` release and run the upload script; Settings -> Pages ->
    Source: "GitHub Actions"; watch the first runs.
 
-## Where we stopped (2026-11-27, end of session)
+## Handoff: whole-project check, cleanup, README (2026-11-27)
 
-Done: steps 1-3 (this plan; versioned data and code URLs, `export
-deploy`; the stale-data banner). Commits `3a912b1` .. `7fd2ab2`.
+For a fresh session. Hosting is **done and live**:
+https://z-clement.github.io/septa-detours/, updated every 15 minutes by
+`.github/workflows/publish.yml` (below, "The workflow as built"). Plan
+steps 1-6 and my go-live steps are all done (history: commits
+`3a912b1` .. `64b59fe`, `docs/notes/ingest.md`, `docs/notes/gtfs.md`).
+1829 Python + 172 JS tests pass; lint clean.
 
-Next, in order:
+**How to work** (CLAUDE.md applies): small increments, say what and why
+before each, tests + lint + mutation check, then stop for my review.
+Claude may commit each reviewed increment (check `git log` first: I
+sometimes commit before you do); don't push, I do. Changes to the live
+site go out on my next push (the workflow deploys `main` as it is).
 
-1. **Me: put the repo on GitHub** (public), push `main`. Checked before
-   pushing: 143 tracked files, 1.6 MB, no data or secrets in the tree or
-   history (largest blob ever: `uv.lock`, 144 KB); `.gitignore` covers
-   `data/raw/`, `data/gtfs/`, `data/processed/*`, `web/data/`, `.env`.
-   Note: the commits' author email becomes public with the repo; if
-   that's unwanted, set GitHub's noreply address (and decide whether to
-   rewrite existing history) before the first push.
-2. **Step 4, reference data**: done (2026-11-27).
-   `python -m septa_detours.gtfs check` (end-date warnings as
-   `::warning::` lines, always exit 0). GTFS (changed, see top):
-   `ingest gtfs` (SEPTA's release in effect -> `data/raw/gtfs/`, size +
-   SHA-256 checked, skipped if already saved) then `gtfs unpack`
-   (-> `data/gtfs/`). `gtfs pack` was built, then removed. Decided: no
-   upload script; I upload `streets.parquet` by hand on the GitHub
-   website (instructions with the workflow, step 6).
-3. **Step 5, snapshot store**: commit a snapshot to the orphan
-   `snapshots` branch only when its bytes differ from the newest stored.
-   Decided (2026-11-27): never check the branch out (it grows ~16 MB of
-   files a day); git commands compare blob ids and commit through a
-   temporary index (`ingest/store.py`, `docs/notes/ingest.md`).
-   Done 2026-11-27: `python -m septa_detours.ingest store <snapshot>`
-   (prints `stored ...` / `unchanged: ...`; exit 1 on a git failure,
-   e.g. a lost race; never forces).
-4. **Step 6, the workflow**: done 2026-11-27,
-   `.github/workflows/publish.yml` (details below, "The workflow as
-   built"). Terms checked first (section below); SEPTA credit added.
-5. **Me: go live**: done 2026-11-27. Second manual run (after the
-   action updates) green end to end: GTFS from cache, deploy, snapshot
-   `2026-11-27T153734Z` stored by `github-actions[bot]`. Live at
-   https://z-clement.github.io/septa-detours/ (`status.json` fresh,
-   hashed `js-`/`css-` dirs, no `test/`, `Cache-Control: max-age=600`).
-6. **My whole-project check** before announcing it (notes below), then
-   share it and collect feedback for the mobile pass (`docs/backlog.md`).
+**Task 1: whole-project check and cleanup.** Go through the list below
+with me one item at a time: propose, I decide, then do it. Many are
+small decisions, not obvious fixes. Read the area's `docs/notes/` file
+before touching it.
+
+- Everything in "Notes for the pre-deploy check" below (rider-facing
+  error text, `#error` placement, favicon, MapLibre SRI/vendoring, open
+  tabs never refreshing, `web-plan.md` "Caching" history, `#stale`
+  covering the open credits, public-facing wording of the title and
+  status line). The SEPTA credit part of the last one is done.
+- **CLAUDE.md "Current state"**: still says schema 9 and ~1660 / ~156
+  tests (now schema 10, 1829 / 172). The ty count ("47 pre-existing")
+  wasn't rechecked after this session's new test files (ty runs in VS
+  Code only); check it in the editor.
+- **This plan has outlived itself**: the top's "Decided" list and
+  "Reference data: release assets" still describe GTFS as a manual
+  release asset (replaced by `ingest gtfs`; marked, not removed).
+  Trim it to what's true now, or move the history to
+  `docs/notes/`.
+- **Routes H, L, R, XH are unmatched on the live site** (9 detours
+  "not matched to a route" on 2026-11-27, mostly these). Deliberate:
+  `match/routes.py` leaves Bus Revolution renames out because GTFS
+  doesn't document them. Riders on those routes see nothing. Question
+  for me: find a trustworthy source for the new names, or keep it.
+- **Action versions drift**: the first deploy failed because the pins
+  from memory were 1-4 majors old. Options: Dependabot for
+  `github-actions` (a PR when an action updates), and/or pinning full
+  commit SHAs. `setup-uv` must stay an exact version (no major tags
+  since v8).
+- **Watching the job**: GitHub disables schedules after 60 days with
+  no repo activity; the store step can fail without turning a run red
+  (check the `snapshots` branch grows). Maybe a short "operating the
+  site" section (README or a notes file): where to look, how to
+  re-run, how to refresh `streets.parquet` ("Going live" step 5).
+- **`tools/shot.mjs`** (2026-11-27): the headless screenshot script,
+  kept on my machine so it isn't lost a third time; `tools/` is
+  gitignored (my choice: not public). Mention it in
+  `docs/notes/export-and-web.md` so later sessions know it's there.
+- **Notes gaps**: the credits change (SEPTA line, open 5 s) is recorded
+  here but not in `docs/notes/export-and-web.md`.
+- **Small consistency nits**: `match/__main__.py`'s `_SNAPSHOT_NAME`
+  uses `\d` where the newer code uses `[0-9]` (`\d` accepts any
+  Unicode digit); `tests/test_expiry.py` has literal Arabic-Indic
+  digits where newer tests write `\u` escapes.
+
+**Task 2: the README** (after task 1; currently there is none, and no
+LICENSE, by my choice for now). Readers: people who land on the GitHub
+repo, riders curious about the map and developers. Suggested contents,
+short, linking to `docs/` for depth: what it is + the live link (a
+screenshot helps: the local `tools/shot.mjs`); how it works (ingest -> parse +
+match -> export, and the 15-minute job); data sources and credits
+(SEPTA's alerts API and GTFS, "not affiliated with SEPTA";
+OpenStreetMap data under the ODbL, incl. the published detour paths
+and `streets.parquet`; OpenFreeMap / OpenMapTiles basemap); running it
+locally (the commands from CLAUDE.md); the repo layout in brief. Ask me
+before writing anything about licensing of the code.
 
 ## Terms checked before step 6 (Claude, 2026-11-27)
 

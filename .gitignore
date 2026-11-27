@@ -16,3 +16,6 @@ data/gtfs/
 data/processed/*
 !data/processed/sample_*
 web/data/
+
+# Local helper scripts (not published)
+tools/
