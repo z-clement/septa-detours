@@ -61,6 +61,7 @@ const REJOIN_LAYER = "rejoin-dots";
 const STARTS_LAYER = "start-dots";
 const MARKER_LAYER = "detour-markers";
 const MARKER_LABEL_LAYER = "detour-marker-labels";
+const START_LABEL_LAYER = "start-dot-labels";
 
 /** Zoomed out below this, each detour is a route-number marker; from it
  * up, its start dot, skipped stretch and path (UI plan B1). Check by eye. */
@@ -414,6 +415,26 @@ export function addOverviewLayers(map, site) {
     },
   });
 
+  // From MARKER_ZOOM on the overview: each start dot's route number beside
+  // it (render sweep finding 4: near City Hall you couldn't tell whose
+  // dot was whose). Hidden when focused: every dot is that route's.
+  map.addLayer({
+    id: START_LABEL_LAYER,
+    type: "symbol",
+    source: STARTS_SOURCE,
+    minzoom: MARKER_ZOOM,
+    filter: inEffect,
+    layout: {
+      "text-field": ["get", "label"],
+      "text-font": LABEL_FONT,
+      "text-size": 11,
+      "text-anchor": "left",
+      "text-offset": [0.9, 0],
+      "text-allow-overlap": false,
+    },
+    paint: { "text-color": "#222222", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+  });
+
   // Zoomed out: one marker per detour in effect at its start, an accent
   // circle with its route number (B1), on top of everything. Where
   // markers crowd, MapLibre hides labels that would overlap; every circle
@@ -467,6 +488,7 @@ export function addOverviewLayers(map, site) {
     const filter = only === null ? inEffect : ["all", only, inEffect];
     for (const layer of [
       STARTS_LAYER,
+      START_LABEL_LAYER,
       MARKER_LAYER,
       MARKER_LABEL_LAYER,
       SKIPPED_LAYER,
@@ -513,7 +535,7 @@ export function addOverviewLayers(map, site) {
     ]) {
       map.setLayerZoomRange(layer, detailed, 24);
     }
-    for (const layer of [MARKER_LAYER, MARKER_LABEL_LAYER]) {
+    for (const layer of [MARKER_LAYER, MARKER_LABEL_LAYER, START_LABEL_LAYER]) {
       map.setLayoutProperty(layer, "visibility", focus === null ? "visible" : "none");
     }
     map.getSource(FOCUS_SOURCE).setData(detail === null ? EMPTY_COLLECTION : detail.shapes);
