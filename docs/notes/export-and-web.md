@@ -895,3 +895,11 @@ gave Claude a free hand on these, with your decisions on the open ones.
   after load; the error banner with status.json removed. CDP renders
   need `Network.enable` before `Network.setCacheDisabled`, or the
   profile serves an old `index.html`.
+- Page head: `<meta name="description">` (says "Unofficial: not
+  affiliated with SEPTA"); `web/favicon.svg` (a grey route with a magenta
+  detour around a block, the page's colors; `deploy` copies it as is, so
+  no more `/favicon.ico` 404); SRI `integrity` + `crossorigin` on
+  MapLibre's script and stylesheet (sha384 of unpkg's files, whose
+  sha256 matched jsDelivr's published hashes of the same npm release).
+  Checked headless: the real hashes load; one changed character leaves
+  `maplibregl` undefined and the rider's error line shows.

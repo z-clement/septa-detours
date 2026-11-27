@@ -4,17 +4,32 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SEPTA Detours</title>
+    <meta
+      name="description"
+      content="A map of SEPTA bus, trolley and rail detours in effect now, updated every 15 minutes. Unofficial: not affiliated with SEPTA."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
 
     <!-- MapLibre GL JS, pinned to an exact version. Stylesheet and script must match.
          Deliberately v5, not v6: v6 is ESM-only and starts its web worker
          from a separate file, which browsers refuse to load cross-origin
          from a CDN. v5's single UMD file bundles the worker and defines the
-         global `maplibregl`. Moving to v6 means vendoring it into web/. -->
+         global `maplibregl`. Moving to v6 means vendoring it into web/.
+         `integrity`: the browser refuses a file whose hash differs from
+         these (checked against jsDelivr's hashes of the same npm release),
+         so a changed CDN file can't run here. A new version needs new ones:
+         curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A -->
     <link
       rel="stylesheet"
       href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"
+      integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK"
+      crossorigin="anonymous"
     />
-    <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+    <script
+      src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"
+      integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp"
+      crossorigin="anonymous"
+    ></script>
 
     <link rel="stylesheet" href="css/app.css" />
   </head>
