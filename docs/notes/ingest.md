@@ -81,3 +81,25 @@ import from match). Tests: `tests/test_ingest_store.py` (15; one input
 is real git 2.56 output). Mutants: 11, 10 killed; `partition` ->
 `rpartition` is equivalent (both reject every path that isn't
 `alerts/<name>`).
+
+Done: `commit_snapshot(snapshot, parent, repo)` -> commit id or None.
+Adds `alerts/<name>` (mode 100644) to `parent`'s tree (None = root
+commit, the orphan branch's first) in a temporary index
+(`GIT_INDEX_FILE`), so the checkout, its index and every ref stay
+untouched; moves no branch, pushes nothing. None when the blob equals
+the newest stored one, or when the tree equals the parent's (same name
+and bytes already stored, not the newest). Same bytes as an *older*
+snapshot are stored (the feed went back). Same name, different bytes ->
+`ValueError` (never replaces a stored snapshot); so does a non-stamp
+name. Author/committer `github-actions[bot]` + its noreply address
+(decided: the job's commits, not mine); message `alerts: <stamp>`.
+`write-tree --missing-ok` + `GIT_NO_LAZY_FETCH=1` on every call: in the
+job's partial clone the old blobs are absent and must stay so.
+Finding: `commit-tree` ignores `commit.gpgSign` (only `git commit`
+honours it), so `--no-gpg-sign` was a no-op and was dropped; a test with
+`gpg.program=false` guards it. Tests: 12 more in
+`tests/test_ingest_store.py` (real git in `tmp_path`, global/system
+config off; bytes from real route fixtures), incl. a real
+`--filter=blob:none --depth=1` clone where the old blob stays missing.
+Mutants: 15, 14 killed; `GIT_NO_LAZY_FETCH` survives (a safety net
+nothing trips today: without `--missing-ok` it's what fails the test).
