@@ -126,22 +126,15 @@ test("routeLabel: short and long name, or short name alone", () => {
   assert.equal(routeLabel({ ...ROUTE_2, short_name: "K", long_name: null }), "Route K");
 });
 
-test("statusLine: real counts, every part", () => {
-  assert.equal(
-    statusLine(STATUS),
-    "Detours as of Nov 25, 2026, 7:11 AM: 166 total, 134 on the map, " +
-      "27 without a location, 5 not matched to a route",
-  );
+test("statusLine: the count and the fetch time, nothing else", () => {
+  assert.equal(statusLine(STATUS), "166 detours as of Nov 25, 2026, 7:11 AM");
+  const allPlaced = { ...STATUS, detours: { total: 5, matched: 5, placed: 5 } };
+  assert.equal(statusLine(allPlaced), "5 detours as of Nov 25, 2026, 7:11 AM");
 });
 
-test("statusLine: zero parts are left out", () => {
-  const allPlaced = { ...STATUS, detours: { total: 5, matched: 5, placed: 5 } };
-  assert.equal(statusLine(allPlaced), "Detours as of Nov 25, 2026, 7:11 AM: 5 total, 5 on the map");
-  const unmatchedOnly = { ...STATUS, detours: { total: 3, matched: 0, placed: 0 } };
-  assert.equal(
-    statusLine(unmatchedOnly),
-    "Detours as of Nov 25, 2026, 7:11 AM: 3 total, 0 on the map, 3 not matched to a route",
-  );
+test("statusLine: one detour", () => {
+  const one = { ...STATUS, detours: { total: 1, matched: 0, placed: 0 } };
+  assert.equal(statusLine(one), "1 detour as of Nov 25, 2026, 7:11 AM");
 });
 
 test("statusLine: no detours", () => {
@@ -151,7 +144,7 @@ test("statusLine: no detours", () => {
 
 test("statusLine: a hand-named snapshot shows its name", () => {
   const mine = { ...STATUS, snapshot: "mine.json", snapshot_fetched_at: null };
-  assert.equal(statusLine(mine).split(":")[0], "Detours in mine.json");
+  assert.equal(statusLine(mine), "166 detours in mine.json");
 });
 
 // --- loadErrorText ------------------------------------------------------------

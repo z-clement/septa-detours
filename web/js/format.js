@@ -79,33 +79,27 @@ export function routeLabel(route) {
 }
 
 /**
- * The status line: when the detours are from and how many are drawn.
+ * The status line: how many detours there are, and when they're from.
  *
- * e.g. "Detours as of Nov 25, 2026, 7:11 AM: 166 total, 134 on the map,
- * 27 without a location, 5 not matched to a route". The last two parts are
- * left out when zero. A hand-named snapshot has no fetch time, so its file
- * name is shown instead.
+ * e.g. "127 detours as of Nov 27, 2026, 8:44 AM". A hand-named snapshot
+ * has no fetch time, so its file name is shown instead.
+ *
+ * It used to go on "118 on the map, 28 without a location, 9 not matched
+ * to a route" (status.json's `matched` / `placed`): read as internal on
+ * the public site, and "on the map" overcounted, since the map draws only
+ * the detours in effect (U1). The unmatched ones are still listed ("Not
+ * on the map"), the unplaced ones in their route's panel.
  *
  * @param {object} status status.json
  * @returns {string}
  */
 export function statusLine(status) {
-  const { total, matched, placed } = status.detours;
+  const { total } = status.detours;
   const when =
     status.snapshot_fetched_at === null
       ? `in ${status.snapshot}`
       : `as of ${formatTime(status.snapshot_fetched_at)}`;
-  if (total === 0) {
-    return `No detours ${when}`;
-  }
-  const parts = [`${total} total`, `${placed} on the map`];
-  if (matched > placed) {
-    parts.push(`${matched - placed} without a location`);
-  }
-  if (total > matched) {
-    parts.push(`${total - matched} not matched to a route`);
-  }
-  return `Detours ${when}: ${parts.join(", ")}`;
+  return total === 0 ? `No detours ${when}` : `${plural(total, "detour")} ${when}`;
 }
 
 /**

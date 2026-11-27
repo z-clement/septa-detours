@@ -868,3 +868,8 @@ gave Claude a free hand on these, with your decisions on the open ones.
   again in a few minutes." Used for the page (`#error`) and the route
   panel ("This route's detours"). Checked headless with `status.json`
   removed. Mutants: 8, all killed.
+- Status line: just "127 detours as of <time>" (`plural`, so "1
+  detour"; that also gave `plural` its first caller outside tests). The
+  old "N on the map, N without a location, N not matched to a route"
+  read as internal, and "on the map" counted every placed detour though
+  the map draws only those in effect (U1). Mutants: 4, all killed.
