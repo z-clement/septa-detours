@@ -1,8 +1,10 @@
 """Write GeoJSON to disk for the web map.
 
-The only file I/O in ``export/``. Everything that decides *what* goes in
-the file lives in ``geojson.py`` (pure, tested without touching disk);
-this module only decides *where* and *how* it is written. Uses stdlib
+Writes the data contract; the only other file I/O in ``export/`` is
+``deploy.py``, which copies ``web/`` as it's published. Everything that
+decides *what* goes in the file lives in ``geojson.py`` (pure, tested
+without touching disk); this module only decides *where* and *how* it is
+written. Uses stdlib
 ``json``; no extra dependency needed.
 
 Output format decisions (see ``write_geojson``):
