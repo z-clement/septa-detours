@@ -17,7 +17,9 @@ code itself changes.
 
 import hashlib
 import re
+import shutil
 from collections.abc import Mapping
+from pathlib import Path
 
 ASSET_DIRS = ("js", "css")
 """The page's code folders, renamed to ``<dir>-<version>`` when published."""
@@ -25,6 +27,11 @@ ASSET_DIRS = ("js", "css")
 VERSION_LENGTH = 10
 """Hex digits kept from the hash (40 bits: collisions don't matter here,
 since a new version only has to differ from the few before it)."""
+
+NOT_PUBLISHED = frozenset({"test"})
+"""Top-level ``web/`` entries left out of the published copy (node tests)."""
+
+INDEX = "index.html"
 
 _ASSET_REF = re.compile(r'(?<![\w-])(?P<attr>src|href)="(?:\./)?(?P<dir>js|css)/')
 """An ``index.html`` reference into a code folder: ``src="js/main.js"``,
@@ -71,3 +78,58 @@ def versioned_index(html: str, version: str) -> str:
     return _ASSET_REF.sub(
         lambda match: f'{match["attr"]}="{match["dir"]}-{version}/', html
     )
+
+
+def build_site(web: Path, out: Path) -> str:
+    """Copy ``web/`` to ``out`` as it's published; return the code version.
+
+    ``js/`` and ``css/`` land in ``js-<version>/`` and ``css-<version>/``,
+    ``index.html`` points at them (``versioned_index``), ``test/`` is left
+    out, and everything else (``data/``) is copied as is.
+
+    Raises:
+        FileExistsError: ``out`` exists and isn't an empty folder: a stale
+            file there would be published too.
+        FileNotFoundError: ``web`` has no ``data/status.json`` (the page
+            would load without data), no ``index.html``, or no ``js/`` or
+            ``css/`` folder (the page would load nothing).
+        ValueError: ``index.html`` doesn't load its code from ``js/`` and
+            ``css/`` (``versioned_index``).
+    """
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        msg = f"{out} already exists and isn't empty; publish into a new folder"
+        raise FileExistsError(msg)
+    if not (web / "data" / "status.json").is_file():
+        msg = (
+            f"no {web / 'data' / 'status.json'}; make the data first: "
+            "uv run python -m septa_detours.export site"
+        )
+        raise FileNotFoundError(msg)
+    for name in ASSET_DIRS:
+        if not (web / name).is_dir():
+            raise FileNotFoundError(f"no {web / name} folder: the page's code")
+    # Bytes, not read_text: universal newlines would rewrite any "\r\n".
+    html = (web / INDEX).read_bytes().decode("utf-8")
+
+    code = {
+        path.relative_to(web).as_posix(): path.read_bytes()
+        for name in ASSET_DIRS
+        for path in sorted((web / name).rglob("*"))
+        if path.is_file()
+    }
+    version = asset_version(code)
+    index = versioned_index(html, version)
+
+    out.mkdir(parents=True, exist_ok=True)
+    for entry in sorted(web.iterdir()):
+        if entry.name in NOT_PUBLISHED or entry.name == INDEX:
+            continue
+        target = out / entry.name
+        if entry.name in ASSET_DIRS:
+            target = out / f"{entry.name}-{version}"
+        if entry.is_dir():
+            shutil.copytree(entry, target)
+        else:
+            shutil.copy2(entry, target)
+    (out / INDEX).write_bytes(index.encode("utf-8"))
+    return version

@@ -670,6 +670,20 @@ Tests: 125 JS.
   `site.status.generated_at`), uses the normal cache, so Pages'
   fixed `max-age=600` can't mix exports. 8/8 mutants killed; checked
   headless (`/#route=bus-21`: every data request carried `?v=`).
+- `export deploy <out>` (hosting plan step 2b, 2026-11-27,
+  `export/deploy.py`): `asset_version` = sha256 (10 hex) over each
+  js/css file's length-prefixed path and bytes (content, not commit:
+  15-minute data runs and docs commits keep cached code);
+  `versioned_index` rewrites `src`/`href` `="js/` / `="css/` (optional
+  `./`; not `data-src`; CDN URLs untouched) and raises if either is
+  never referenced; `build_site` copies `web/` minus `test/`, code dirs
+  renamed `<dir>-<hash>`, index read/written as bytes (CRLF kept).
+  Refuses a non-empty out, a missing `data/status.json` or code folder,
+  before writing anything. 24/24 mutants killed (one survivor,
+  `is_file`, killed by a nested-module test). Real run: 200 files,
+  version `8b60501980`; served and loaded headless, every module from
+  `js-8b60501980/`. `write.py`'s docstring still says it's "the only
+  file I/O in export/" (no longer true; left for the user).
 
 ## U1, time on the map (UI plan, 2026-11-26)
 

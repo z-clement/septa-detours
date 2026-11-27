@@ -4,12 +4,15 @@ Usage (from the repo root, since default paths are relative to it)::
 
     uv run python -m septa_detours.export site [detours.json]
     uv run python -m septa_detours.export route bus 21
+    uv run python -m septa_detours.export deploy <out>
 
 ``site`` reads a ``match`` output (default: the newest
 ``data/processed/detours-*.json``) plus both GTFS feeds and writes the
 data contract (``export/contract.py``) to ``web/data/``, which the map
 page reads. ``route`` writes ``web/data/<feed>-<route_id>.geojson`` (a
-debugging tool; the page doesn't read it). Glue only: every decision
+debugging tool; the page doesn't read it). ``deploy`` copies ``web/`` (data
+included) to a new folder as it's published, with versioned code URLs
+(``export/deploy.py``). Glue only: every decision
 about *what* goes in a file lives in ``gtfs/`` and the ``export/``
 builders, and *how* it is written lives in ``export/write.py``.
 
@@ -17,9 +20,10 @@ Output: one ``wrote ...`` summary line on stdout.
 
 Exit codes:
     0: file written.
-    1: nothing written: a missing file (GTFS, detours), or data that can't
-       be exported (unknown route, no shapes, invalid detours, detours that
-       disagree with GTFS). ``error: ...`` on stderr.
+    1: nothing written: a missing file (GTFS, detours, the page's data), a
+       ``deploy`` folder that isn't empty, or data that can't be exported
+       (unknown route, no shapes, invalid detours, detours that disagree
+       with GTFS). ``error: ...`` on stderr.
     2: bad command-line arguments (argparse's own convention).
 """
 
@@ -31,6 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+from septa_detours.export.deploy import build_site
 from septa_detours.export.geojson import (
     join_route_lines,
     route_feature_collection,
@@ -72,13 +77,14 @@ from septa_detours.model import Detour, read_detours
 # another's internals. Both describe the files ``match`` writes.
 DEFAULT_DETOURS_DIR = Path("data/processed")
 MATCH_COMMAND = "uv run python -m septa_detours.match"
+DEFAULT_WEB_DIR = Path("web")
 
 # ``match``'s output name for a stamped snapshot: ``detours-<stamp>.json``.
 _DETOURS_NAME = re.compile(r"detours-\d{4}-\d{2}-\d{2}T\d{6}Z\.json")
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser: a required ``site`` or ``route`` command.
+    """Build the argument parser: a ``site``, ``route`` or ``deploy`` command.
 
     ``route``'s ``feed`` is limited to ``ALL_FEEDS`` via ``choices``, so a
     typo is rejected by argparse (exit 2, usage message) before any GTFS
@@ -103,6 +109,14 @@ def _build_parser() -> argparse.ArgumentParser:
     route.add_argument(
         "route_id",
         help="GTFS route_id (e.g. 21, L1); not always the public route name.",
+    )
+
+    deploy = commands.add_parser(
+        "deploy", help="Copy web/ to a new folder as it's published."
+    )
+    deploy.add_argument("out", type=Path, help="Folder to write (new or empty).")
+    deploy.add_argument(
+        "--web", type=Path, default=DEFAULT_WEB_DIR, help="Page to copy (default: web)."
     )
 
     return parser
@@ -283,11 +297,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "site":
             summary = export_site(args.detours_file or find_latest_detours())
+        elif args.command == "deploy":
+            version = build_site(args.web, args.out)
+            count = sum(1 for path in args.out.rglob("*") if path.is_file())
+            summary = f"wrote {count} files to {args.out} (code version {version})"
         else:
             # argparse types attributes as Any; `choices` guarantees a Feed.
             feed = cast("Feed", args.feed)
             summary = f"wrote {export_route(feed, args.route_id)}"
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, FileExistsError, ValueError) as exc:
         # Expected, explainable failures only. Anything else is a bug and
         # should surface with its full traceback.
         print(f"error: {exc}", file=sys.stderr)  # noqa: T201

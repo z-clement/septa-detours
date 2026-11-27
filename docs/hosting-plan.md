@@ -103,7 +103,10 @@ exports, or run old JS against new data. Fix (already planned, web plan
 ## Steps (one increment each, tested and committed)
 
 1. This plan.
-2. **Versioned URLs** for data files and the JS modules.
+2. **Versioned URLs** for data files and the JS modules. (Done
+   2026-11-27: `data.js` `versioned`, `?v=<generated_at>`; `export
+   deploy <out>` puts the code in `js-<hash>/`, `css-<hash>/`, hash of
+   the code's contents, so data-only runs keep cached code.)
 3. **Stale-data warning** on the page when the data is old (e.g. more
    than an hour: the job has stopped or is failing). Threshold: my
    decision.

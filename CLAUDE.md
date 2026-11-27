@@ -131,6 +131,10 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
 - Export one route's shapes (debugging tool, not used by the page):
   `uv run python -m septa_detours.export route bus 21` ->
   `web/data/bus-21.geojson`
+- Build the copy to publish (hosting): `uv run python -m
+  septa_detours.export deploy <out>` -> `<out>/` = `web/` without
+  `test/`, code in `js-<hash>/`, `css-<hash>/` (refuses a non-empty
+  `<out>`). Locally, serve `web/` as is
 - Serve the map: `python -m http.server -d web`, then open
   http://localhost:8000 (it reads the files `export site` writes)
 
