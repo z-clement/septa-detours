@@ -4,7 +4,7 @@
 // Loaded by index.html as a module, after maplibre-gl.js (so the global
 // `maplibregl` exists for mapview.js).
 
-import { loadSite, routeDetailLoader } from "./data.js";
+import { isNewerExport, latestVersion, loadSite, routeDetailLoader } from "./data.js";
 import { detourBounds, inEffectKeys, isInEffect, rejoinCollection } from "./detours.js";
 import { focusAnnouncement, loadErrorText, staleNotice, statusLine } from "./format.js";
 import {
@@ -31,6 +31,10 @@ import { createState, formatHash, parseHash } from "./state.js";
 
 /** How often `now` moves on, so detours become active/ended on screen. */
 const NOW_REFRESH_MS = 60_000;
+
+/** How often an open page asks whether newer detours are out (the job
+ * publishes every 15 minutes; a 304 when nothing changed). */
+const UPDATE_CHECK_MS = 5 * 60_000;
 
 /** Where the sidebar becomes a bottom sheet; the same width as app.css. */
 const NARROW = window.matchMedia("(max-width: 699px)");
@@ -74,11 +78,14 @@ async function main() {
   const { showLegendFor } = addLegend(map, { open: !NARROW.matches });
   showStatus(statusLine(site.status));
   const staleElement = document.getElementById("stale");
-  /** The old-data banner at `now` (empty, so hidden, while fresh). Only
-   * rewritten when the text changes: the clock ticks every minute, and a
-   * screen reader may announce a rewritten role="status" again. */
+  const updateElement = document.getElementById("update");
+  let updateOffered = false;
+  /** The old-data banner at `now` (empty, so hidden, while fresh, or once
+   * a reload to newer detours is offered). Only rewritten when the text
+   * changes: the clock ticks every minute, and a screen reader may
+   * announce a rewritten role="status" again. */
   const showStale = (now) => {
-    const text = staleNotice(site.status, now) ?? "";
+    const text = updateOffered ? "" : (staleNotice(site.status, now) ?? "");
     if (staleElement.textContent !== text) {
       staleElement.textContent = text;
     }
@@ -276,6 +283,39 @@ async function main() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && store.get().focus !== null) {
       store.focus(null);
+    }
+  });
+
+  // --- Newer detours --------------------------------------------------------
+
+  // The page loads its data once. An open tab asks every few minutes, and
+  // whenever it's shown again (a phone's tab from yesterday), whether a
+  // newer export is out, then offers a reload. Never reloads by itself:
+  // the rider may be reading a card. Reloading keeps the URL hash, so the
+  // focused route and detour stay.
+  const checkForUpdate = () => {
+    if (updateOffered) {
+      return;
+    }
+    latestVersion()
+      .then((latest) => {
+        if (!updateOffered && isNewerExport(site.status.generated_at, latest)) {
+          updateOffered = true;
+          const reload = document.createElement("button");
+          reload.type = "button";
+          reload.textContent = "Reload";
+          reload.addEventListener("click", () => window.location.reload());
+          updateElement.replaceChildren("Newer detours are available. ", reload);
+          showStale(store.get().now);
+        }
+      })
+      // Offline, or between deploys: just ask again next time.
+      .catch((err) => console.warn("Couldn't check for newer detours:", err));
+  };
+  setInterval(checkForUpdate, UPDATE_CHECK_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      checkForUpdate();
     }
   });
 

@@ -873,3 +873,25 @@ gave Claude a free hand on these, with your decisions on the open ones.
   old "N on the map, N without a location, N not matched to a route"
   read as internal, and "on the map" counted every placed detour though
   the map draws only those in effect (U1). Mutants: 4, all killed.
+- Newer detours, offered (your choice: offer, don't force):
+  `data.latestVersion()` (status.json, fresh) and pure
+  `data.isNewerExport(current, latest)` (later by `Date.parse`, not just
+  different, so an older cached status.json never offers a reload; NaN
+  is false). `main.js` asks every `UPDATE_CHECK_MS` (5 min) and on
+  `visibilitychange` to visible; a newer one fills `#update` ("Newer
+  detours are available." + a Reload button, which keeps the hash) and
+  empties `#stale`. A failed check only warns in the console. Mutants: 5,
+  all killed.
+- Banners: `#error`, `#stale`, `#update` share `.banner` (bottom middle
+  of the map; phones: above the sheet). `#error` moved there from the top
+  of the window (it sat under the map key / zoom buttons on phones).
+  While the credits are open they push the banners up: `createMap`
+  observes `.maplibregl-ctrl-attrib` (`ResizeObserver`) and sets
+  `--credits-height` (its height + `CREDITS_GAP_PX` 8 while
+  `maplibregl-compact-show`, else 0). Before, `#stale` covered the open
+  credits entirely on a phone (OSM's credit must stay visible). Checked
+  headless at 1200x800 and 390x844, credits open (2.5 s) and closed (9 s);
+  the reload offer with a copy of `web/` whose status.json was bumped
+  after load; the error banner with status.json removed. CDP renders
+  need `Network.enable` before `Network.setCacheDisabled`, or the
+  profile serves an old `index.html`.

@@ -6,7 +6,15 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
-import { DataError, SCHEMA_VERSION, loadSite, routeDetailLoader, versioned } from "../js/data.js";
+import {
+  DataError,
+  SCHEMA_VERSION,
+  isNewerExport,
+  latestVersion,
+  loadSite,
+  routeDetailLoader,
+  versioned,
+} from "../js/data.js";
 
 let requested;
 let options;
@@ -141,6 +149,37 @@ test("loadSite: a missing status.json stops everything", async () => {
   serve({});
   await assert.rejects(loadSite(), /Could not load data\/status\.json \(HTTP 404\)/);
   assert.deepEqual(requested, ["data/status.json"]);
+});
+
+// --- latestVersion, isNewerExport -------------------------------------------
+
+test("latestVersion: status.json's generated_at, asked fresh", async () => {
+  const later = { ...STATUS, generated_at: "2026-11-27T14:00:12Z" };
+  serve({ "data/status.json": later });
+  assert.equal(await latestVersion(), "2026-11-27T14:00:12Z");
+  assert.deepEqual(requested, ["data/status.json"]);
+  assert.deepEqual(options, [{ cache: "no-cache" }]);
+});
+
+test("latestVersion: a missing status.json rejects", async () => {
+  serve({});
+  await assert.rejects(latestVersion(), { reason: "missing" });
+});
+
+test("isNewerExport: only a later export", () => {
+  assert.equal(isNewerExport(GENERATED_AT, "2026-11-27T14:00:12Z"), true);
+  assert.equal(isNewerExport(GENERATED_AT, GENERATED_AT), false);
+  // An older status.json (a cache or server behind the page) isn't newer.
+  assert.equal(isNewerExport(GENERATED_AT, "2026-11-27T13:29:51Z"), false);
+  // By time, not by text: the same instant written with an offset.
+  assert.equal(isNewerExport(GENERATED_AT, "2026-11-27T08:44:40-05:00"), false);
+  assert.equal(isNewerExport(GENERATED_AT, "2026-11-27T08:44:41-05:00"), true);
+});
+
+test("isNewerExport: anything unreadable is not newer", () => {
+  assert.equal(isNewerExport(GENERATED_AT, undefined), false);
+  assert.equal(isNewerExport(GENERATED_AT, "soon"), false);
+  assert.equal(isNewerExport(undefined, GENERATED_AT), false);
 });
 
 // --- routeDetailLoader --------------------------------------------------------

@@ -79,47 +79,55 @@ body {
   flex-direction: column;
 }
 
-/* Error banner over the map. `:empty` hides it until showError()
-   puts text in it, so no JS is needed to toggle visibility. */
-#error {
+/* Banners over the map (index.html): #error (red), #stale (old data,
+   amber, hosting plan step 3) and #update (newer detours, a Reload
+   button). At the bottom middle of the map (right of the 320px sidebar;
+   phones: above the sheet, below). At the top they covered the map key
+   or the zoom buttons on narrower screens. 96px of width is kept free so
+   they clear the credits' (i) button (bottom right); while the credits
+   are open they move up above them (`--credits-height`, from mapview.js:
+   OSM's credit must stay visible). `:empty` hides each until main.js
+   fills it. */
+.banner {
   position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100% - 48px);
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #b00020;
-  color: #fff;
-  font: 14px/1.4 system-ui, sans-serif;
-  white-space: pre-line; /* keep the line break in error messages */
-}
-#error:empty {
-  display: none;
-}
-
-/* Old-data banner (hosting plan step 3): amber, at the bottom middle of
-   the map (right of the 320px sidebar; phones: above the sheet, below).
-   At the top it covered the map key or the zoom buttons on narrower
-   screens, and it stays up as long as the data is old. 96px of width is
-   kept free so it clears the attribution button (bottom right). Only
-   shows once the data has loaded, so it never meets a load error. */
-#stale {
-  position: absolute;
-  bottom: 12px;
+  bottom: calc(12px + var(--credits-height, 0px));
   left: calc(320px + (100% - 320px) / 2);
   transform: translateX(-50%);
   width: max-content;
   max-width: min(420px, calc(100% - 320px - 96px));
   padding: 8px 12px;
-  border: 1px solid #d9a400;
+  border: 1px solid;
   border-radius: 4px;
+  font: 14px/1.4 system-ui, sans-serif;
+  transition: bottom 0.2s ease;
+}
+.banner:empty {
+  display: none;
+}
+#error {
+  border-color: #b00020;
+  background: #b00020;
+  color: #fff;
+}
+#stale {
+  border-color: #d9a400;
   background: #fff4ce;
   color: #4d3500;
-  font: 14px/1.4 system-ui, sans-serif;
 }
-#stale:empty {
-  display: none;
+#update {
+  border-color: #7aa7e0;
+  background: #e8f1fc;
+  color: #0b3a75;
+}
+#update button {
+  margin-left: 4px;
+  padding: 2px 10px;
+  border: 1px solid #0b3a75;
+  border-radius: 4px;
+  background: #0b3a75;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* Status line (what's drawn), at the top of the sidebar. Hidden while
@@ -303,11 +311,10 @@ body {
    attribution) sit just above it. */
 @media (max-width: 699px) {
   /* The map is full width here, with the sheet over its bottom. */
-  #stale {
-    bottom: calc(var(--sheet-height, 50vh) + 12px);
+  .banner {
+    bottom: calc(var(--sheet-height, 50vh) + 12px + var(--credits-height, 0px));
     left: 50%;
     max-width: calc(100% - 96px);
-    transition: bottom 0.2s ease;
   }
   body {
     display: block;
@@ -364,9 +371,14 @@ body {
 
 @media (max-width: 699px) and (prefers-reduced-motion: reduce) {
   #sidebar,
-  #stale,
   .maplibregl-ctrl-bottom-left,
   .maplibregl-ctrl-bottom-right {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner {
     transition: none;
   }
 }

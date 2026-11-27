@@ -111,6 +111,31 @@ export async function loadSite() {
 }
 
 /**
+ * The `generated_at` of the export on the server now (status.json, asked
+ * fresh), for an open page's check for newer detours (main.js).
+ *
+ * @returns {Promise<string>}
+ */
+export async function latestVersion() {
+  return (await loadJson("data/status.json", { fresh: true })).generated_at;
+}
+
+/**
+ * Whether `latest` is a later export than `current` (two `generated_at`s).
+ *
+ * Later, not merely different: a server or cache still holding an older
+ * status.json mustn't offer a reload to older data. Either one
+ * unparseable gives false (`NaN` compares false).
+ *
+ * @param {string} current the page's export
+ * @param {string} latest the server's, from `latestVersion`
+ * @returns {boolean}
+ */
+export function isNewerExport(current, latest) {
+  return Date.parse(latest) > Date.parse(current);
+}
+
+/**
  * Make a loader for route detail files (routes/<key>.json), with a cache.
  *
  * Each file is fetched at most once: the cache holds the Promise, so two

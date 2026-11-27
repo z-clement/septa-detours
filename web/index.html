@@ -43,10 +43,16 @@
          which would silence it. -->
     <div id="announce" class="visually-hidden" aria-live="polite"></div>
     <div id="map"></div>
-    <div id="error" role="alert"></div>
-    <!-- Old data (format.staleNotice): over the map, so it shows whatever
-         the phone sheet's height. -->
-    <div id="stale" role="status"></div>
+    <!-- Banners over the map's bottom middle (app.css .banner), so they
+         show whatever the phone sheet's height. At most one shows: an
+         error means nothing loaded, and the reload offer replaces the
+         old-data warning. -->
+    <div id="error" class="banner" role="alert"></div>
+    <!-- Old data (format.staleNotice). -->
+    <div id="stale" class="banner" role="status"></div>
+    <!-- Newer detours are out (main.js asks every few minutes): a Reload
+         button, filled in by main.js. -->
+    <div id="update" class="banner" role="status"></div>
 
     <!-- type="module": strict mode, own scope (no accidental globals), and
          deferred until the HTML is parsed, so #map exists when it runs.

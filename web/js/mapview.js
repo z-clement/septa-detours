@@ -17,6 +17,9 @@ const SEPTA_CREDIT =
 /** How long the credits stay open after the map loads (OSM allows 5 s). */
 const CREDITS_OPEN_MS = 5000;
 
+/** Space between the open credits and a banner above them. */
+const CREDITS_GAP_PX = 8;
+
 /** Used when a route's `color` is null (export emits null, never junk). */
 const FALLBACK_COLOR = "#555555";
 
@@ -113,6 +116,17 @@ export function createMap(container) {
     customAttribution: SEPTA_CREDIT,
   });
   map.addControl(attribution);
+  // The page's banners (app.css `.banner`) sit above the credits while
+  // they're open: open, they span the map's bottom (two lines on a phone).
+  // Closed, only the (i) button is left, which the banners clear anyway.
+  const credits = map.getContainer().querySelector(".maplibregl-ctrl-attrib");
+  new ResizeObserver(() => {
+    const open = credits.classList.contains("maplibregl-compact-show");
+    document.documentElement.style.setProperty(
+      "--credits-height",
+      open ? `${credits.offsetHeight + CREDITS_GAP_PX}px` : "0px",
+    );
+  }).observe(credits);
   map.once("load", () => {
     setTimeout(() => {
       map
