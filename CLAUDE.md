@@ -148,6 +148,9 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
   septa_detours.export deploy <out>` -> `<out>/` = `web/` without
   `test/`, code in `js-<hash>/`, `css-<hash>/` (refuses a non-empty
   `<out>`). Locally, serve `web/` as is
+- Hosted: `.github/workflows/publish.yml` runs ingest gtfs -> gtfs unpack
+  -> gtfs check -> ingest -> match -> export site -> export deploy
+  -> Pages -> ingest store, every 15 minutes
 - Serve the map: `python -m http.server -d web`, then open
   http://localhost:8000 (it reads the files `export site` writes)
 
@@ -226,13 +229,13 @@ Reached (history in `docs/notes/`, plans in `docs/`):
 ## Next
 
 **Hosting** (`docs/hosting-plan.md`, decided 2026-11-27): GitHub
-Actions every 15 min -> GitHub Pages, snapshots on a `snapshots`
-branch, GTFS + street cache by hand as `reference` release assets.
-Done: versioned URLs (`export deploy`), stale-data banner. Remaining
-(see the plan's "Where we stopped"): reference upload + GTFS end-date
-warning (log only), snapshot store, the workflow, then my pre-deploy
-check (notes in the plan). After it: a targeted mobile UI/UX pass
-from testers' feedback (`docs/backlog.md`).
+Actions every 15 min (`.github/workflows/publish.yml`) -> GitHub Pages;
+snapshots on a `snapshots` branch; GTFS from SEPTA's GitHub releases
+(cached); the street cache by hand as a `reference` release asset.
+Built and checked locally. Next: my "Going live" steps in the plan
+(push, release, Pages setting, first run), then my pre-deploy check
+(notes in the plan), then a README. After it: a targeted mobile UI/UX
+pass from testers' feedback (`docs/backlog.md`).
 
 Left for later (render sweep and color pass done 2026-11-26): the
 off-route start lead-in and the two unchecked turns

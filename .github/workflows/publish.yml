@@ -1,0 +1,116 @@
+# Fetch SEPTA's detours every 15 minutes and publish the map to GitHub Pages.
+# Plan and decisions: docs/hosting-plan.md. Each step is a command you can
+# run locally from the repo root (see CLAUDE.md, "Commands").
+#
+# Fails safe: any failed step before the deploy stops the run, and the last
+# good site stays up (the page warns when its data is over an hour old).
+
+name: publish
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # GitHub often starts these 5-15 minutes late
+  workflow_dispatch: # the "Run workflow" button on the Actions tab
+
+# One run at a time; a run never cancels another mid-deploy.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push alerts snapshots to the `snapshots` branch
+  pages: write # deploy to Pages
+  id-token: write # required by actions/deploy-pages
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      UV_NO_SYNC: "1" # `uv run` uses what `uv sync` built (no dev tools)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install (Python from .python-version, locked dependencies)
+        run: uv sync --locked --no-dev
+
+      # GTFS: SEPTA's release in effect, cached between runs. The newest
+      # cache is restored by prefix; `ingest gtfs` downloads only when the
+      # release in effect isn't the cached one.
+      - name: Restore GTFS cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/gtfs
+          key: gtfs-restore-newest # never an exact hit: restore-keys decides
+          restore-keys: gtfs-
+
+      - name: GTFS (fetch if new, unpack, check end dates)
+        id: gtfs
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # lifts the API's per-address limit
+        run: |
+          if out=$(uv run python -m septa_detours.ingest gtfs); then
+            echo "$out"
+            zip=$(echo "$out" | cut -d' ' -f2)
+            if [[ $out == wrote* ]]; then
+              # Keep only the release in effect in the cache.
+              find data/raw/gtfs -name 'gtfs_public-*.zip' ! -path "$zip" -delete
+              echo "save_key=gtfs-$(basename "$zip" .zip)" >> "$GITHUB_OUTPUT"
+            fi
+            uv run python -m septa_detours.gtfs unpack "$zip"
+          else
+            echo "::warning::Couldn't check SEPTA's GTFS releases; using the cached one"
+            uv run python -m septa_detours.gtfs unpack
+          fi
+          uv run python -m septa_detours.gtfs check
+
+      - name: Save GTFS cache (new release only)
+        if: steps.gtfs.outputs.save_key != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/gtfs
+          key: ${{ steps.gtfs.outputs.save_key }}
+
+      - name: Street cache (the `reference` release)
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p data/processed
+          curl -fsSL --retry 3 -o data/processed/streets.parquet \
+            "https://github.com/$REPO/releases/download/reference/streets.parquet"
+
+      - name: Fetch alerts, match, export
+        id: pipeline
+        run: |
+          out=$(uv run python -m septa_detours.ingest)
+          echo "$out"
+          echo "snapshot=${out#wrote }" >> "$GITHUB_OUTPUT"
+          uv run python -m septa_detours.match
+          uv run python -m septa_detours.export site
+          uv run python -m septa_detours.export deploy _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # After the deploy, and allowed to fail: a git problem (e.g. two runs
+      # racing) must never keep riders on old data. The next run stores its
+      # own snapshot.
+      - name: Store the snapshot (if it changed)
+        continue-on-error: true
+        env:
+          SNAPSHOT: ${{ steps.pipeline.outputs.snapshot }}
+        run: uv run python -m septa_detours.ingest store "$SNAPSHOT"

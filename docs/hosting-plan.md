@@ -162,15 +162,10 @@ Next, in order:
    Done 2026-11-27: `python -m septa_detours.ingest store <snapshot>`
    (prints `stored ...` / `unchanged: ...`; exit 1 on a git failure,
    e.g. a lost race; never forces).
-4. **Step 6, the workflow** `.github/workflows/publish.yml` (every 15
-   min + manual; uv + Python 3.13; reference download; `ingest` ->
-   `match` -> `export site` -> snapshot store -> `export deploy _site`
-   -> upload + `actions/deploy-pages`; permissions `contents: write`,
-   `pages: write`, `id-token: write`). Before it: SEPTA's data terms
-   (incl. republishing GTFS as a release asset), OpenFreeMap's terms,
-   a SEPTA credit on the page.
-5. **Me**: create the `reference` release and run the upload script;
-   Settings -> Pages -> Source: "GitHub Actions"; watch the first runs.
+4. **Step 6, the workflow**: done 2026-11-27,
+   `.github/workflows/publish.yml` (details below, "The workflow as
+   built"). Terms checked first (section below); SEPTA credit added.
+5. **Me: go live** (the steps under "Going live" below).
 6. **My whole-project check** before announcing it (notes below), then
    share it and collect feedback for the mobile pass (`docs/backlog.md`).
 
@@ -214,6 +209,64 @@ advice, just what the texts say.
   big extraction"), so treat both as ODbL: credit OpenStreetMap and say
   they're under the ODbL (the release description for `streets.parquet`;
   the page's existing credit for `paths.geojson`).
+
+## The workflow as built (2026-11-27)
+
+`.github/workflows/publish.yml`, one job, every 15 minutes + "Run
+workflow"; `concurrency: publish` (no overlap, never cancelled);
+permissions `contents: write`, `pages: write`, `id-token: write`;
+`UV_NO_SYNC=1` so `uv run` uses `uv sync --locked --no-dev`'s env.
+
+1. GTFS: restore the newest `gtfs-*` cache (by prefix); `ingest gtfs`
+   (with `GITHUB_TOKEN`); after a `wrote`, delete older zips and save the
+   cache as `gtfs-<file name>` (a new cache per SEPTA release, not per
+   run). If the release list can't be fetched: `::warning::` and unpack
+   the newest cached release (fails only with no cache). `gtfs unpack`,
+   `gtfs check`.
+2. `streets.parquet` from this repo's `reference` release (`curl`).
+3. `ingest` -> `match` -> `export site` -> `export deploy _site` ->
+   Pages (configure, upload, deploy).
+4. After the deploy, `ingest store <snapshot>` with `continue-on-error`.
+
+Step outputs reach shell scripts through `env:`, not `${{ }}` pasted
+into them. Actions pinned to major tags (`checkout@v4`, `setup-uv@v6`,
+`cache@v4`, `configure-pages@v5`, `upload-pages-artifact@v3`,
+`deploy-pages@v4`); newer majors may exist.
+
+Checked locally (Actions itself can't run here): the YAML parses
+(`uvx --from pyyaml`); the GTFS and pipeline steps' shell, run with
+`bash -eo pipefail` in a fresh clone: cache hit (no save key), empty
+cache (download, stale zip deleted, `save_key=gtfs-gtfs_public-v202611220`),
+API failure with cache (warning, exit 0) and without (exit 1); the
+pipeline (~14 s, 131 detours, 199 files in `_site`); the store command
+against a local bare origin (stored, then unchanged).
+
+## Going live (my steps, written by Claude 2026-11-27)
+
+1. **Push**: `git push` (main).
+2. **Create the `reference` release** (website): repo -> Releases ->
+   "Draft a new release" -> "Choose a tag": type `reference`, "Create
+   new tag: reference on publish" (target `main`). Title: `Reference
+   data`. Description:
+
+   > `streets.parquet`: street data derived from OpenStreetMap,
+   > © OpenStreetMap contributors, available under the Open Database
+   > License (ODbL) 1.0: https://opendatacommons.org/licenses/odbl/1-0/
+   > Built from Geofabrik extracts pennsylvania-, new-jersey- and
+   > delaware-261124 (2026-11-24).
+
+   Attach `data/processed/streets.parquet` (24 MB). Publish (a draft's
+   files can't be downloaded by the job). "Pre-release" off.
+3. **Pages**: Settings -> Pages -> Build and deployment -> Source:
+   "GitHub Actions".
+4. **First run**: Actions -> publish -> "Run workflow" (branch `main`).
+   Expect: green, GTFS downloaded (the first run has no cache), a
+   snapshot stored, the site at `https://<user>.github.io/<repo>/`.
+   Then let a scheduled run or two go by (they start late).
+5. **Later, refreshing the street cache** (after `ingest osm` + `python
+   -m septa_detours.streets`): edit the release, delete
+   `streets.parquet`, upload the new one (the website can't replace in
+   place), update the extract dates in the description.
 
 ## Notes for the pre-deploy check (collected by Claude, 2026-11-27)
 
