@@ -6,7 +6,7 @@
 
 import { loadSite, routeDetailLoader } from "./data.js";
 import { detourBounds, inEffectKeys, isInEffect, rejoinCollection } from "./detours.js";
-import { focusAnnouncement, statusLine } from "./format.js";
+import { focusAnnouncement, staleNotice, statusLine } from "./format.js";
 import {
   addClickHandler,
   addLegend,
@@ -72,11 +72,22 @@ async function main() {
   // Open on wide screens; a closed "Map key" button on phones (U6).
   const { showLegendFor } = addLegend(map, { open: !NARROW.matches });
   showStatus(statusLine(site.status));
+  const staleElement = document.getElementById("stale");
+  /** The old-data banner at `now` (empty, so hidden, while fresh). Only
+   * rewritten when the text changes: the clock ticks every minute, and a
+   * screen reader may announce a rewritten role="status" again. */
+  const showStale = (now) => {
+    const text = staleNotice(site.status, now) ?? "";
+    if (staleElement.textContent !== text) {
+      staleElement.textContent = text;
+    }
+  };
 
   // The catalog's mode order (D8, as Python wrote it), for the chips and
   // the list's groups: search ranking must not reorder the groups.
   const modeOrder = groupByMode(site.routes).map((group) => group.mode);
   const store = createState({ modes: modeOrder, now: new Date() });
+  showStale(store.get().now);
 
   // The map draws only detours in effect, by the page's clock (U1): every
   // detour feature carries its start and end.
@@ -333,6 +344,7 @@ async function main() {
     }
     if (changed.has("now")) {
       showInEffect(state.now);
+      showStale(state.now);
     }
     if (changed.has("focus")) {
       const route = state.focus === null ? null : routesByKey.get(state.focus);

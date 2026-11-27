@@ -108,8 +108,11 @@ exports, or run old JS against new data. Fix (already planned, web plan
    deploy <out>` puts the code in `js-<hash>/`, `css-<hash>/`, hash of
    the code's contents, so data-only runs keep cached code.)
 3. **Stale-data warning** on the page when the data is old (e.g. more
-   than an hour: the job has stopped or is failing). Threshold: my
-   decision.
+   than an hour: the job has stopped or is failing). (Done 2026-11-27:
+   `format.staleNotice`, 1 hour (`STALE_AFTER_MS`, Claude's suggestion;
+   change freely), from `snapshot_fetched_at`; an amber `#stale` banner
+   at the bottom middle of the map, above the phone sheet; checked on the
+   page's 1-minute tick.)
 4. **Reference data**: the upload script (zip both GTFS feeds + the
    street cache, upload to the `reference` release), the job's unpack
    step, and the GTFS end-date check (a small pure function, tested).
@@ -122,6 +125,46 @@ exports, or run old JS against new data. Fix (already planned, web plan
 7. **My part**: create the GitHub repo and push; create the
    `reference` release and run the upload script; Settings -> Pages ->
    Source: "GitHub Actions"; watch the first runs.
+
+## Notes for the pre-deploy check (collected by Claude, 2026-11-27)
+
+Minor things noticed along the way, for the whole-project check before
+the first deploy. None blocks hosting; each is a small decision.
+
+- **CLAUDE.md "Current state" is out of date**: it says contract
+  **schema 9** (it's 10 since `e8a619d`) and ~1660 Python / ~156 JS
+  tests (now 1691 / 172).
+- **Error messages are written for me, not riders**: a missing data file
+  shows "Make it first: uv run python -m septa_detours.match ..." and a
+  schema mismatch "Re-export the data (or reload the page)" in the red
+  `#error` banner (`web/js/data.js`). On the public site a rider would
+  see these. Maybe a rider-facing line ("Detours couldn't load; try
+  again later") with the details in the console.
+- **`#error` banner placement**: centered on the whole window (sidebar
+  included) and at the top, where on narrow screens it sits under the
+  map key / zoom buttons. `#stale` had the same problem and moved to the
+  bottom middle of the map; `#error` could follow (it would only meet
+  `#stale` if both show, which can't happen today).
+- **No favicon**: every load asks for `/favicon.ico` (404). A small icon
+  (or `<link rel="icon" href="data:,">` to stop the request).
+- **MapLibre from unpkg** (`index.html`, pinned 5.24.0) with no
+  `integrity` attribute: if unpkg served a different file, the page
+  would run it. Add SRI hashes, or copy MapLibre into `web/vendor/`
+  (it'd then be versioned by `deploy` too, if under `js/`).
+- **An open tab never sees new data**: the page loads the data once;
+  after an hour the stale banner asks for a reload. Later, maybe: re-check
+  `status.json` every few minutes and offer "New detours: reload".
+- **`docs/web-plan.md` "Caching"** describes the plan before it was built
+  (and suggested a commit-based version; it's content-based). History
+  only; fine to leave or trim.
+- **The headless screenshot script isn't in the repo**: it lived in
+  Claude's scratchpad and was lost twice (rewritten 2026-11-27 as a
+  ~30-line CDP script). If headless checks stay useful, keep a copy in
+  e.g. `tools/` (Node 20, `--experimental-websocket`, no dependencies).
+- **Public-facing text to review**: the page title, the status line's
+  wording ("28 without a location, 9 not matched to a route" reads as
+  internal), and a SEPTA credit / "not affiliated with SEPTA" line
+  (step 6).
 
 ## After hosting
 

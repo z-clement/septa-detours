@@ -44,6 +44,9 @@
     <div id="announce" class="visually-hidden" aria-live="polite"></div>
     <div id="map"></div>
     <div id="error" role="alert"></div>
+    <!-- Old data (format.staleNotice): over the map, so it shows whatever
+         the phone sheet's height. -->
+    <div id="stale" role="status"></div>
 
     <!-- type="module": strict mode, own scope (no accidental globals), and
          deferred until the HTML is parsed, so #map exists when it runs.

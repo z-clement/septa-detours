@@ -682,8 +682,23 @@ Tests: 125 JS.
   before writing anything. 24/24 mutants killed (one survivor,
   `is_file`, killed by a nested-module test). Real run: 200 files,
   version `8b60501980`; served and loaded headless, every module from
-  `js-8b60501980/`. `write.py`'s docstring still says it's "the only
-  file I/O in export/" (no longer true; left for the user).
+  `js-8b60501980/`. (`write.py`'s docstring reworded to match.)
+- Stale-data banner (hosting plan step 3, 2026-11-27):
+  `format.staleNotice(status, now, maxAgeMs = STALE_AFTER_MS)` (1 h):
+  "Last updated N hours ago. Detours may have changed since; reloading
+  may show newer ones." Age from `snapshot_fetched_at`, rounded down;
+  minutes < 1 h (only with a smaller limit), hours < 48 h, then days.
+  `null` while fresh (up to exactly the limit), for a hand-named
+  snapshot, or a fetch time ahead of the clock. 12/12 mutants killed
+  (two boundary survivors fixed: exactly 1 h, fractional minutes).
+  `main.js` writes `#stale` at start and on each `now` tick, only when
+  the text changes (no repeated screen-reader announcement). Placement:
+  first top-center like `#error`, but rendered (headless, data faked
+  3 h old) it sat under the map key at 1280 px and over the key and zoom
+  buttons at 800 px / on phones; now bottom middle of the map (desktop
+  centered right of the sidebar, max 420 px; phones `bottom:
+  var(--sheet-height) + 12px`, following the sheet), 96 px kept clear
+  for the attribution button. Checked at 1280x800, 800x600, 390x844.
 
 ## U1, time on the map (UI plan, 2026-11-26)
 

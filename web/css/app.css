@@ -98,6 +98,30 @@ body {
   display: none;
 }
 
+/* Old-data banner (hosting plan step 3): amber, at the bottom middle of
+   the map (right of the 320px sidebar; phones: above the sheet, below).
+   At the top it covered the map key or the zoom buttons on narrower
+   screens, and it stays up as long as the data is old. 96px of width is
+   kept free so it clears the attribution button (bottom right). Only
+   shows once the data has loaded, so it never meets a load error. */
+#stale {
+  position: absolute;
+  bottom: 12px;
+  left: calc(320px + (100% - 320px) / 2);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(420px, calc(100% - 320px - 96px));
+  padding: 8px 12px;
+  border: 1px solid #d9a400;
+  border-radius: 4px;
+  background: #fff4ce;
+  color: #4d3500;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+#stale:empty {
+  display: none;
+}
+
 /* Status line (what's drawn), at the top of the sidebar. Hidden while
    empty, like #error. */
 #status {
@@ -278,6 +302,13 @@ body {
    map's fit and pan leave room for; MapLibre's bottom controls (the
    attribution) sit just above it. */
 @media (max-width: 699px) {
+  /* The map is full width here, with the sheet over its bottom. */
+  #stale {
+    bottom: calc(var(--sheet-height, 50vh) + 12px);
+    left: 50%;
+    max-width: calc(100% - 96px);
+    transition: bottom 0.2s ease;
+  }
   body {
     display: block;
   }
@@ -333,6 +364,7 @@ body {
 
 @media (max-width: 699px) and (prefers-reduced-motion: reduce) {
   #sidebar,
+  #stale,
   .maplibregl-ctrl-bottom-left,
   .maplibregl-ctrl-bottom-right {
     transition: none;
