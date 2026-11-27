@@ -8,6 +8,15 @@ import { clickChoices, detouredKeys, withRouteLabels } from "./routes.js";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
+/** Listed before the basemap's own credits. Not required by SEPTA's
+ * license; the page is titled "SEPTA Detours", so it says it isn't SEPTA's. */
+const SEPTA_CREDIT =
+  'Detour data from <a href="https://www.septa.org/" target="_blank">SEPTA</a>' +
+  " \u00b7 Not affiliated with SEPTA";
+
+/** How long the credits stay open after the map loads (OSM allows 5 s). */
+const CREDITS_OPEN_MS = 5000;
+
 /** Used when a route's `color` is null (export emits null, never junk). */
 const FALLBACK_COLOR = "#555555";
 
@@ -96,14 +105,21 @@ export function createMap(container) {
   map.addControl(new maplibregl.NavigationControl());
   // Compact: an (i) button that opens the credits, not a two-line box
   // across the bottom of a phone's map (render sweep finding 6). MapLibre
-  // shows it open at first; close it once the map has loaded.
-  const attribution = new maplibregl.AttributionControl({ compact: true });
+  // shows it open at first and closes it on the first drag. OSM's
+  // attribution guidelines want it seen without a click, but allow it to
+  // close "automatically after five seconds": so close it then, not at load.
+  const attribution = new maplibregl.AttributionControl({
+    compact: true,
+    customAttribution: SEPTA_CREDIT,
+  });
   map.addControl(attribution);
   map.once("load", () => {
-    map
-      .getContainer()
-      .querySelector(".maplibregl-ctrl-attrib")
-      ?.classList.remove("maplibregl-compact-show");
+    setTimeout(() => {
+      map
+        .getContainer()
+        .querySelector(".maplibregl-ctrl-attrib")
+        ?.classList.remove("maplibregl-compact-show");
+    }, CREDITS_OPEN_MS);
   });
   return map;
 }

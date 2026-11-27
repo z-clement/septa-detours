@@ -194,9 +194,13 @@ advice, just what the texts say.
   OpenStreetMap` (linked), shown by our compact `AttributionControl`.
 - **OpenStreetMap** (OSMF attribution guidelines): credit "OpenStreetMap"
   and make the ODbL clear (a link to openstreetmap.org/copyright does).
-  Visible at first, may collapse "on map interaction": MapLibre 5.24.0's
-  compact control starts open and collapses on the first drag. OK as is
-  (check by eye that the phone sheet doesn't cover it).
+  Visible at first, may collapse "on map interaction" or "automatically
+  after five seconds": MapLibre 5.24.0's compact control starts open and
+  collapses on the first drag. But `createMap` closed it at load (render
+  sweep finding 6); fixed 2026-11-27: closed 5 s after load
+  (`CREDITS_OPEN_MS`), with a SEPTA line first (`SEPTA_CREDIT`, "Detour
+  data from SEPTA · Not affiliated with SEPTA", my choice). Checked
+  headless (Brave + CDP): open at 2 s with all four links, closed at 8 s.
 - **OSM data we publish ourselves**: `paths.geojson` (detour paths drawn
   along OSM ways) and the `streets.parquet` release asset are extracts
   of OSM. Republished every 15 minutes, they don't fit the "insubstantial"
@@ -240,6 +244,10 @@ the first deploy. None blocks hosting; each is a small decision.
   Claude's scratchpad and was lost twice (rewritten 2026-11-27 as a
   ~30-line CDP script). If headless checks stay useful, keep a copy in
   e.g. `tools/` (Node 20, `--experimental-websocket`, no dependencies).
+- **`#stale` covers the open credits** (found 2026-11-27, headless
+  1200x800): while the credits are open (the first 5 s), the amber
+  banner's second line sits behind the credits strip. Only when the data
+  is old. Raise `#stale` a little, or accept it.
 - **Public-facing text to review**: the page title, the status line's
   wording ("28 without a location, 9 not matched to a route" reads as
   internal), and a SEPTA credit / "not affiliated with SEPTA" line
