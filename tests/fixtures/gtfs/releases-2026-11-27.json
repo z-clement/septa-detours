@@ -1,0 +1,158 @@
+[
+ {
+  "tag_name": "v202611220",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-11-18T18:12:08Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202611220/gtfs_public.zip",
+    "size": 26479721
+   }
+  ]
+ },
+ {
+  "tag_name": "v202611010",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-26T14:18:39Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202611010/gtfs_public.zip",
+    "size": 26745416
+   }
+  ]
+ },
+ {
+  "tag_name": "v202609271",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-06T17:39:44Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609271/gtfs_public.zip",
+    "size": 22054851
+   }
+  ]
+ },
+ {
+  "tag_name": "v202609270",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-09-25T17:14:15Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609270/gtfs_public.zip",
+    "size": 22054912
+   }
+  ]
+ },
+ {
+  "tag_name": "v202609061",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-09-11T20:15:49Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609061/gtfs_public.zip",
+    "size": 21675909
+   }
+  ]
+ },
+ {
+  "tag_name": "v202609060",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-09-02T15:48:11Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202609060/gtfs_public.zip",
+    "size": 21555258
+   }
+  ]
+ },
+ {
+  "tag_name": "v202608233",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-08-21T14:34:59Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608233/gtfs_public.zip",
+    "size": 22774259
+   }
+  ]
+ },
+ {
+  "tag_name": "v202608232",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-08-19T17:14:47Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608232/gtfs_public.zip",
+    "size": 22453789
+   }
+  ]
+ },
+ {
+  "tag_name": "v202608091",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-08-11T16:27:32Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608091/gtfs_public.zip",
+    "size": 20767915
+   }
+  ]
+ },
+ {
+  "tag_name": "v202608090",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-08-04T18:08:30Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202608090/gtfs_public.zip",
+    "size": 20767898
+   }
+  ]
+ },
+ {
+  "tag_name": "v202607261",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-07-23T17:59:33Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202607261/gtfs_public.zip",
+    "size": 20716970
+   }
+  ]
+ },
+ {
+  "tag_name": "v202607120",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-07-15T15:10:56Z",
+  "assets": [
+   {
+    "name": "gtfs_public.zip",
+    "browser_download_url": "https://github.com/septadev/GTFS/releases/download/v202607120/gtfs_public.zip",
+    "size": 20668553
+   }
+  ]
+ }
+]

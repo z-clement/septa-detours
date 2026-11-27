@@ -129,3 +129,26 @@ stderr; exit 1. Tests: 16 more in `tests/test_ingest_store.py` (bare
 origin with `uploadpack.allowFilter`, depth-1 clones of `main` as job
 checkouts; the race injected by patching `commit_snapshot`). Mutants:
 17, all killed (after adding the depth and rewrite tests).
+
+## GTFS from SEPTA's GitHub releases (`ingest/gtfs.py`, 2026-11-27)
+
+Decided (me, after the hosting terms check): fetch GTFS automatically
+instead of uploading it by hand. Facts: `septadev/GTFS` releases are
+tagged `v<YYYYMMDD><n>` (service start + revision), one asset
+`gtfs_public.zip` = `google_bus.zip` + `google_rail.zip`; unpacked, the
+`v202611220` release was byte-identical to my hand-downloaded
+`data/gtfs/`. Releases come out 2-6 days *before* the start date
+(`v202611220` on 11-18), revisions sometimes after (`v202609271` on
+10-06), so GitHub's "latest" would switch to new routes early.
+
+Done: `Release` / `ReleaseAsset` (pydantic, strict, extra ignored;
+`parse_releases(bytes)`) and `pick_release(releases, today)` (pure): skip
+drafts, pre-releases, releases without `gtfs_public.zip`, tags that
+aren't exactly `v` + 8 ASCII digits (a real date) + revision digits; of
+those starting on or before `today`, max `(date, revision)` (numeric:
+10 > 9). None -> ValueError. `today` = New York's date (the CLI's job).
+Fixture `tests/fixtures/gtfs/releases-2026-11-27.json` (real list,
+trimmed to the fields read). Tests: `tests/test_ingest_gtfs.py` (23).
+Mutants: 19, all killed; the revision tiebreak survived at first
+(max keeps the first of equal keys, and the winner was listed first), so
+the revision tests run in both list orders.

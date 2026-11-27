@@ -13,6 +13,12 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
   domain (nothing extra to secure).
 - **Snapshots**: stored, somewhere durable (Claude recommended the
   branch below).
+- **Changed 2026-11-27 (after the terms check): GTFS is fetched
+  automatically** from SEPTA's GitHub releases (`septadev/GTFS`; a new
+  feed every 2-4 weeks, published 2-6 days before it starts), choosing
+  the newest release *in effect* (New York date), not "latest". Only
+  `streets.parquet` stays a manual release asset; `gtfs pack` becomes
+  `gtfs unpack`. Was:
 - **GTFS stays manual** (SEPTA's feeds change rarely): I download it as
   today. It and the street cache reach the job as release assets (below),
   not through the Actions cache. No `ingest gtfs` for now.
