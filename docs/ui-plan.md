@@ -251,3 +251,30 @@ map like an upcoming one (its card stays, saying the hours and "not
 running now"); a time range parse can't read as daily hours gets a
 **parse issue** (the notice becomes partial; parse's pins move, to
 review); **U8 before U5b**.
+
+## Render sweep (2026-11-26, Claude, headless Brave; evening, snapshot `145719Z`)
+
+Checked and working: overview markers (grey routes, magenta labelled
+markers), zoom >= 13 detail (dashed paths with arrows, skipped bands,
+start dots), focus framing (route 19's detours; route 124 with all
+detours ended falls back to the whole route), direction arrows, one
+line per direction (route 79), hours ("not running now", the off-hours
+detour hidden), phone: "Map key" closed, route 31 framed above the
+sheet. Findings, none fixed yet:
+
+1. **Crowded markers lose their numbers**: around City Hall and where a
+   route's two directions start at one corner (two overlapping
+   markers); worst on a phone, where Center City is one clump.
+   Options: cluster at low zoom (a count), or one marker per route.
+2. **Detoured-route grey vs network grey** are too close to tell apart
+   (color pass).
+3. **"Detoured now" counts ignore daily hours**: the list uses dates
+   only, the map dates and hours, so at night they disagree.
+4. **Start dots have no route number** from zoom 13 on: near City Hall
+   you can't tell whose dot is whose without clicking.
+5. **Phone overview markers clump** (see 1).
+6. **Attribution box** spreads over two lines at the bottom of a phone's
+   map: MapLibre's compact attribution (an (i) button) would fix it.
+7. **"In effect (3)" lists a detour "not running now"** (off-hours): a
+   heading that contradicts its card. Options: a "Not running now"
+   group, or call the group "Current".
