@@ -69,6 +69,10 @@ def test_find_latest_same_day_compares_time(tmp_path):
         "2027-01-01T000000Z.json.bak",  # suffix
         "detours-2027-01-01T000000Z.json",  # match output, not a snapshot
         "latest.json",
+        # Arabic-Indic digits for 2027 (``\d`` would match them, and they
+        # sort after ASCII digits, so this would be "newest").
+        "\u0662\u0660\u0662\u0667-01-01T000000Z.json",
+        "2027-01-01T\u0660\u0660\u0660\u0660\u0660\u0660Z.json",  # and in the time
     ],
 )
 def test_find_latest_ignores_names_that_are_not_snapshots(tmp_path, stray):

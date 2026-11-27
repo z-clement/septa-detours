@@ -336,6 +336,7 @@ def test_find_latest_detours_picks_newest_stamp(tmp_path):
         "xdetours-2027-01-01T000000Z.json",
         "detours-2027-01-01T000000Z.geojson",
         "streets.parquet",
+        "detours-\u0662\u0660\u0662\u0667-01-01T000000Z.json",  # Arabic-Indic 2027
     ],
 )
 def test_find_latest_detours_ignores_other_files(tmp_path, stray):

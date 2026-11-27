@@ -903,3 +903,15 @@ gave Claude a free hand on these, with your decisions on the open ones.
   sha256 matched jsDelivr's published hashes of the same npm release).
   Checked headless: the real hashes load; one changed character leaves
   `maplibregl` undefined and the rider's error line shows.
+- File-name patterns are ASCII-only: `[0-9]` for `\d` in
+  `match/__main__.py` and `export/site.py` (`_SNAPSHOT_NAME`),
+  `export/__main__.py` (`_DETOURS_NAME`), `ingest/osm.py`
+  (`dated_extract_name`) and `streets/cache.py` (`find_latest_extract`),
+  as `gtfs/expiry.py` and `ingest/store.py` already were. Not only style:
+  `\d` matches Arabic-Indic digits, which sort after ASCII ones, so such a
+  name would have been picked as "newest". A stray of that kind in each
+  module's tests (written as `\u` escapes; the two older tests' literal
+  digits are escapes now too). `parse/hours.py` keeps `\d`: alert text,
+  not file names, and `int()` reads those digits correctly. Mutants: 6
+  (one per pattern, plus the time part in `match`), all killed after one
+  more stray.

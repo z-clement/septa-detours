@@ -146,6 +146,7 @@ def test_dated_extract_name(region, final_url, expected):
         f"{US}/delaware/delaware-2611240.osm.pbf",
         f"{US}/delaware/delaware-20261124.osm.pbf",
         f"{US}/delaware/delaware-26-11-24.osm.pbf",
+        f"{US}/delaware/delaware-\u0662\u0666\u0661\u0661\u0662\u0664.osm.pbf",
         # Regex-escape check: "." must be a literal dot.
         f"{US}/delaware/delaware-261124xosmxpbf",
         "https://downloadxgeofabrikxde/north-america/us/delaware/delaware-261124.osm.pbf",

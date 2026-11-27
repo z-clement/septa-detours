@@ -1495,6 +1495,7 @@ def test_status_no_detours() -> None:
         "2026-13-25T121123Z.json",  # no month 13
         "2026-11-25T251123Z.json",  # no hour 25
         "2026-1-25T121123Z.json",  # strptime alone would accept this
+        "\u0662\u0660\u0662\u0666-11-25T121123Z.json",  # Arabic-Indic, so would it
     ],
 )
 def test_status_hand_named_snapshot_has_no_fetch_time(snapshot: str) -> None:

@@ -497,6 +497,7 @@ def test_find_latest_ignores_everything_else(tmp_path):
         "delaware-261231.osm.pbf.md5",
         "xdelaware-261231.osm.pbf",
         "new-jersey-261231.osm.pbf",
+        "delaware-\u0662\u0667\u0660\u0661\u0660\u0661.osm.pbf",  # Arabic-Indic
     )
     assert find_latest_extract("delaware", tmp_path).name == "delaware-261101.osm.pbf"
 

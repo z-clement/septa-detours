@@ -101,7 +101,7 @@ def dated_extract_name(region: str, final_url: str) -> str:
     _check_region(region)
     pattern = (
         re.escape(f"{GEOFABRIK_US_URL}/{region}/{region}-")
-        + r"(\d{6})"
+        + r"([0-9]{6})"
         + re.escape(".osm.pbf")
     )
     match = re.fullmatch(pattern, final_url)

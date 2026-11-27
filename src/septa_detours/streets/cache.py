@@ -275,7 +275,7 @@ def find_latest_extract(region: str, root: Path = DEFAULT_OSM_DIR) -> Path:
         FileNotFoundError: If ``root`` doesn't exist or has no extract for
             ``region``; the message names the fetch command.
     """
-    pattern = re.compile(re.escape(region) + r"-(\d{6})\.osm\.pbf")
+    pattern = re.compile(re.escape(region) + r"-([0-9]{6})\.osm\.pbf")
     candidates = (
         [path for path in root.iterdir() if pattern.fullmatch(path.name)]
         if root.is_dir()

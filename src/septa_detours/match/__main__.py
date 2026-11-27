@@ -47,7 +47,7 @@ INGEST_COMMAND = "uv run python -m septa_detours.ingest"
 DEFAULT_DETOURS_DIR = Path("data/processed")
 
 # ``ingest``'s snapshot name: a UTC stamp, ``%Y-%m-%dT%H%M%SZ.json``.
-_SNAPSHOT_NAME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{6}Z\.json")
+_SNAPSHOT_NAME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z\.json")
 
 
 def find_latest_snapshot(root: Path = DEFAULT_ALERTS_DIR) -> Path:

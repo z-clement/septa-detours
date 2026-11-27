@@ -56,7 +56,7 @@ _NUMBER = re.compile(r"[0-9]+")
 _SAFE_ROUTE_ID = re.compile(r"[A-Za-z0-9_-]+")
 """Same rule as ``write.py``'s (a test checks they agree)."""
 
-_SNAPSHOT_NAME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{6}Z\.json")
+_SNAPSHOT_NAME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z\.json")
 _SNAPSHOT_FORMAT = "%Y-%m-%dT%H%M%SZ.json"
 """How ``ingest`` names snapshots (a test checks they agree)."""
 

@@ -81,7 +81,7 @@ def test_empty_listing_means_nothing_stored_yet() -> None:
         entry("alerts/sub/2026-12-01T000000Z.json"),
         entry("other/2026-12-01T000000Z.json"),
         entry("2026-12-01T000000Z.json"),
-        entry("alerts/٢٠٢٦-12-01T000000Z.json"),  # Arabic-Indic digits
+        entry("alerts/\u0662\u0660\u0662\u0666-12-01T000000Z.json"),  # Arabic-Indic
     ],
 )
 def test_strays_newer_than_every_snapshot_are_ignored(stray: str) -> None:

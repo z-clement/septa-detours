@@ -77,7 +77,7 @@ def test_within_days_moves_the_threshold() -> None:
         " 20270220",
         "20270230",
         "20271301",
-        "٢٠٢٧٠٢٢٠",  # Arabic-Indic digits
+        "\u0662\u0660\u0662\u0667\u0660\u0662\u0662\u0660",  # Arabic-Indic digits
     ],
 )
 def test_unreadable_end_date_warns_instead_of_failing(end: str | None) -> None:

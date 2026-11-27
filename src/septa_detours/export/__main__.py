@@ -80,7 +80,7 @@ MATCH_COMMAND = "uv run python -m septa_detours.match"
 DEFAULT_WEB_DIR = Path("web")
 
 # ``match``'s output name for a stamped snapshot: ``detours-<stamp>.json``.
-_DETOURS_NAME = re.compile(r"detours-\d{4}-\d{2}-\d{2}T\d{6}Z\.json")
+_DETOURS_NAME = re.compile(r"detours-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z\.json")
 
 
 def _build_parser() -> argparse.ArgumentParser:
