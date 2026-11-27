@@ -20,6 +20,9 @@ import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
+STORE_BRANCH = "snapshots"
+"""The orphan branch that holds the snapshots."""
+
 STORE_DIR = "alerts"
 """The directory on the ``snapshots`` branch that holds the snapshots."""
 
@@ -132,6 +135,52 @@ def commit_snapshot(
     }
     message = f"{STORE_DIR}: {name.removesuffix('.json')}"
     return _git(repo, "commit-tree", tree, *parents, "-m", message, env=bot)
+
+
+def store_snapshot(
+    snapshot: Path, repo: Path = Path(), remote: str = "origin"
+) -> str | None:
+    """Add ``snapshot`` to ``remote``'s ``snapshots`` branch if it changed.
+
+    For the hosted job, run in its checkout of ``main``. Fetches only the
+    branch tip's file list (``--depth=1 --filter=blob:none``), commits with
+    :func:`commit_snapshot`, and pushes the commit; returns its id, or
+    None when nothing changed (nothing pushed). A missing branch is the
+    first run: the push creates it.
+
+    Never forces. If another run pushed in between, the push is rejected
+    (non-fast-forward) and raises; the next run stores its own snapshot.
+
+    Side effects in ``repo``: the fetch updates
+    ``refs/remotes/<remote>/snapshots`` and, being filtered, marks
+    ``remote`` as a partial-clone ("promisor") remote in its config.
+    Harmless on the job's throwaway checkout; running this in your own
+    clone would do the same, and would push to the real branch.
+
+    Raises:
+        ValueError: From :func:`commit_snapshot`.
+        subprocess.CalledProcessError: A git command failed (no network,
+            no permission to push, a rejected push).
+    """
+    branch = f"refs/heads/{STORE_BRANCH}"
+    tracking = f"refs/remotes/{remote}/{STORE_BRANCH}"
+    parent = None
+    if _git(repo, "ls-remote", "--heads", remote, branch):
+        _git(
+            repo,
+            "fetch",
+            "-q",
+            "--depth=1",
+            "--filter=blob:none",
+            remote,
+            f"+{branch}:{tracking}",
+        )
+        parent = _git(repo, "rev-parse", "--verify", f"{tracking}^{{commit}}")
+    commit = commit_snapshot(snapshot, parent, repo)
+    if commit is None:
+        return None
+    _git(repo, "push", "-q", remote, f"{commit}:{branch}")
+    return commit
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:

@@ -153,6 +153,9 @@ Next, in order:
    Decided (2026-11-27): never check the branch out (it grows ~16 MB of
    files a day); git commands compare blob ids and commit through a
    temporary index (`ingest/store.py`, `docs/notes/ingest.md`).
+   Done 2026-11-27: `python -m septa_detours.ingest store <snapshot>`
+   (prints `stored ...` / `unchanged: ...`; exit 1 on a git failure,
+   e.g. a lost race; never forces).
 4. **Step 6, the workflow** `.github/workflows/publish.yml` (every 15
    min + manual; uv + Python 3.13; reference download; `ingest` ->
    `match` -> `export site` -> snapshot store -> `export deploy _site`

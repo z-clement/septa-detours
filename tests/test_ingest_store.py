@@ -15,12 +15,15 @@ from pathlib import Path
 
 import pytest
 
+from septa_detours.ingest import __main__ as ingest_main
+from septa_detours.ingest import store
 from septa_detours.ingest.store import (
     BOT_EMAIL,
     BOT_NAME,
     StoredSnapshot,
     commit_snapshot,
     newest_stored,
+    store_snapshot,
 )
 
 OLD_BLOB = "78981922613b2afb6025042ff6bd878ac1994e85"
@@ -320,3 +323,232 @@ def test_partial_clone_commits_without_fetching_old_snapshots(
         "alerts/2026-11-25T121123Z.json",
     ]
     assert git(clone, "log", "-1", "--format=%P", second) == first
+
+
+@pytest.fixture
+def origin(repo: Path, tmp_path: Path) -> Path:
+    """A bare repo standing in for GitHub, holding ``repo``'s ``main``."""
+    origin = tmp_path / "origin.git"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    git(origin, "config", "uploadpack.allowFilter", "true")
+    git(repo, "push", "-q", str(origin), "main")
+    return origin
+
+
+def clone_main(origin: Path, path: Path) -> Path:
+    """A fresh checkout of ``main``, as ``actions/checkout`` makes one."""
+    git(path.parent, "clone", "-q", "--depth=1", f"file://{origin}", str(path))
+    return path
+
+
+@pytest.fixture
+def job(origin: Path, tmp_path: Path) -> Path:
+    return clone_main(origin, tmp_path / "job")
+
+
+def stored_tip(origin: Path) -> str:
+    return git(origin, "rev-parse", "--verify", "refs/heads/snapshots")
+
+
+def test_first_store_creates_the_branch(
+    origin: Path, job: Path, tmp_path: Path
+) -> None:
+    snapshot = write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A)
+    commit = store_snapshot(snapshot, job)
+    assert commit is not None
+    assert stored_tip(origin) == commit
+    assert git(origin, "log", "--format=%P|%s", "snapshots") == (
+        "|alerts: 2026-11-25T025344Z"
+    )
+    assert files_in(origin, "snapshots") == {"alerts/2026-11-25T025344Z.json": FEED_A}
+
+
+def test_later_runs_add_on_top_without_fetching_old_snapshots(
+    origin: Path, job: Path, tmp_path: Path
+) -> None:
+    first = store_snapshot(
+        write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A), job
+    )
+    assert first is not None
+    # The next run is a fresh checkout, like every Actions run.
+    later_job = clone_main(origin, tmp_path / "later-job")
+    second = store_snapshot(
+        write_snapshot(tmp_path, "2026-11-25T121123Z.json", FEED_B), later_job
+    )
+    assert second is not None
+    assert stored_tip(origin) == second
+    assert git(origin, "log", "--format=%s", "snapshots").splitlines() == [
+        "alerts: 2026-11-25T121123Z",
+        "alerts: 2026-11-25T025344Z",
+    ]
+    assert files_in(origin, "snapshots") == {
+        "alerts/2026-11-25T025344Z.json": FEED_A,
+        "alerts/2026-11-25T121123Z.json": FEED_B,
+    }
+    old_blob = git(origin, "rev-parse", "snapshots:alerts/2026-11-25T025344Z.json")
+    missing = subprocess.run(
+        ["git", "-C", str(later_job), "cat-file", "-e", old_blob],
+        env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+        capture_output=True,
+        check=False,
+    )
+    assert missing.returncode != 0
+
+
+def test_unchanged_snapshot_pushes_nothing(
+    origin: Path, job: Path, tmp_path: Path
+) -> None:
+    first = store_snapshot(
+        write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A), job
+    )
+    later_job = clone_main(origin, tmp_path / "later-job")
+    again = write_snapshot(tmp_path, "2026-11-25T121123Z.json", FEED_A)
+    assert store_snapshot(again, later_job) is None
+    assert stored_tip(origin) == first
+
+
+def test_a_run_that_lost_the_race_is_rejected_not_forced(
+    origin: Path, job: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store_snapshot(write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A), job)
+    other_job = clone_main(origin, tmp_path / "other-job")
+    winner: list[str | None] = []
+
+    def other_run_pushes_first(
+        snapshot: Path, parent: str | None, repo: Path
+    ) -> str | None:
+        # After this run fetched, another run stores its snapshot first
+        # (its own call lands here too, with ``winner`` set: no recursion).
+        if not winner:
+            winner.append(None)
+            other = write_snapshot(
+                tmp_path / "other", "2026-11-25T121123Z.json", FEED_B
+            )
+            winner[0] = store_snapshot(other, other_job)
+        return commit_snapshot(snapshot, parent, repo)
+
+    monkeypatch.setattr(store, "commit_snapshot", other_run_pushes_first)
+    late_feed = b"[" + ROUTE_24 + b"]"  # differs from both stored feeds
+    late = write_snapshot(tmp_path, "2026-11-25T121500Z.json", late_feed)
+    with pytest.raises(subprocess.CalledProcessError) as exc:
+        store_snapshot(late, job)
+    assert "! [rejected]" in exc.value.stderr
+    assert winner[0] is not None
+    assert stored_tip(origin) == winner[0]
+
+
+def test_job_checkout_stays_as_it_was(origin: Path, job: Path, tmp_path: Path) -> None:
+    before = (git(job, "rev-parse", "HEAD"), git(job, "status", "--porcelain"))
+    store_snapshot(write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A), job)
+    after = (git(job, "rev-parse", "HEAD"), git(job, "status", "--porcelain"))
+    assert after == before
+    assert git(job, "branch", "--format=%(refname:short)") == "main"
+
+
+def test_unknown_remote_raises(job: Path, tmp_path: Path) -> None:
+    snapshot = write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A)
+    with pytest.raises(subprocess.CalledProcessError):
+        store_snapshot(snapshot, job, remote="nowhere")
+
+
+def test_main_store_reports_stored_then_unchanged(
+    origin: Path,
+    job: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(job)  # the workflow runs from its checkout
+    first = write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A)
+    assert ingest_main.main(["store", str(first)]) == 0
+    tip = stored_tip(origin)
+    assert capsys.readouterr().out == (
+        f"stored 2026-11-25T025344Z.json on snapshots ({tip[:12]})\n"
+    )
+
+    again = write_snapshot(tmp_path, "2026-11-25T121123Z.json", FEED_A)
+    assert ingest_main.main(["store", str(again)]) == 0
+    assert capsys.readouterr().out == (
+        "unchanged: nothing new in 2026-11-25T121123Z.json; nothing pushed\n"
+    )
+    assert stored_tip(origin) == tip
+
+
+def test_main_store_bad_name_exits_one(
+    job: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(job)
+    snapshot = write_snapshot(tmp_path, "latest.json", FEED_A)
+    assert ingest_main.main(["store", str(snapshot)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "error: not an alerts snapshot name: 'latest.json'\n"
+
+
+def test_main_store_git_failure_prints_git_stderr_and_exits_one(
+    job: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(job)
+    git(job, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+    snapshot = write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A)
+    assert ingest_main.main(["store", str(snapshot)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    first_line, rest = captured.err.split("\n", 1)
+    assert first_line == (
+        "error: git ls-remote --heads origin refs/heads/snapshots failed:"
+    )
+    assert "gone.git" in rest
+
+
+@pytest.mark.parametrize(
+    "argv", [["store"], ["alerts", "x.json"], ["osm", "x.json"], ["x.json"]]
+)
+def test_main_snapshot_goes_with_store_only(argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        ingest_main.main(argv)
+    assert exc.value.code == 2
+
+
+def test_each_run_fetches_only_the_tip_commit(
+    origin: Path, job: Path, tmp_path: Path
+) -> None:
+    store_snapshot(write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A), job)
+    second_job = clone_main(origin, tmp_path / "second-job")
+    store_snapshot(
+        write_snapshot(tmp_path, "2026-11-25T121123Z.json", FEED_B), second_job
+    )
+    third_job = clone_main(origin, tmp_path / "third-job")
+    third = store_snapshot(
+        write_snapshot(tmp_path, "2026-11-26T141550Z.json", FEED_A), third_job
+    )
+    assert third is not None
+    # Two commits were stored before this run; it fetched just the newest.
+    assert git(third_job, "rev-list", "--count", "refs/remotes/origin/snapshots") == "1"
+    assert git(origin, "rev-list", "--count", "snapshots") == "3"
+
+
+def test_a_branch_rewritten_by_hand_is_followed(
+    repo: Path, origin: Path, job: Path, tmp_path: Path
+) -> None:
+    store_snapshot(write_snapshot(tmp_path, "2026-11-25T025344Z.json", FEED_A), job)
+    # A second run in the same checkout fetches, setting its tracking ref
+    # (the first run had no branch to fetch).
+    store_snapshot(write_snapshot(tmp_path, "2026-11-25T121500Z.json", FEED_B), job)
+    assert git(job, "rev-parse", "refs/remotes/origin/snapshots") != ""
+    # The maintainer replaces the branch with an unrelated history.
+    other = write_snapshot(tmp_path / "other", "2026-11-25T121123Z.json", FEED_A)
+    rewritten = commit_snapshot(other, None, repo)
+    assert rewritten is not None
+    git(repo, "push", "-q", "--force", str(origin), f"{rewritten}:refs/heads/snapshots")
+    # Same checkout as before (its tracking ref still points at the old tip).
+    late = write_snapshot(tmp_path, "2026-11-26T141550Z.json", FEED_B)
+    commit = store_snapshot(late, job)
+    assert commit is not None
+    assert git(origin, "log", "-1", "--format=%P", "snapshots") == rewritten

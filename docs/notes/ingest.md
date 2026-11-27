@@ -103,3 +103,29 @@ config off; bytes from real route fixtures), incl. a real
 `--filter=blob:none --depth=1` clone where the old blob stays missing.
 Mutants: 15, 14 killed; `GIT_NO_LAZY_FETCH` survives (a safety net
 nothing trips today: without `--missing-ok` it's what fails the test).
+
+Done: `store_snapshot(snapshot, repo, remote="origin")` and `python -m
+septa_detours.ingest store <snapshot>` (hosted job only: it pushes).
+`ls-remote` says whether the branch exists (absent = first run, no
+fetch); else `fetch --depth=1 --filter=blob:none origin
++refs/heads/snapshots:refs/remotes/origin/snapshots` and the parent is
+the fetched commit id; `commit_snapshot`; `push origin
+<id>:refs/heads/snapshots`, never forced. Measured with git 2.56 before
+writing: a filtered fetch works in a normal (`actions/checkout`-style)
+clone and turns `origin` into a promisor remote (`remote.origin.promisor
+true` in the config: harmless on the runner; in a local clone it would
+stick, and `store` would push to the real branch). Old blobs stay
+absent through the push. A run that lost a race gets `! [rejected]
+... (fetch first)` (not "non-fast-forward": it lacks the winner's
+commit) and exits 1; the next run stores normally. The `+` matters only
+when a checkout that already fetched meets a branch rewritten by hand
+(git refuses a non-fast-forward update of a tracking ref); a first run
+never fetches, which hid that from the first version of the test.
+Snapshot path required (on the runner `data/raw/alerts/*.json` is one
+file), so ingest doesn't copy match's "newest" finder. Output `stored
+<name> on snapshots (<12-char id>)` / `unchanged: nothing new in <name>;
+nothing pushed`; errors: ValueError message, or the git command + git's
+stderr; exit 1. Tests: 16 more in `tests/test_ingest_store.py` (bare
+origin with `uploadpack.allowFilter`, depth-1 clones of `main` as job
+checkouts; the race injected by patching `commit_snapshot`). Mutants:
+17, all killed (after adding the depth and rewrite tests).
