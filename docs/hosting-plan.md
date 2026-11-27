@@ -126,6 +126,41 @@ exports, or run old JS against new data. Fix (already planned, web plan
    `reference` release and run the upload script; Settings -> Pages ->
    Source: "GitHub Actions"; watch the first runs.
 
+## Where we stopped (2026-11-27, end of session)
+
+Done: steps 1-3 (this plan; versioned data and code URLs, `export
+deploy`; the stale-data banner). Commits `3a912b1` .. `7fd2ab2`.
+
+Next, in order:
+
+1. **Me: put the repo on GitHub** (public), push `main`. Checked before
+   pushing: 143 tracked files, 1.6 MB, no data or secrets in the tree or
+   history (largest blob ever: `uv.lock`, 144 KB); `.gitignore` covers
+   `data/raw/`, `data/gtfs/`, `data/processed/*`, `web/data/`, `.env`.
+   Note: the commits' author email becomes public with the repo; if
+   that's unwanted, set GitHub's noreply address (and decide whether to
+   rewrite existing history) before the first push.
+2. **Step 4, reference data** (fresh session): an upload script (zip
+   both GTFS feeds as `gtfs.zip` + `streets.parquet` -> the `reference`
+   release via `gh release upload reference <file> --clobber`; tested
+   against a fake `gh`, run for real by me once the repo exists), the
+   job's download + unpack, and a pure, tested GTFS end-date check
+   (warn within 14 days of / past `feed_end_date`, never fail). Today's
+   feeds end 2027-02-20.
+3. **Step 5, snapshot store**: commit a snapshot to the orphan
+   `snapshots` branch only when its bytes differ from the newest stored.
+4. **Step 6, the workflow** `.github/workflows/publish.yml` (every 15
+   min + manual; uv + Python 3.13; reference download; `ingest` ->
+   `match` -> `export site` -> snapshot store -> `export deploy _site`
+   -> upload + `actions/deploy-pages`; permissions `contents: write`,
+   `pages: write`, `id-token: write`). Before it: SEPTA's data terms
+   (incl. republishing GTFS as a release asset), OpenFreeMap's terms,
+   a SEPTA credit on the page.
+5. **Me**: create the `reference` release and run the upload script;
+   Settings -> Pages -> Source: "GitHub Actions"; watch the first runs.
+6. **My whole-project check** before announcing it (notes below), then
+   share it and collect feedback for the mobile pass (`docs/backlog.md`).
+
 ## Notes for the pre-deploy check (collected by Claude, 2026-11-27)
 
 Minor things noticed along the way, for the whole-project check before

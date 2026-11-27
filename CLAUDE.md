@@ -215,8 +215,10 @@ Reached (history in `docs/notes/`, plans in `docs/`):
 **Hosting** (`docs/hosting-plan.md`, decided 2026-11-27): GitHub
 Actions every 15 min -> GitHub Pages, snapshots on a `snapshots`
 branch, GTFS + street cache by hand as `reference` release assets.
-Steps: versioned URLs, stale-data warning, reference upload + GTFS
-end-date warning (log only), snapshot store, the workflow. After it: a targeted mobile UI/UX pass
+Done: versioned URLs (`export deploy`), stale-data banner. Remaining
+(see the plan's "Where we stopped"): reference upload + GTFS end-date
+warning (log only), snapshot store, the workflow, then my pre-deploy
+check (notes in the plan). After it: a targeted mobile UI/UX pass
 from testers' feedback (`docs/backlog.md`).
 
 Left for later (render sweep and color pass done 2026-11-26): the
