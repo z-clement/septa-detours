@@ -1,0 +1,22 @@
+# Pull requests when something this repo depends on has a newer release.
+# The first deploy failed on action pins 1-4 majors old
+# (docs/hosting-plan.md); the test workflow checks each update before it's
+# merged. Grouped, so each ecosystem opens at most one pull request a time.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
