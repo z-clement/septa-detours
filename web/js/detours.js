@@ -152,8 +152,30 @@ export function hoursOf(properties) {
  * @returns {boolean}
  */
 export function isInEffect(start, end, now, hours = null) {
+  const state = detourState(start, end, hours, now);
+  return state === "active" || state === "unknown";
+}
+
+/**
+ * A detour's state at `now` for the page's lists and groups:
+ * `detourTiming`'s, except that a detour within its dates (active, or
+ * unknown) but outside its daily hours is "resting": not running now
+ * (render sweep finding 7: the map hides it, so "In effect" shouldn't
+ * list it).
+ *
+ * @param {string | null | undefined} start
+ * @param {string | null | undefined} end
+ * @param {{days: number[], start: string, end: string} | null | undefined} hours
+ *   null or missing: all day
+ * @param {Date} now
+ * @returns {"active" | "resting" | "upcoming" | "ended" | "unknown"}
+ */
+export function detourState(start, end, hours, now) {
   const timing = detourTiming(start, end, now);
-  return (timing === "active" || timing === "unknown") && inHours(hours, now);
+  if ((timing === "active" || timing === "unknown") && !inHours(hours ?? null, now)) {
+    return "resting";
+  }
+  return timing;
 }
 
 /**
@@ -177,10 +199,10 @@ export function inEffectKeys(features, now) {
 }
 
 /** The route panel's group order: in effect first, ended last (D6). */
-export const TIMING_ORDER = Object.freeze(["active", "upcoming", "unknown", "ended"]);
+export const TIMING_ORDER = Object.freeze(["active", "resting", "upcoming", "unknown", "ended"]);
 
 /**
- * A route's detours grouped by `detourTiming`, for the route panel.
+ * A route's detours grouped by `detourState`, for the route panel.
  *
  * Groups come in `TIMING_ORDER`; a group with no detours is left out.
  * Within a group, detours keep the order given (snapshot order).
@@ -192,7 +214,7 @@ export const TIMING_ORDER = Object.freeze(["active", "upcoming", "unknown", "end
 export function groupByTiming(detours, now) {
   const groups = new Map(TIMING_ORDER.map((timing) => [timing, []]));
   for (const detour of detours) {
-    groups.get(detourTiming(detour.start, detour.end, now)).push(detour);
+    groups.get(detourState(detour.start, detour.end, detour.hours, now)).push(detour);
   }
   return TIMING_ORDER.filter((timing) => groups.get(timing).length > 0).map((timing) => ({
     timing,

@@ -4,7 +4,7 @@
 // (routes.js, format.js), which have the tests. Text always goes in through
 // `textContent`, never `innerHTML`, so names from the data can't inject markup.
 
-import { detourTiming, groupByTiming, inHours } from "./detours.js";
+import { detourState, groupByTiming } from "./detours.js";
 import { element, routeBadge } from "./dom.js";
 import {
   TIMING_WORDS,
@@ -90,7 +90,11 @@ function unmatchedSection(detours, now) {
     const summary = element("summary");
     summary.append(
       element("span", "name", unmatchedSummary(detour)),
-      element("span", "count", TIMING_WORDS[detourTiming(detour.start, detour.end, now)]),
+      element(
+        "span",
+        "count",
+        TIMING_WORDS[detourState(detour.start, detour.end, detour.hours, now)],
+      ),
     );
     item.append(
       summary,
@@ -252,9 +256,7 @@ function detourCard(detour, directions, selected, originalOpen, now) {
   );
   if (detour.hours !== null) {
     // Within its dates but outside its hours: the map hides it (U8).
-    const timing = detourTiming(detour.start, detour.end, now);
-    const resting =
-      (timing === "active" || timing === "unknown") && !inHours(detour.hours, now);
+    const resting = detourState(detour.start, detour.end, detour.hours, now) === "resting";
     const text = `Hours: ${hoursText(detour.hours)}`;
     card.append(element("p", "hours", resting ? `${text} \u00b7 not running now` : text));
   }

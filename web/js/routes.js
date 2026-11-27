@@ -2,7 +2,7 @@
 //
 // PURE: no DOM, no `maplibregl`, no fetch, so `node --test` can run it.
 
-import { detourTiming } from "./detours.js";
+import { detourState } from "./detours.js";
 
 /**
  * The routes with at least one matched detour, in catalog order.
@@ -48,20 +48,22 @@ export function routesBounds(routes) {
 }
 
 /**
- * How many of a route's matched detours are active, upcoming, ended or of
- * unknown timing at `now`, from its `routes.json` windows.
+ * How many of a route's matched detours are in each `detourState` at
+ * `now`, from its `routes.json` windows `[start, end, hours]`. "Resting"
+ * ones (within their dates, outside their daily hours) aren't active: the
+ * map hides them.
  *
- * Every matched detour has a window, placed or not, so the four counts add
+ * Every matched detour has a window, placed or not, so the five counts add
  * up to `route.detours.total`.
  *
  * @param {object} route a routes.json entry
  * @param {Date} now
- * @returns {{active: number, upcoming: number, ended: number, unknown: number}}
+ * @returns {{active: number, resting: number, upcoming: number, ended: number, unknown: number}}
  */
 export function timingCounts(route, now) {
-  const counts = { active: 0, upcoming: 0, ended: 0, unknown: 0 };
-  for (const [start, end] of route.detours.windows) {
-    counts[detourTiming(start, end, now)] += 1;
+  const counts = { active: 0, resting: 0, upcoming: 0, ended: 0, unknown: 0 };
+  for (const [start, end, hours] of route.detours.windows) {
+    counts[detourState(start, end, hours, now)] += 1;
   }
   return counts;
 }
@@ -70,7 +72,7 @@ export function timingCounts(route, now) {
  * The sidebar's "Detoured now": routes with at least one active detour.
  *
  * Most active detours first; ties keep catalog order (`sort` is stable).
- * Routes whose detours are all upcoming, ended or unknown aren't here;
+ * Routes whose detours are all resting, upcoming, ended or unknown aren't here;
  * they're still in their mode's group with their counts.
  *
  * @param {object[]} routes routes.json

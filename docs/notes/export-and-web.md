@@ -792,3 +792,11 @@ Tests: 125 JS.
   Brown, north on 49th, east on Westminster). The CDP renders need
   `Network.setCacheDisabled`: the browser profile cached the old
   `mapview.js` (the same JS caching the page's users hit).
+- Render sweep fixes (2026-11-26): compact attribution (an (i), closed
+  after load); route numbers beside start dots from zoom 13
+  (`start-dot-labels`, hidden when focused); contract 10, `routes.json`
+  windows are `[start, end, hours]`; `detours.detourState` adds
+  "resting" (within its dates, outside its hours): its own panel group
+  "Not running now" after "In effect", "off-hours" in list counts, not
+  counted in "Detoured now" (so the list agrees with the map). Real
+  render: route 79 in the evening, In effect (2) + Not running now (1).

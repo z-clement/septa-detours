@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   TIMING_ORDER,
   detourBounds,
+  detourState,
   detourTiming,
   groupByTiming,
   hoursOf,
@@ -145,8 +146,8 @@ test("groupByTiming: leaves out empty groups; none for no detours", () => {
   assert.deepEqual(groupByTiming([], NOW), []);
 });
 
-test("TIMING_ORDER covers every detourTiming result, ended last", () => {
-  assert.deepEqual(TIMING_ORDER, ["active", "upcoming", "unknown", "ended"]);
+test("TIMING_ORDER covers every detourState result, ended last", () => {
+  assert.deepEqual(TIMING_ORDER, ["active", "resting", "upcoming", "unknown", "ended"]);
   assert.ok(Object.isFrozen(TIMING_ORDER));
 });
 
@@ -377,4 +378,34 @@ test("inEffectKeys and rejoinCollection follow the hours", () => {
   };
   assert.equal(rejoinCollection(detail, null, evening).features.length, 0);
   assert.equal(rejoinCollection(detail, null, local("25", "09:00")).features.length, 1);
+});
+
+// --- detourState (render sweep finding 7) -------------------------------------
+
+test("detourState: within its dates but outside its hours is resting", () => {
+  const evening = local("25", "20:00"); // a Wednesday
+  assert.equal(detourState(START, END, WEEKDAYS_7_4, evening), "resting");
+  assert.equal(detourState(START, END, WEEKDAYS_7_4, local("25", "09:00")), "active");
+  assert.equal(detourState(null, END, WEEKDAYS_7_4, evening), "resting"); // unknown dates
+  assert.equal(detourState(null, END, WEEKDAYS_7_4, local("25", "09:00")), "unknown");
+  assert.equal(detourState(...UPCOMING, WEEKDAYS_7_4, evening), "upcoming");
+  assert.equal(detourState(...ENDED, WEEKDAYS_7_4, evening), "ended");
+  // No hours, or hours missing (older data): all day.
+  assert.equal(detourState(START, END, null, evening), "active");
+  assert.equal(detourState(START, END, undefined, evening), "active");
+});
+
+test("groupByTiming: off-hours detours get their own group, after In effect", () => {
+  const evening = local("25", "20:00");
+  const detours = [
+    { ...detour("resting", START, END), hours: WEEKDAYS_7_4 },
+    { ...detour("running", START, END), hours: null },
+    { ...detour("later", ...UPCOMING), hours: null },
+  ];
+  const keys = (groups) => groups.map((g) => [g.timing, g.detours.map((d) => d.source_key)]);
+  assert.deepEqual(keys(groupByTiming(detours, evening)), [
+    ["active", ["running"]],
+    ["resting", ["resting"]],
+    ["upcoming", ["later"]],
+  ]);
 });

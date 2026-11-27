@@ -188,6 +188,7 @@ test("timingSummary: no detours gives an empty string", () => {
 test("timingSummary: uses TIMING_WORDS", () => {
   assert.deepEqual(TIMING_WORDS, {
     active: "now",
+    resting: "off-hours",
     upcoming: "later",
     ended: "ended",
     unknown: "unknown",
@@ -529,4 +530,12 @@ test("hoursText: weekends, noon and midnight, a gap in the days", () => {
     hoursText({ days: [3, 4, 5, 6], start: "06:00", end: "09:00" }),
     "Thu \u2013 Sun 6am \u2013 9am",
   );
+});
+
+test("timingSummary and timingHeading: off-hours detours", () => {
+  assert.equal(
+    timingSummary({ active: 1, resting: 2, upcoming: 0, ended: 1, unknown: 0 }),
+    "1 now, 2 off-hours, 1 ended",
+  );
+  assert.equal(timingHeading("resting", 2), "Not running now (2)");
 });

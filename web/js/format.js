@@ -111,6 +111,7 @@ export function statusLine(status) {
 /** The sidebar's word for each `detourTiming` result. */
 export const TIMING_WORDS = Object.freeze({
   active: "now",
+  resting: "off-hours",
   upcoming: "later",
   ended: "ended",
   unknown: "unknown",
@@ -246,6 +247,7 @@ export function detourHeadline(detour, directions) {
 /** The route panel's heading for each `detourTiming` group. */
 const TIMING_HEADINGS = Object.freeze({
   active: "In effect",
+  resting: "Not running now",
   upcoming: "Upcoming",
   unknown: "Dates unknown",
   ended: "Ended",
@@ -254,7 +256,7 @@ const TIMING_HEADINGS = Object.freeze({
 /**
  * A route panel group's heading with its count: "In effect (2)".
  *
- * @param {"active" | "upcoming" | "ended" | "unknown"} timing
+ * @param {"active" | "resting" | "upcoming" | "ended" | "unknown"} timing
  * @param {number} count detours in the group
  * @returns {string}
  */
@@ -275,6 +277,7 @@ export function timingHeading(timing, count) {
 export function timingSummary(counts) {
   const parts = [
     [counts.active, TIMING_WORDS.active],
+    [counts.resting, TIMING_WORDS.resting],
     [counts.upcoming, TIMING_WORDS.upcoming],
     [counts.ended, TIMING_WORDS.ended],
     [counts.unknown, TIMING_WORDS.unknown],

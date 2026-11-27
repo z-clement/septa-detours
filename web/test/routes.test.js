@@ -106,6 +106,7 @@ function windowed(key, windows) {
 test("timingCounts: route 2's real windows", () => {
   assert.deepEqual(timingCounts(windowed("bus-2", ROUTE_2_WINDOWS), NOW), {
     active: 2,
+    resting: 0,
     upcoming: 4,
     ended: 1,
     unknown: 0,
@@ -115,6 +116,7 @@ test("timingCounts: route 2's real windows", () => {
 test("timingCounts: a missing time counts as unknown", () => {
   assert.deepEqual(timingCounts(windowed("bus-9", [UNKNOWN, ACTIVE, UNKNOWN]), NOW), {
     active: 1,
+    resting: 0,
     upcoming: 0,
     ended: 0,
     unknown: 2,
@@ -124,6 +126,7 @@ test("timingCounts: a missing time counts as unknown", () => {
 test("timingCounts: no detours is all zeros", () => {
   assert.deepEqual(timingCounts(windowed("bus-21", []), NOW), {
     active: 0,
+    resting: 0,
     upcoming: 0,
     ended: 0,
     unknown: 0,
@@ -467,4 +470,27 @@ test("withRouteLabels: the input isn't changed", () => {
   const before = structuredClone(starts);
   withRouteLabels(starts, [{ key: "bus-49", short_name: "49" }]);
   assert.deepEqual(starts, before);
+});
+
+test("timingCounts: off-hours detours count as resting, not active", () => {
+  // NOW is 9:00 on a Wednesday in Philadelphia: a weekday 7-4 detour runs,
+  // an evening one rests.
+  const weekdays = { days: [0, 1, 2, 3, 4], start: "07:00", end: "16:00" };
+  const evenings = { days: [0, 1, 2, 3, 4], start: "19:00", end: "23:00" };
+  const windows = [
+    [...ACTIVE, weekdays],
+    [...ACTIVE, evenings],
+    [...UNKNOWN, evenings],
+    [...UPCOMING, evenings], // not yet in its dates: upcoming, whatever the hour
+  ];
+  assert.deepEqual(timingCounts(windowed("bus-79", windows), NOW), {
+    active: 1,
+    resting: 2,
+    upcoming: 1,
+    ended: 0,
+    unknown: 0,
+  });
+  assert.deepEqual(detouredNow([windowed("bus-79", windows)], NOW), [
+    { route: windowed("bus-79", windows), active: 1 },
+  ]);
 });
