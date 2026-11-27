@@ -13,6 +13,13 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
   domain (nothing extra to secure).
 - **Snapshots**: stored, somewhere durable (Claude recommended the
   branch below).
+- **GTFS stays manual** (SEPTA's feeds change rarely): I download it as
+  today. It and the street cache reach the job as release assets (below),
+  not through the Actions cache. No `ingest gtfs` for now.
+- **GTFS age warning: for me, not riders.** The job logs a warning as the
+  feed nears its `feed_end_date`; the page says nothing (no contract
+  change). Log only for now; opening an issue (which emails) can come
+  later if I miss it.
 
 ## Facts measured (2026-11-27)
 
@@ -36,11 +43,11 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
 Every 15 minutes (`cron: "*/15 * * * *"`), plus a manual trigger:
 
 1. Check out `main`; set up uv and Python 3.13; `uv sync`.
-2. Restore GTFS and the street cache from the Actions cache. On a miss:
-   `ingest gtfs` (step 2 below) / `ingest osm` + `streets`. Runs every
-   15 minutes keep the cache warm (entries unused for 7 days are
-   evicted). GTFS is refreshed when SEPTA publishes a new release (cache
-   key: the release, or a daily check; settled in step 2).
+2. Download the reference data from the repo's `reference` release:
+   `gtfs.zip` (both feeds) and `streets.parquet`. Public repo, so no
+   token. Warn (a `::warning::` annotation in the run log) when either
+   feed's `feed_end_date` is within 14 days or past; keep going either
+   way, so the site never stops over old GTFS.
 3. `ingest` -> `match` -> `export site`.
 4. Store the snapshot (below).
 5. Upload `web/` (without `web/test/`) and deploy it to Pages.
@@ -48,6 +55,17 @@ Every 15 minutes (`cron: "*/15 * * * *"`), plus a manual trigger:
 Failing safe: any failed step stops the run before the deploy, so the
 last good site stays up. The page's "as of" time shows how old the data
 is; step 4 below adds a visible warning when it's old.
+
+### Reference data: release assets (decided 2026-11-27)
+
+GTFS (~both feeds zipped) and `streets.parquet` (24 MB) change rarely
+and are rebuilt by hand. They live as assets of one GitHub release
+(tag `reference`), replaced in place (`gh release upload reference
+<file> --clobber`) by a small upload script run after I refresh them.
+Assets aren't in git history, so the "never commit raw downloads or
+full GTFS" rule holds; it does republish SEPTA's public GTFS, so check
+SEPTA's terms (step 6). Today's feeds: `v202611220`, running
+2026-11-22 to 2027-02-20 (`feed_info.txt`, both feeds).
 
 Known limits of Actions timers: runs often start 5-15 minutes late
 (sometimes skipped at busy times), and GitHub turns a scheduled
@@ -85,19 +103,21 @@ exports, or run old JS against new data. Fix (already planned, web plan
 ## Steps (one increment each, tested and committed)
 
 1. This plan.
-2. **`ingest gtfs`**: download SEPTA's static GTFS (bus + rail) into
-   `data/gtfs/{bus,rail}/` with httpx; tests with `httpx.MockTransport`.
-   Find the official source and its format first.
-3. **Versioned URLs** for data files and the JS modules.
-4. **Stale-data warning** on the page when the data is old (e.g. more
+2. **Versioned URLs** for data files and the JS modules.
+3. **Stale-data warning** on the page when the data is old (e.g. more
    than an hour: the job has stopped or is failing). Threshold: my
    decision.
+4. **Reference data**: the upload script (zip both GTFS feeds + the
+   street cache, upload to the `reference` release), the job's unpack
+   step, and the GTFS end-date check (a small pure function, tested).
 5. **Store snapshots**: a small script that commits a snapshot to the
    `snapshots` branch only if it changed.
 6. **The workflow** (`publish.yml`) as above. Before it: check SEPTA's
-   data terms and OpenFreeMap's terms for a public site fetching every
-   15 minutes, and add a SEPTA credit to the page if needed.
-7. **My part**: create the GitHub repo and push; Settings -> Pages ->
+   data terms (including republishing GTFS as a release asset) and
+   OpenFreeMap's terms for a public site fetching every 15 minutes, and
+   add a SEPTA credit to the page if needed.
+7. **My part**: create the GitHub repo and push; create the
+   `reference` release and run the upload script; Settings -> Pages ->
    Source: "GitHub Actions"; watch the first runs.
 
 ## After hosting
