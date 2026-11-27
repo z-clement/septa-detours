@@ -809,3 +809,10 @@ Tests: 125 JS.
   Real render: route 19's stacked pair is one marker; different routes
   still overlap (City Hall, and the whole phone overview at its zoom):
   marker size is for the color/size pass.
+- Color pass (2026-11-26; your choice from three rendered palettes:
+  A): network `#c9cdd2` at 0.7, detoured routes charcoal `#4a4f55`,
+  detours magenta `#D500F9` (B, route colors at half opacity, was busy:
+  red routes competed with the detours; C, a teal accent, stood out
+  less). Markers shrink zoomed out: radius 7 px at zoom 9 to 11 px at
+  12, label 8 to 11 px. Palettes were rendered from patched copies of
+  `web/` in the scratchpad (headless Brave over CDP).

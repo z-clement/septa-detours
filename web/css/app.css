@@ -362,7 +362,7 @@ body {
    detoured routes, everything detour in the accent. */
 .legend {
   --detour-color: #d500f9; /* mapview.js's DETOUR_COLOR */
-  --route-grey: #7d838a; /* mapview.js's DETOURED_ROUTE_COLOR */
+  --route-grey: #4a4f55; /* mapview.js's DETOURED_ROUTE_COLOR */
 }
 /* "Map key": opens and closes the rows (closed by default on phones). */
 .legend summary {

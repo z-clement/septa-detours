@@ -199,7 +199,8 @@ checked by eye with your screenshots. Rough sizes in brackets.
 - **U7. Rider cards (F)** (done 2026-11-26: turn-by-turn steps and the
   raw message collapsed; no A/B markers; contract 7) [medium: contract gains the
   steps, schema bump].
-- **Color pass (yours, 2026-11-26)** [small]: once the UI is settled,
+- **Color pass (yours, 2026-11-26)** (done: palette A, smaller zoomed-out
+  markers) [small]: once the UI is settled,
   one pass over every color (accent, greys, route colors, dots,
   legend), together. Magenta is fine for now.
 - **Match follow-up (not UI, seen 2026-11-26 on route 79):** a path can
@@ -278,3 +279,9 @@ sheet. Findings, none fixed yet:
 7. **"In effect (3)" lists a detour "not running now"** (off-hours): a
    heading that contradicts its card. Options: a "Not running now"
    group, or call the group "Current".
+
+Fixed (2026-11-26, same day): 1 and 5 (one marker per route per place,
+your choice; smaller markers zoomed out; different routes can still
+overlap on a phone's region view), 2 (palette A, your choice from three
+renders), 3 and 7 (contract 10; "Not running now" group, your choice),
+4 (route numbers beside start dots), 6 (compact attribution).

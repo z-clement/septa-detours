@@ -12,16 +12,17 @@ const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 const FALLBACK_COLOR = "#555555";
 
 /** The faint whole-network lines (decided: one neutral grey, not route colors). */
-const NETWORK_COLOR = "#9aa0a6";
+const NETWORK_COLOR = "#c9cdd2";
 
 /** Every detour mark (path, skipped stretch on the overview, start and
  * rejoin dots) in one accent color no SEPTA route uses (UI plan A1), so
  * detours stand out from routes. app.css repeats it (`--detour-color`). */
 const DETOUR_COLOR = "#D500F9";
 
-/** Detoured routes on the overview: grey like the network (A1), a little
- * darker and wider, so the affected routes still show. */
-const DETOURED_ROUTE_COLOR = "#7d838a";
+/** Detoured routes on the overview: charcoal over the very light grey
+ * network (color pass, your choice: palette A), so the affected routes
+ * stand out and the magenta detours stand out more. */
+const DETOURED_ROUTE_COLOR = "#4a4f55";
 
 /** The skipped stretch on the overview, where routes are grey: a light
  * band of the accent. (Focused, it's a white fade over the route color.) */
@@ -38,7 +39,7 @@ const SKIPPED_FADE_OPACITY = 0.65;
 const PHILLY_CENTER = [-75.16, 39.95];
 
 /** The network's opacity on the overview, and fainter while a route is focused. */
-const NETWORK_OPACITY = 0.6;
+const NETWORK_OPACITY = 0.7;
 const NETWORK_OPACITY_FOCUSED = 0.3;
 
 const NETWORK_SOURCE = "network";
@@ -451,7 +452,8 @@ export function addOverviewLayers(map, site) {
     maxzoom: MARKER_ZOOM,
     paint: {
       "circle-color": DETOUR_COLOR,
-      "circle-radius": 11,
+      // Smaller zoomed out, where markers crowd (a phone's region view).
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 7, 12, 11],
       "circle-stroke-color": "#ffffff",
       "circle-stroke-width": 2,
     },
@@ -464,7 +466,7 @@ export function addOverviewLayers(map, site) {
     layout: {
       "text-field": ["get", "label"],
       "text-font": LABEL_FONT,
-      "text-size": 11,
+      "text-size": ["interpolate", ["linear"], ["zoom"], 9, 8, 12, 11],
       "text-allow-overlap": false,
     },
     paint: { "text-color": "#ffffff" },
