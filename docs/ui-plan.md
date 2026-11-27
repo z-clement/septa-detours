@@ -1,8 +1,10 @@
-# UI/UX plan: a map readable at a glance (draft, 2026-11-26)
+# UI/UX plan: a map readable at a glance (2026-11-26)
 
-Written from your point of view: "I", "my choice" = you. Status:
-directions A, B, C, E **decided** (2026-11-26); D, F, G proposed, to
-confirm before building them. Order of work at the end.
+Written from the user's point of view: "I", "me", "my choice" = the
+user ("you" in places means the user too). Status (2026-11-27): **done**:
+U1-U8 and U5b, then the render sweep and the color pass (end of this
+file; details in `notes/export-and-web.md`). Next for the UI: a
+phone-focused pass from testers' feedback (`backlog.md`).
 
 ## Goal (decided 2026-11-26)
 

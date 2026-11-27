@@ -6,17 +6,18 @@ read the one for the area you're about to touch.
 
 | File | Covers |
 |---|---|
-| `gtfs.md` | `gtfs/`: loaders, shapes, a route's shapes, directions |
-| `ingest.md` | `io.py`, alerts ingest, the alerts API's shape and quirks |
+| `gtfs.md` | `gtfs/`: loaders, shapes, a route's shapes, directions, unpack, the end-date check |
+| `ingest.md` | `io.py`, alerts ingest, the alerts API's shape and quirks, the snapshot store, GTFS releases |
 | `streets.md` | OSM extracts (`ingest osm`) and the street cache (`streets/`) |
 | `model.md` | `model.py` (shared types) |
 | `fixtures.md` | alert fixtures, real snapshots, what the data looks like |
 | `parse.md` | `parse/`: text, times, directions, notices, locations |
-| `match.md` | `match/`: routes, directions, street names, crossings, tier A |
-| `export-and-web.md` | `export/`, the match command, `web/` |
+| `match.md` | `match/`: routes, directions, street names, crossings, tiers A-C |
+| `export-and-web.md` | `export/`, the match command, `web/`, the public-facing pass |
 
-Plans live one level up: `../web-plan.md` (current), `../geography-plan.md`,
-`../backlog.md`.
+Plans live one level up, all done: `../web-plan.md`, `../geography-plan.md`,
+`../ui-plan.md`, `../hosting-plan.md`. Open items: `../backlog.md`.
+Running the hosted site: `../operating.md`.
 
 ## Progress before "detours on the map"
 

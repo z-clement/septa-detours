@@ -4,8 +4,10 @@ Moved verbatim from CLAUDE.md on 2026-11-25. Written from the user's
 point of view: "I", "me", "my choice" = the user. Line-level details
 may be out of date; the code and tests are the source of truth.
 
-How detours get geometry. Tier A (start point) is done for
-intersections; step 4 (stop closures) and tiers B/C are open.
+How detours get geometry. Status (2026-11-27): tiers A, B and C are
+**done** and on the map (start points, skipped stretches, detour paths;
+`notes/match.md`). Open: tier A step 4 (stop closures; may not be
+needed) and the tier C follow-ups at the end.
 
 Geography plan (agreed; tier A done for intersections: start point
 stored; stop closures not yet). 170 distinct real messages: 126

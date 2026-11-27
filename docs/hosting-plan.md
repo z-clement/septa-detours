@@ -1,8 +1,13 @@
-# Hosting plan: GitHub Actions + GitHub Pages (draft, 2026-11-27)
+# Hosting plan: GitHub Actions + GitHub Pages (2026-11-27)
 
 Written from the user's point of view: "I", "me", "my choice" = the
 user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
 (option 1 there: static hosting + a scheduled job).
+
+Status: **done and live** since 2026-11-27 at
+https://z-clement.github.io/septa-detours/. Running it (what runs, where
+to look, chores): `operating.md`. This file is the record of how it was
+decided and built.
 
 ## Decided by the user (2026-11-27)
 
@@ -13,15 +18,12 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
   domain (nothing extra to secure).
 - **Snapshots**: stored, somewhere durable (Claude recommended the
   branch below).
-- **Changed 2026-11-27 (after the terms check): GTFS is fetched
-  automatically** from SEPTA's GitHub releases (`septadev/GTFS`; a new
-  feed every 2-4 weeks, published 2-6 days before it starts), choosing
-  the newest release *in effect* (New York date), not "latest". Only
-  `streets.parquet` stays a manual release asset; `gtfs pack` became
-  `gtfs unpack`. Was:
-- **GTFS stays manual** (SEPTA's feeds change rarely): I download it as
-  today. It and the street cache reach the job as release assets (below),
-  not through the Actions cache. No `ingest gtfs` for now.
+- **GTFS is fetched automatically** (changed 2026-11-27 after the terms
+  check; at first it was to be a manual release asset like the street
+  cache) from SEPTA's GitHub releases (`septadev/GTFS`; a new feed every
+  2-4 weeks, published 2-6 days before it starts), choosing the newest
+  release *in effect* (New York date), not "latest". Only
+  `streets.parquet` is a manual release asset.
 - **GTFS age warning: for me, not riders.** The job logs a warning as the
   feed nears its `feed_end_date`; the page says nothing (no contract
   change). Log only for now; opening an issue (which emails) can come
@@ -37,8 +39,8 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
   fetch time inside, so an unchanged feed gives byte-identical files:
   two snapshots 40 minutes apart (`141550Z`, `145719Z`) differed in 1 of
   185 route entries.
-- Inputs the job needs besides the alerts API: both GTFS feeds (fetched
-  by hand today; no ingest step) and the street cache
+- Inputs the job needs besides the alerts API: both GTFS feeds and the
+  street cache
   (`streets.parquet`, 24 MB, built from ~540 MB of OSM extracts in
   ~30 s / ~1.2 GB RAM).
 
@@ -49,11 +51,11 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
 Every 15 minutes (`cron: "*/15 * * * *"`), plus a manual trigger:
 
 1. Check out `main`; set up uv and Python 3.13; `uv sync`.
-2. Download the reference data from the repo's `reference` release:
-   `gtfs.zip` (both feeds) and `streets.parquet`. Public repo, so no
-   token. Warn (a `::warning::` annotation in the run log) when either
-   feed's `feed_end_date` is within 14 days or past; keep going either
-   way, so the site never stops over old GTFS.
+2. GTFS from SEPTA's releases (cached between runs); `streets.parquet`
+   from the repo's `reference` release (public repo, so no token). Warn
+   (a `::warning::` annotation in the run log) when either feed's
+   `feed_end_date` is within 14 days or past; keep going either way, so
+   the site never stops over old GTFS.
 3. `ingest` -> `match` -> `export site`.
 4. Store the snapshot (below).
 5. Upload `web/` (without `web/test/`) and deploy it to Pages.
@@ -62,16 +64,13 @@ Failing safe: any failed step stops the run before the deploy, so the
 last good site stays up. The page's "as of" time shows how old the data
 is; step 4 below adds a visible warning when it's old.
 
-### Reference data: release assets (decided 2026-11-27)
+### Reference data: a release asset (decided 2026-11-27)
 
-GTFS (~both feeds zipped) and `streets.parquet` (24 MB) change rarely
-and are rebuilt by hand. They live as assets of one GitHub release
-(tag `reference`), replaced in place (`gh release upload reference
-<file> --clobber`) by a small upload script run after I refresh them.
-Assets aren't in git history, so the "never commit raw downloads or
-full GTFS" rule holds; it does republish SEPTA's public GTFS, so check
-SEPTA's terms (step 6). Today's feeds: `v202611220`, running
-2026-11-22 to 2027-02-20 (`feed_info.txt`, both feeds).
+`streets.parquet` (24 MB) changes rarely and is rebuilt by hand. It
+lives as an asset of one GitHub release (tag `reference`), replaced by
+hand after a refresh (`operating.md`). Assets aren't in git history, so
+the "never commit raw downloads" rule holds. (GTFS was planned here too,
+zipped by a `gtfs pack` command; replaced by `ingest gtfs`, above.)
 
 Known limits of Actions timers: runs often start 5-15 minutes late
 (sometimes skipped at busy times), and GitHub turns a scheduled
@@ -119,90 +118,15 @@ exports, or run old JS against new data. Fix (already planned, web plan
    change freely), from `snapshot_fetched_at`; an amber `#stale` banner
    at the bottom middle of the map, above the phone sheet; checked on the
    page's 1-minute tick.)
-4. **Reference data**: the upload script (zip both GTFS feeds + the
-   street cache, upload to the `reference` release), the job's unpack
-   step, and the GTFS end-date check (a small pure function, tested).
-5. **Store snapshots**: a small script that commits a snapshot to the
-   `snapshots` branch only if it changed.
-6. **The workflow** (`publish.yml`) as above. Before it: check SEPTA's
-   data terms (including republishing GTFS as a release asset) and
-   OpenFreeMap's terms for a public site fetching every 15 minutes, and
-   add a SEPTA credit to the page if needed.
-7. **My part**: create the GitHub repo and push; create the
-   `reference` release and run the upload script; Settings -> Pages ->
-   Source: "GitHub Actions"; watch the first runs.
-
-## Handoff: whole-project check, cleanup, README (2026-11-27)
-
-For a fresh session. Hosting is **done and live**:
-https://z-clement.github.io/septa-detours/, updated every 15 minutes by
-`.github/workflows/publish.yml` (below, "The workflow as built"). Plan
-steps 1-6 and my go-live steps are all done (history: commits
-`3a912b1` .. `64b59fe`, `docs/notes/ingest.md`, `docs/notes/gtfs.md`).
-1829 Python + 172 JS tests pass; lint clean.
-
-**How to work** (CLAUDE.md applies): small increments, say what and why
-before each, tests + lint + mutation check, then stop for my review.
-Claude may commit each reviewed increment (check `git log` first: I
-sometimes commit before you do); don't push, I do. Changes to the live
-site go out on my next push (the workflow deploys `main` as it is).
-
-**Task 1: whole-project check and cleanup.** Go through the list below
-with me one item at a time: propose, I decide, then do it. Many are
-small decisions, not obvious fixes. Read the area's `docs/notes/` file
-before touching it.
-
-- Everything in "Notes for the pre-deploy check" below (rider-facing
-  error text, `#error` placement, favicon, MapLibre SRI/vendoring, open
-  tabs never refreshing, `web-plan.md` "Caching" history, `#stale`
-  covering the open credits, public-facing wording of the title and
-  status line). The SEPTA credit part of the last one is done.
-- **CLAUDE.md "Current state"**: still says schema 9 and ~1660 / ~156
-  tests (now schema 10, 1829 / 172). The ty count ("47 pre-existing")
-  wasn't rechecked after this session's new test files (ty runs in VS
-  Code only); check it in the editor.
-- **This plan has outlived itself**: the top's "Decided" list and
-  "Reference data: release assets" still describe GTFS as a manual
-  release asset (replaced by `ingest gtfs`; marked, not removed).
-  Trim it to what's true now, or move the history to
-  `docs/notes/`.
-- **Routes H, L, R, XH are unmatched on the live site** (9 detours
-  "not matched to a route" on 2026-11-27, mostly these). Deliberate:
-  `match/routes.py` leaves Bus Revolution renames out because GTFS
-  doesn't document them. Riders on those routes see nothing. Question
-  for me: find a trustworthy source for the new names, or keep it.
-- **Action versions drift**: the first deploy failed because the pins
-  from memory were 1-4 majors old. Options: Dependabot for
-  `github-actions` (a PR when an action updates), and/or pinning full
-  commit SHAs. `setup-uv` must stay an exact version (no major tags
-  since v8).
-- **Watching the job**: GitHub disables schedules after 60 days with
-  no repo activity; the store step can fail without turning a run red
-  (check the `snapshots` branch grows). Maybe a short "operating the
-  site" section (README or a notes file): where to look, how to
-  re-run, how to refresh `streets.parquet` ("Going live" step 5).
-- **`tools/shot.mjs`** (2026-11-27): the headless screenshot script,
-  kept on my machine so it isn't lost a third time; `tools/` is
-  gitignored (my choice: not public). Mention it in
-  `docs/notes/export-and-web.md` so later sessions know it's there.
-- **Notes gaps**: the credits change (SEPTA line, open 5 s) is recorded
-  here but not in `docs/notes/export-and-web.md`.
-- **Small consistency nits**: `match/__main__.py`'s `_SNAPSHOT_NAME`
-  uses `\d` where the newer code uses `[0-9]` (`\d` accepts any
-  Unicode digit); `tests/test_expiry.py` has literal Arabic-Indic
-  digits where newer tests write `\u` escapes.
-
-**Task 2: the README** (after task 1; currently there is none, and no
-LICENSE, by my choice for now). Readers: people who land on the GitHub
-repo, riders curious about the map and developers. Suggested contents,
-short, linking to `docs/` for depth: what it is + the live link (a
-screenshot helps: the local `tools/shot.mjs`); how it works (ingest -> parse +
-match -> export, and the 15-minute job); data sources and credits
-(SEPTA's alerts API and GTFS, "not affiliated with SEPTA";
-OpenStreetMap data under the ODbL, incl. the published detour paths
-and `streets.parquet`; OpenFreeMap / OpenMapTiles basemap); running it
-locally (the commands from CLAUDE.md); the repo layout in brief. Ask me
-before writing anything about licensing of the code.
+4. **Reference data** (done 2026-11-27): `ingest gtfs` + `gtfs
+   unpack` for GTFS, the `reference` release for the street cache, and
+   the GTFS end-date check (`gtfs/expiry.py`).
+5. **Store snapshots** (done 2026-11-27): `ingest store`, which commits
+   a snapshot to the `snapshots` branch only if it changed.
+6. **The workflow** (done 2026-11-27): `publish.yml`, below, after the
+   terms check (below) and a SEPTA credit on the page.
+7. **My part** (done 2026-11-27): the repo, the `reference` release,
+   Pages set to "GitHub Actions", the first runs.
 
 ## Terms checked before step 6 (Claude, 2026-11-27)
 
@@ -282,76 +206,30 @@ API failure with cache (warning, exit 0) and without (exit 1); the
 pipeline (~14 s, 131 detours, 199 files in `_site`); the store command
 against a local bare origin (stored, then unchanged).
 
-## Going live (my steps, written by Claude 2026-11-27)
+## Going live (done 2026-11-27)
 
-1. **Push**: `git push` (main).
-2. **Create the `reference` release** (website): repo -> Releases ->
-   "Draft a new release" -> "Choose a tag": type `reference`, "Create
-   new tag: reference on publish" (target `main`). Title: `Reference
-   data`. Description:
+Pushed; created the `reference` release with `streets.parquet` and its
+ODbL notice; Settings -> Pages -> Source: "GitHub Actions"; the first
+run by hand, then the schedule. The steps that recur (refreshing the
+street cache) are in `operating.md`.
 
-   > `streets.parquet`: street data derived from OpenStreetMap,
-   > © OpenStreetMap contributors, available under the Open Database
-   > License (ODbL) 1.0: https://opendatacommons.org/licenses/odbl/1-0/
-   > Built from Geofabrik extracts pennsylvania-, new-jersey- and
-   > delaware-261124 (2026-11-24).
+## Whole-project check (done 2026-11-27)
 
-   Attach `data/processed/streets.parquet` (24 MB). Publish (a draft's
-   files can't be downloaded by the job). "Pre-release" off.
-3. **Pages**: Settings -> Pages -> Build and deployment -> Source:
-   "GitHub Actions".
-4. **First run**: Actions -> publish -> "Run workflow" (branch `main`).
-   Expect: green, GTFS downloaded (the first run has no cache), a
-   snapshot stored, the site at `https://<user>.github.io/<repo>/`.
-   Then let a scheduled run or two go by (they start late).
-5. **Later, refreshing the street cache** (after `ingest osm` + `python
-   -m septa_detours.streets`): edit the release, delete
-   `streets.parquet`, upload the new one (the website can't replace in
-   place), update the extract dates in the description.
+A pass over the whole repo after going live (Claude, with my decisions):
 
-## Notes for the pre-deploy check (collected by Claude, 2026-11-27)
-
-Minor things noticed along the way, for the whole-project check before
-the first deploy. None blocks hosting; each is a small decision.
-
-- **CLAUDE.md "Current state" is out of date**: it says contract
-  **schema 9** (it's 10 since `e8a619d`) and ~1660 Python / ~156 JS
-  tests (now 1691 / 172).
-- **Error messages are written for me, not riders**: a missing data file
-  shows "Make it first: uv run python -m septa_detours.match ..." and a
-  schema mismatch "Re-export the data (or reload the page)" in the red
-  `#error` banner (`web/js/data.js`). On the public site a rider would
-  see these. Maybe a rider-facing line ("Detours couldn't load; try
-  again later") with the details in the console.
-- **`#error` banner placement**: centered on the whole window (sidebar
-  included) and at the top, where on narrow screens it sits under the
-  map key / zoom buttons. `#stale` had the same problem and moved to the
-  bottom middle of the map; `#error` could follow (it would only meet
-  `#stale` if both show, which can't happen today).
-- **No favicon**: every load asks for `/favicon.ico` (404). A small icon
-  (or `<link rel="icon" href="data:,">` to stop the request).
-- **MapLibre from unpkg** (`index.html`, pinned 5.24.0) with no
-  `integrity` attribute: if unpkg served a different file, the page
-  would run it. Add SRI hashes, or copy MapLibre into `web/vendor/`
-  (it'd then be versioned by `deploy` too, if under `js/`).
-- **An open tab never sees new data**: the page loads the data once;
-  after an hour the stale banner asks for a reload. Later, maybe: re-check
-  `status.json` every few minutes and offer "New detours: reload".
-- **`docs/web-plan.md` "Caching"** describes the plan before it was built
-  (and suggested a commit-based version; it's content-based). History
-  only; fine to leave or trim.
-- **The headless screenshot script isn't in the repo**: it lived in
-  Claude's scratchpad and was lost twice (rewritten 2026-11-27 as a
-  ~30-line CDP script). If headless checks stay useful, keep a copy in
-  e.g. `tools/` (Node 20, `--experimental-websocket`, no dependencies).
-- **`#stale` covers the open credits** (found 2026-11-27, headless
-  1200x800): while the credits are open (the first 5 s), the amber
-  banner's second line sits behind the credits strip. Only when the data
-  is old. Raise `#stale` a little, or accept it.
-- **Public-facing text to review**: the page title, the status line's
-  wording ("28 without a location, 9 not matched to a route" reads as
-  internal), and a SEPTA credit / "not affiliated with SEPTA" line
-  (step 6).
+- The page, for riders: load errors in plain words (details in the
+  console); the status line is "N detours as of <time>" (it said
+  "N on the map", which overcounted); an open page offers a reload when
+  newer detours are out (my choice: offer, don't force); the banners sit
+  above the open credits; a favicon, a meta description, SRI hashes on
+  MapLibre. Details: `notes/export-and-web.md`, "Public-facing pass".
+- Code: ASCII-only digits in file-name patterns; package docstrings
+  brought up to date.
+- CI: a `test` workflow and Dependabot (`operating.md`).
+- Docs: plans marked done, this file trimmed, `operating.md`, a README
+  and an MIT LICENSE (data keeps its own terms: README).
+- Decided to leave: routes H, L, R, XH unmatched (`backlog.md`); the
+  screenshot script stays local (`tools/`, gitignored).
 
 ## After hosting
 

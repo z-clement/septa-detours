@@ -1,13 +1,15 @@
 # Web plan: data contract and map app
 
-Status: **P1-P6, W1, W2, W3 done** (the page draws the data contract
-and the route sidebar: grouped list, search, mode chips, "Detoured
-now", "Not on the map"). **W4 (focus a route) next**: confirm its open
-decisions first (see W4 in "Order of work"). Written
-2026-11-25 for a future session to pick up. Work through it with the usual rules in `CLAUDE.md` (small
-increments, tests from real data, mutation checks, stop for review after
-each). Items marked **Confirm** are proposals the user hasn't approved
-yet: ask before building them.
+Status (2026-11-27): **done.** P1-P6 and W1-W6 are built (details:
+`notes/export-and-web.md`); the UI pass that followed is
+`ui-plan.md`, and hosting replaced "Later: hosting" below
+(`hosting-plan.md`). Kept as the record of how the contract and the
+page were designed; the code and tests are the source of truth, and the
+contract has moved on since (schema 10, `export/contract.py`).
+
+Written 2026-11-25 for a future session to pick up, with the usual rules
+in `CLAUDE.md`. Items marked **Confirm** were proposals the user hadn't
+approved yet.
 
 ## Goal
 
@@ -572,4 +574,6 @@ so each export has its own URLs (nothing re-checked, old and new never
 mixed, even mid-export) and the files can be cached long. The JS
 modules themselves can still be cached stale (a page reading an old
 `SCHEMA_VERSION`): versioned script URLs or a no-cache header on
-`index.html` and `js/` cover that too.
+`index.html` and `js/` cover that too. (Built 2026-11-27, hosting plan
+step 2: the data as above; the code versioned by a hash of its contents
+(`export deploy`), not by the commit.)

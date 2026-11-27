@@ -4,8 +4,9 @@ Moved verbatim from CLAUDE.md on 2026-11-25. Written from the user's
 point of view: "I", "me", "my choice" = the user. Line-level details
 may be out of date; the code and tests are the source of truth.
 
-Options and follow-ups not scheduled yet. The current plan is
-`docs/web-plan.md`.
+Options and follow-ups not scheduled yet. The plans (`web-plan.md`,
+`geography-plan.md`, `ui-plan.md`, `hosting-plan.md`) are done; running
+the hosted site is `operating.md`.
 
 Other options, for later:
 - **A targeted mobile UI/UX pass after hosting** (added 2026-11-27):
@@ -29,13 +30,19 @@ Other options, for later:
   apart. Options: add the raw direction to the hash (changes the pinned
   key `661b7024a25d2bbd` and every key across snapshots), or a
   page-side id (`source_key` + index). Parse stage + `model.py`: flag.
-- **Keep collecting snapshots** (`uv run python -m septa_detours.ingest`);
-  run parse + match over each and add fixtures for new quirks (then
-  update all the pins listed above).
+- **Use the collected snapshots**: the hosted job stores every changed
+  snapshot on the `snapshots` branch (`git fetch origin snapshots`). Run
+  parse + match over them and add fixtures for new quirks (then update
+  all the pins listed in CLAUDE.md, "Testing habits").
+- **Bus Revolution renames (H, L, R, XH)**: the alerts API still uses
+  the old names and GTFS doesn't document the new ones, so these
+  routes' detours stay "not matched to a route" (decided 2026-11-27:
+  leave them until a trustworthy source for the mapping turns up;
+  `match/routes.py`).
+- **A `septa-detours` command** (`[project.scripts]`): one entry point
+  instead of `python -m septa_detours.<stage>`. Not needed while the
+  workflow calls the modules.
 - **Small follow-ups**: move `alerts.make_client` to a shared
   `ingest/http.py` (OSM uses it too; its docstring says "SEPTA API");
   maybe make `write_bytes_atomic` a wrapper over `write_chunks_atomic`;
   maybe a byte-progress line for the OSM download.
-
-Small follow-ups: (done in W1/W2: the plurals, and the total, now in
-`status.json`.)

@@ -915,3 +915,15 @@ gave Claude a free hand on these, with your decisions on the open ones.
   not file names, and `int()` reads those digits correctly. Mutants: 6
   (one per pattern, plus the time part in `match`), all killed after one
   more stray.
+- Credits (2026-11-27, before going live; recorded here late):
+  `createMap` adds `SEPTA_CREDIT` ("Detour data from SEPTA · Not
+  affiliated with SEPTA", your wording) before the basemap's credits, and
+  closes the compact control `CREDITS_OPEN_MS` 5 s after load (OSM's
+  guidelines allow closing "automatically after five seconds"; before,
+  it closed at load). Terms: `docs/hosting-plan.md`, "Terms checked".
+- Headless checks: `tools/shot.mjs` on your machine (gitignored, your
+  choice: not public) is a ~30-line CDP script for Brave/Chrome (Node 20,
+  `--experimental-websocket`; usage in its header). It screenshots the
+  page at 2 s and 8 s and prints the credits' state; edit it for other
+  checks. This pass used scratch variants of it (steps: wait, evaluate,
+  screenshot, run a shell command).
