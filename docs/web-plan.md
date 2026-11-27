@@ -400,7 +400,8 @@ that then notify subscribers (sidebar and map re-render from state):
 
 ### Later in the web part
 
-- **UI/UX pass: the map must be readable at a glance** (yours,
+- **UI/UX pass: the map must be readable at a glance** (in progress:
+  `docs/ui-plan.md`) (yours,
   2026-11-26, after tier C). Now that the map shows routes, detoured
   routes, faded skipped stretches, dashed detour paths and start dots
   (plus the network, focus dimming and direction offsets), it needs a
@@ -408,12 +409,10 @@ that then notify subscribers (sidebar and map re-render from state):
   detoured, where, and what to do. A big piece of work, not a tweak:
   plan it (questions, sketches, by-eye checks on real data) before
   building.
-- Detoured lines in a different line style (yours, 2026-11-25), so
-  they're easier to pick out on the map than by color and width alone
-  (e.g. a casing/halo, or a dashed overlay; pick when it's built).
-- Mobile (< ~700 px): the sidebar becomes a bottom sheet.
-- Keyboard and screen readers: rows and cards are real `<button>`s,
-  visible focus, `aria-live` status.
+- ~~Detoured lines in a different line style~~ (done: tier B/C and the
+  UI pass: faded stretches, dashed magenta paths).
+- ~~Mobile (< ~700 px): the sidebar becomes a bottom sheet~~ (W6).
+- ~~Keyboard and screen readers~~ (W6).
 - Stops + closures, live vehicles, rail status: new layers and panel
   sections fed by new contract files (bump `schema_version` or add
   optional files). Live vehicles need data refreshed every ~15-30 s,

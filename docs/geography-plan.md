@@ -35,7 +35,9 @@ Tier A steps (agreed): 1. ~~street-name normalization~~ and
 `model.py` change, if tier C needs it); 4. stop-closure notices: point
 at the stop (`load_stops`; maybe needs `location_type` from the bus feed
 only, which breaks "shared columns only": ask). Step 4 is postponed
-behind the map UI/UX work.
+behind the map UI/UX work, and **may not be needed** (yours,
+2026-11-26): stop closures are well signed in person; detour details
+aren't, so the map's value is in the detours.
 
 ## Tier B (started 2026-11-25)
 
@@ -95,9 +97,9 @@ Results and decisions made while building (tier B):
   in its own style next to the faded stretch.
 
 Tier B follow-ups (not built):
-- A rejoin when the last street isn't the route (98 crossings sat
+- ~~A rejoin when the last street isn't the route (98 crossings sat
   62-959 m off): walk the last street to where it meets the route (a
-  first step of tier C).
+  first step of tier C).~~ (done in tier C: `walk_to_route`.)
 - The 6 detours with both points but no stretch: 5 have the rejoin at
   the start crossing itself (two-step paths like "via Harbison, Right
   on Frankford"): maybe "the route between start and the next crossing

@@ -184,64 +184,37 @@ Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
 pytest `testpaths = ["tests"]`. No CLI entry point yet; add
 `[project.scripts]` back when building `fetch`.
 
-Reached: **detours on the map**, end to end: `ingest` -> `match` command
-(`data/processed/detours-<stamp>.json`, a list of `Detour`) -> `export
-detours` (`web/data/detours.geojson`: detoured route lines + start points)
--> `web/` (the detours map, replacing the single-route page). Real
-snapshot `121123Z`: 166 detours, 161 matched to a route, 134 placed;
-292 lines on 52 routes, ~3.3 MB. Details: `docs/notes/export-and-web.md`.
-(`export detours` was removed in W2, replaced by `export site`.)
+Reached (history in `docs/notes/`, plans in `docs/`):
 
-Then: **the data contract** (web plan P1-P6, done): `export site` writes
-every file the new page will read (`export/contract.py` types;
-builders in `export/site.py`, geometry in `export/simplify.py`). Real
-run: 185 files, 3.6 MB; the page loads ~1.05 MB up front (network
-0.97 MB) plus one route file (<= 109 KB) on focus. Since W2 the page
-draws it: grey network, detoured routes in color, start dots by timing.
-Since W3 a fixed left sidebar (`sidebar.js`) holds the status line,
-search (prefix matches first), mode chips, "Detoured now", every route
-by mode with counts by timing, and "Not on the map"; `routes.json`
-carries detour windows (schema 2). Since W4 a row, line or dot focuses
-a route: the panel replaces the list (detours grouped by timing,
-"Ended" collapsed), the map dims the rest, the URL hash
-(`#route=...&detour=...`) and Back/Escape work; state lives in
-`state.js`. Since W5 cards and dots are linked (hover, select, scroll,
-pan) and a click on several routes opens a chooser. Since W6 below 700
-px the sidebar is a bottom sheet (3 heights, tap handle; `sheet.js`),
-plus a keyboard/screen-reader pass. 125 JS tests.
-
-Then **tier B** (geography plan): parse reads the message's path
-(`parse/steps.py`, `DetourNotice.route_steps`), match places the rejoin
-(`RouteMatch.rejoin_point`: last two streets' crossing within 30 m of
-the affected shapes) and cuts the skipped stretch (`RouteMatch.skipped`,
-`match/skipped.py`), the contract is schema 3 (`rejoin_point`,
-`skipped`, `skipped.geojson`), and the map fades the skipped stretch
-out of the (still drawn) route, with a legend.
-
-Then **tier C** (geography plan): `match/walk.py` + `match/path.py`
-walk the message street by street along OSM ways (networkx), checking
-each turn's left/right; `RouteMatch.path` (and rejoins tier B missed),
-contract schema 4 (`path`, `paths.geojson`), drawn as route-color dashes
-over white for detours in effect. Real `121123Z`: 63 paths of 97
-candidates, stretches 53 -> 75. Map side not yet checked by eye. Real `121123Z`: 107 of 157 messages
-give a path, 65 rejoins, 51 stretches. Map side not yet checked by eye.
+- **The pipeline**: `ingest` -> `match` (parse + match: route, shapes,
+  start point, rejoin, skipped stretch, the detour's own path walked
+  along OSM streets, daily hours) -> `export site` (the data contract,
+  `export/contract.py`, **schema 9**) -> `web/`.
+- **The page** (web plan W1-W6): sidebar / bottom sheet with search,
+  mode chips, route list and a route panel of detour cards; focus via
+  URL hash; keyboard and screen-reader pass.
+- **Geography** (geography plan tiers A-C): start points, rejoins,
+  skipped stretches (cut from the drawn line), detour paths with turn
+  checks. Real `121123Z`: 63 paths of 97 candidates, 75 stretches.
+- **UI/UX pass** (`docs/ui-plan.md`, U1-U8 + U5b, 2026-11-26): only
+  detours in effect, by the page's clock and their daily hours; grey
+  routes and magenta detours; route-number markers below zoom 13;
+  focusing frames the detours; direction arrows on the focused route
+  and on detour paths; a legend of what's drawn; cards with turns,
+  hours and "Back on route ..."; each route-direction drawn once.
+- Tests: ~1660 Python, ~156 JS. The map can be rendered headless
+  (Brave + CDP, see `docs/notes/export-and-web.md`), not just by eye.
 
 ## Next
 
-**The web app**: `docs/web-plan.md` holds the whole plan (decisions
-made, facts measured, the contract's files, the JS module layout, the
-order of work, and **decisions still to confirm: ask before building
-those**). P1-P6 (Python) and W1-W6 are done (W6: check on a phone).
-Tiers B and C are built (check the stretches and paths by eye); their
-follow-ups are in `docs/geography-plan.md`. **Current: the UI/UX pass**,
-`docs/ui-plan.md` (goal: riders, readable at a glance; decisions A1 B1
-C1 E1; U1-U8 and U5b done 2026-11-26, contract now schema 9; next:
-the color pass and by-eye fixes). Next: pick from there, the web plan's
-"Later in the web part", or the backlog: ask which.
-
-Other open work: `docs/backlog.md` (parse's open questions, snapshot
-collection, small follow-ups) and `docs/geography-plan.md` (tier A step
-4, tiers B/C).
+Agreed order (2026-11-26): a render sweep of everything built (by
+Claude, headless), then the **color pass** (`docs/ui-plan.md`), then
+the remaining follow-ups: script caching (web plan, hosting), the
+off-route start lead-in and the two unchecked turns
+(`docs/geography-plan.md`, tier C follow-ups), two-street detours,
+`source_key` twins and message-vs-API questions (`docs/backlog.md`),
+snapshot collection. Stop closures on the map (tier A step 4) may not
+be needed: closures are well signed in person; detours aren't.
 
 ## Testing habits (cross-cutting)
 

@@ -9,8 +9,9 @@ Options and follow-ups not scheduled yet. The current plan is
 
 Other options, for later:
 - **Settle parse's open questions** (each is my decision; ask):
-  recurring windows ("7am - 4pm Mon thru Fri") and message-vs-API
-  mismatches (route 44 #3, 61 #1): add an issue or not? Flagging makes
+  ~~recurring windows ("7am - 4pm Mon thru Fri")~~ (done 2026-11-26:
+  `parse/hours.py`, UI plan U8) and message-vs-API mismatches (route
+  44 #3, 61 #1): add an issue or not? Flagging makes
   many notices `partial` and changes the pinned `NOT_COMPLETE`.
   Detecting either means parsing message text, which `parse/` doesn't do
   yet. And a `kind` field (reroute / stop closure / relocation; route 6,
