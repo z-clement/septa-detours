@@ -6,7 +6,7 @@
 
 import { loadSite, routeDetailLoader } from "./data.js";
 import { detourBounds, inEffectKeys, isInEffect, rejoinCollection } from "./detours.js";
-import { focusAnnouncement, staleNotice, statusLine } from "./format.js";
+import { focusAnnouncement, loadErrorText, staleNotice, statusLine } from "./format.js";
 import {
   addClickHandler,
   addLegend,
@@ -46,13 +46,14 @@ function showStatus(message) {
 }
 
 /**
- * Show an error message on the page (and in the console).
+ * Show why the page didn't load: a rider's line on the page, the details
+ * in the console.
  *
- * @param {string} message
+ * @param {unknown} err
  */
-function showError(message) {
-  console.error(message);
-  document.getElementById("error").textContent = message;
+function showError(err) {
+  console.error(err);
+  document.getElementById("error").textContent = loadErrorText(err);
 }
 
 /** Build the map, load the data, draw it, and wire up the page. */
@@ -209,7 +210,8 @@ async function main() {
         loaded = { key, detail, error: null };
       })
       .catch((err) => {
-        loaded = { key, detail: null, error: err.message };
+        console.error(err);
+        loaded = { key, detail: null, error: loadErrorText(err, "This route's detours") };
       })
       .finally(() => {
         // Dropped if the user has moved on to another route meanwhile.
@@ -389,4 +391,4 @@ async function main() {
 // An async function returns a Promise; an error thrown inside it becomes a
 // rejection, which `.catch` turns into a visible message instead of a
 // silent console-only failure.
-main().catch((err) => showError(err.message));
+main().catch(showError);

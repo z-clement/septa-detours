@@ -853,3 +853,18 @@ Tests: 125 JS.
   less). Markers shrink zoomed out: radius 7 px at zoom 9 to 11 px at
   12, label 8 to 11 px. Palettes were rendered from patched copies of
   `web/` in the scratchpad (headless Brave over CDP).
+
+## Public-facing pass (2026-11-27, after hosting)
+
+From the whole-project check (`docs/hosting-plan.md`, "Handoff"); you
+gave Claude a free hand on these, with your decisions on the open ones.
+
+- Rider-facing errors: `data.js` throws `DataError(message, reason)`,
+  `reason` "missing" (HTTP error) or "schema"; the message (URL, status,
+  the commands) goes to the console only. `format.loadErrorText(err,
+  subject)`: a schema mismatch (an old page cached across a schema
+  change) says "This page is out of date. Reload it ..."; anything else
+  (missing file, offline, a bug) "<subject> couldn't load. Please try
+  again in a few minutes." Used for the page (`#error`) and the route
+  panel ("This route's detours"). Checked headless with `status.json`
+  removed. Mutants: 8, all killed.

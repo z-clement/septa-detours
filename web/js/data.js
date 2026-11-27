@@ -10,6 +10,23 @@ const MAKE_SITE_COMMANDS =
   "uv run python -m septa_detours.export site";
 
 /**
+ * A data file the page refused, with why: `reason` is "missing" (an HTTP
+ * error) or "schema" (another contract version). The message is for
+ * developers (the console); format.js `loadErrorText` writes the rider's.
+ */
+export class DataError extends Error {
+  /**
+   * @param {string} message
+   * @param {"missing" | "schema"} reason
+   */
+  constructor(message, reason) {
+    super(message);
+    this.name = "DataError";
+    this.reason = reason;
+  }
+}
+
+/**
  * One export's URL for a data file: `path?v=<version>`.
  *
  * Every export has its own `generated_at`, so its files get URLs no
@@ -26,7 +43,8 @@ export function versioned(path, version) {
 }
 
 /**
- * Fetch and parse one JSON file; a missing file names the commands.
+ * Fetch and parse one JSON file; a missing file's message names the
+ * commands that make it.
  *
  * `fresh`: ask the server before using a cached copy (`cache: "no-cache"`;
  * a cheap 304 when unchanged). Only status.json needs it: it's the one
@@ -42,9 +60,10 @@ export function versioned(path, version) {
 async function loadJson(url, { fresh = false } = {}) {
   const response = await (fresh ? fetch(url, { cache: "no-cache" }) : fetch(url));
   if (!response.ok) {
-    throw new Error(
+    throw new DataError(
       `Could not load ${url} (HTTP ${response.status}).\n` +
         `Make it first:\n${MAKE_SITE_COMMANDS}`,
+      "missing",
     );
   }
   return response.json();
@@ -59,10 +78,11 @@ async function loadJson(url, { fresh = false } = {}) {
  */
 function checkSchema(url, file) {
   if (file.schema_version !== SCHEMA_VERSION) {
-    throw new Error(
+    throw new DataError(
       `${url} has schema_version ${file.schema_version}; this page reads ` +
         `${SCHEMA_VERSION}.\nRe-export the data (or reload the page):\n` +
         "uv run python -m septa_detours.export site",
+      "schema",
     );
   }
 }

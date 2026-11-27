@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
-import { SCHEMA_VERSION, loadSite, routeDetailLoader, versioned } from "../js/data.js";
+import { DataError, SCHEMA_VERSION, loadSite, routeDetailLoader, versioned } from "../js/data.js";
 
 let requested;
 let options;
@@ -53,6 +53,12 @@ beforeEach(() => serve({}));
 
 test("SCHEMA_VERSION matches the Python contract's", () => {
   assert.equal(SCHEMA_VERSION, 10);
+});
+
+test("DataError: an Error with a name and a reason", () => {
+  const err = new DataError("details", "missing");
+  assert.ok(err instanceof Error);
+  assert.deepEqual([err.name, err.message, err.reason], ["DataError", "details", "missing"]);
 });
 
 // --- versioned ------------------------------------------------------------
@@ -102,6 +108,8 @@ test("loadSite: returns every overview file, status first", async () => {
 test("loadSite: stale data (an older schema_version) fails before the other files", async () => {
   serve({ ...SITE, "data/status.json": { ...STATUS, schema_version: 9 } });
   await assert.rejects(loadSite(), {
+    name: "DataError",
+    reason: "schema",
     message:
       "data/status.json has schema_version 9; this page reads 10.\n" +
       "Re-export the data (or reload the page):\n" +
@@ -120,6 +128,8 @@ test("loadSite: a missing file names the URL, the status and the commands", asyn
   const { [`data/network.geojson${V}`]: _, ...withoutNetwork } = SITE;
   serve(withoutNetwork);
   await assert.rejects(loadSite(), {
+    name: "DataError",
+    reason: "missing",
     message:
       `Could not load data/network.geojson${V} (HTTP 404).\nMake it first:\n` +
       "uv run python -m septa_detours.match\n" +
@@ -164,6 +174,7 @@ test("routeDetailLoader: separate loaders have separate caches", async () => {
 test("routeDetailLoader: a failed load is retried next time", async () => {
   serve({});
   const load = routeDetailLoader(GENERATED_AT);
+  await assert.rejects(load("bus-2"), { reason: "missing" });
   await assert.rejects(load("bus-2"), /Could not load data\/routes\/bus-2\.json\?v=2026-11-27T13%3A44%3A40Z \(HTTP 404\)/);
   serve({ [`data/routes/bus-2.json${V}`]: BUS_2 });
   assert.deepEqual(await load("bus-2"), BUS_2);
@@ -176,6 +187,7 @@ test("routeDetailLoader: a newer route file (stale page) is refused, then retrie
     load("bus-2"),
     /data\/routes\/bus-2\.json\?v=\S+ has schema_version 11; this page reads 10/,
   );
+  await assert.rejects(load("bus-2"), { reason: "schema" });
   serve({ [`data/routes/bus-2.json${V}`]: BUS_2 });
   assert.deepEqual(await load("bus-2"), BUS_2);
 });

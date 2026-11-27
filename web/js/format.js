@@ -109,6 +109,26 @@ export function statusLine(status) {
 }
 
 /**
+ * What a rider sees when data doesn't load.
+ *
+ * Only data.js's "schema" refusal has its own text: the page's code and
+ * its data are from different exports (an old page cached across a
+ * schema change), and reloading fixes that. Anything else (a missing
+ * file, no network, a bug) can only be waited out. The details (URL, HTTP
+ * status, the commands that make the files) belong in the console.
+ *
+ * @param {unknown} err what was thrown; a data.js `DataError` has `reason`
+ * @param {string} [subject] what didn't load, e.g. "This route's detours"
+ * @returns {string}
+ */
+export function loadErrorText(err, subject = "Detours") {
+  if (err?.reason === "schema") {
+    return "This page is out of date. Reload it to see the latest detours.";
+  }
+  return `${subject} couldn't load. Please try again in a few minutes.`;
+}
+
+/**
  * How old the detours can get before the page warns (hosting plan step 3).
  * The job runs every 15 minutes and GitHub's timer can run 5-15 minutes
  * late, so an hour means several runs in a row didn't publish.

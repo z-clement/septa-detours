@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { DataError } from "../js/data.js";
 import {
   choiceText,
   TIMING_WORDS,
@@ -22,6 +23,7 @@ import {
   rejoinText,
   routeLabel,
   STALE_AFTER_MS,
+  loadErrorText,
   staleNotice,
   statusLine,
   stepText,
@@ -150,6 +152,30 @@ test("statusLine: no detours", () => {
 test("statusLine: a hand-named snapshot shows its name", () => {
   const mine = { ...STATUS, snapshot: "mine.json", snapshot_fetched_at: null };
   assert.equal(statusLine(mine).split(":")[0], "Detours in mine.json");
+});
+
+// --- loadErrorText ------------------------------------------------------------
+
+// The errors data.js throws (its messages: data.test.js).
+const MISSING = new DataError("Could not load data/status.json (HTTP 404).", "missing");
+const SCHEMA = new DataError("data/status.json has schema_version 9; this page reads 10.", "schema");
+const RETRY = "Please try again in a few minutes.";
+
+test("loadErrorText: another schema asks for a reload", () => {
+  const reload = "This page is out of date. Reload it to see the latest detours.";
+  assert.equal(loadErrorText(SCHEMA), reload);
+  assert.equal(loadErrorText(SCHEMA, "This route's detours"), reload);
+});
+
+test("loadErrorText: anything else names what failed, with no details", () => {
+  assert.equal(loadErrorText(MISSING), `Detours couldn't load. ${RETRY}`);
+  assert.equal(
+    loadErrorText(MISSING, "This route's detours"),
+    `This route's detours couldn't load. ${RETRY}`,
+  );
+  // fetch's own failure (offline), a bug, or a thrown non-Error.
+  assert.equal(loadErrorText(new TypeError("Failed to fetch")), `Detours couldn't load. ${RETRY}`);
+  assert.equal(loadErrorText(undefined), `Detours couldn't load. ${RETRY}`);
 });
 
 // --- staleNotice --------------------------------------------------------------
