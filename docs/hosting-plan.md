@@ -168,6 +168,43 @@ Next, in order:
 6. **My whole-project check** before announcing it (notes below), then
    share it and collect feedback for the mobile pass (`docs/backlog.md`).
 
+## Terms checked before step 6 (Claude, 2026-11-27)
+
+Read on 2026-11-27; quotes are from the pages themselves. Not legal
+advice, just what the texts say.
+
+- **SEPTA GTFS** (the license on <https://www3.septa.org/developer/>,
+  agreed to when downloading): a "non-exclusive, limited and revocable
+  right to use, reproduce and redistribute the Trip Planning Data", "as
+  is"; no attribution required; "may not use SEPTA's trademarks and
+  copyrighted materials for any commercial or profit-making use". So
+  re-publishing GTFS as a release asset is allowed; the site is
+  non-commercial.
+- **SEPTA alerts API**: no terms found (the license covers GTFS only).
+  15-minute polling is 96 requests a day.
+- **SEPTA also publishes GTFS on GitHub**: `septadev/GTFS` releases,
+  one `gtfs_public.zip` each; recent: `v202609271` (2026-10-06),
+  `v202611010` (10-26), `v202611220` (11-18, ours). About every 2-4
+  weeks, more often than "rarely".
+- **OpenFreeMap** (<https://openfreemap.org/tos/>, updated 2026-11-24):
+  public websites may integrate the service; free, "as-is", may be
+  discontinued "at any time without notice"; forbids collecting data
+  "in automated ways" (we don't: browsers load tiles as they view). The
+  TileJSON's credit is `OpenFreeMap © OpenMapTiles Data from
+  OpenStreetMap` (linked), shown by our compact `AttributionControl`.
+- **OpenStreetMap** (OSMF attribution guidelines): credit "OpenStreetMap"
+  and make the ODbL clear (a link to openstreetmap.org/copyright does).
+  Visible at first, may collapse "on map interaction": MapLibre 5.24.0's
+  compact control starts open and collapses on the first drag. OK as is
+  (check by eye that the phone sheet doesn't cover it).
+- **OSM data we publish ourselves**: `paths.geojson` (detour paths drawn
+  along OSM ways) and the `streets.parquet` release asset are extracts
+  of OSM. Republished every 15 minutes, they don't fit the "insubstantial"
+  guideline (< 100 features, one-off; "repeated small extractions as one
+  big extraction"), so treat both as ODbL: credit OpenStreetMap and say
+  they're under the ODbL (the release description for `streets.parquet`;
+  the page's existing credit for `paths.geojson`).
+
 ## Notes for the pre-deploy check (collected by Claude, 2026-11-27)
 
 Minor things noticed along the way, for the whole-project check before
