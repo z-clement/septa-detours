@@ -60,3 +60,24 @@ detours (`isdetour` is "Y" exactly when the list is non-empty). API
   `"3pn on 11/25/26 thru 2am ..., SB via 17th St, Left on Spring Garden
   St, Right on Broad St, ... Reg Rt"` (SB = southbound, Reg Rt = back on
   the regular route, "btwn"). `location_end` can be `""`.
+
+## Snapshot store (`ingest/store.py`, hosting step 5, 2026-11-27)
+
+Decided (me): **no checkout**. All 4 neighbouring local snapshot pairs
+differ (even 40 minutes apart), so most 15-minute runs add a file
+(~16 MB/day, ~6 GB/year of files): a checkout of the branch would
+write all of them on every run. Instead, git commands directly:
+`fetch --depth=1 --filter=blob:none` (the file list, no contents),
+compare blob ids (a hash of the bytes), commit via a temporary index,
+push. Planned in three increments: find the newest stored, commit,
+fetch/push + CLI.
+
+Done: `newest_stored(ls_tree)` (pure) over `git ls-tree -z <ref> --
+alerts/` output -> `StoredSnapshot(name, blob)` or None (first run).
+Only `blob` entries named exactly `<stamp>.json` count (a `README.md`
+sorts after every stamp; a subdirectory is a `tree`). Its own name
+pattern, `[0-9]` (match's `_SNAPSHOT_NAME` uses `\d`; ingest can't
+import from match). Tests: `tests/test_ingest_store.py` (15; one input
+is real git 2.56 output). Mutants: 11, 10 killed; `partition` ->
+`rpartition` is equivalent (both reject every path that isn't
+`alerts/<name>`).
