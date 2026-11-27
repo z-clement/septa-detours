@@ -53,7 +53,9 @@ data/processed/  pipeline output (gitignored; sample_* files may be
 src/septa_detours/{ingest,parse,match,export}/
 src/septa_detours/gtfs/   shared GTFS reference data (not a stage): load.py
                           reads tables, shapes.py builds coordinate lists,
-                          routes.py finds a route's shapes
+                          routes.py finds a route's shapes, unpack.py
+                          builds data/gtfs/ from a release, expiry.py
+                          warns before a feed ends
 src/septa_detours/streets/  shared OSM street reference data (not a stage):
                           load.py reads extracts, cache.py builds/reads the
                           Parquet cache; never imports from a stage
@@ -115,8 +117,9 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
   planned but not built
 - Check the GTFS end dates (warns within 14 days; always exits 0):
   `uv run python -m septa_detours.gtfs check`
-- Zip the GTFS for the `reference` release (after a new download):
-  `uv run python -m septa_detours.gtfs pack` -> `data/processed/gtfs.zip`
+- Unpack a saved GTFS release into `data/gtfs/{bus,rail}/` (default: the
+  newest in `data/raw/gtfs/`; replaces the old tables):
+  `uv run python -m septa_detours.gtfs unpack [release_zip]`
 - Store a snapshot on the `snapshots` branch (hosted job only; pushes):
   `uv run python -m septa_detours.ingest store <snapshot>`
 - Fetch SEPTA's GTFS release in effect (skips it if already saved):

@@ -94,3 +94,25 @@ Each table is streamed in; the zip is built in memory, then
 26.4 MB, ~4 s; packing twice gave the same SHA-256, and `unzip` gave a
 tree identical to `data/gtfs/`. Tests: `tests/test_gtfs_pack.py` (11);
 17 mutants, all killed.
+
+Changed (2026-11-27, same day): GTFS now comes from SEPTA's GitHub
+releases (`ingest gtfs`, `docs/notes/ingest.md`), so `gtfs pack` and
+`tests/test_gtfs_pack.py` were deleted. In their place,
+`gtfs/unpack.py` and `python -m septa_detours.gtfs unpack
+[release_zip]`: `find_latest_gtfs_zip(raw_root)` (exact
+`gtfs_public-v<8 digits><digits>.zip` names; max (date, numeric
+revision); none -> FileNotFoundError naming `ingest gtfs`; naming and
+`data/raw/gtfs` repeated from ingest on purpose: `gtfs/` never imports
+a stage) and `unpack_gtfs(release_zip, root)`: each feed's
+`google_<feed>.zip` -> `root/<feed>/`, only flat names
+(`[A-Za-z0-9_]+\.txt`: no paths, `..`, hidden files; others skipped, so
+a SEPTA README wouldn't break the job; directory entries end in `/` and
+never match). Built in a temp directory beside `root`, then swapped in
+with two renames (the old tree is put back if the second fails); tables
+dropped from a release disappear. Missing inner zip or no tables ->
+ValueError; not a zip -> BadZipFile; a *truncated* zip may open with a
+partial listing and give the ValueError instead. Any failure leaves
+`root` as it was and no temp directories. Real `v202611220`: 39 tables
+in ~0.3 s, identical to my hand download. Tests:
+`tests/test_gtfs_unpack.py` (27). Mutants: 22, all killed (an
+`is_dir()` check survived as redundant and was removed).

@@ -17,7 +17,7 @@ user. Replaces "Later: hosting with live fetching" in `docs/web-plan.md`
   automatically** from SEPTA's GitHub releases (`septadev/GTFS`; a new
   feed every 2-4 weeks, published 2-6 days before it starts), choosing
   the newest release *in effect* (New York date), not "latest". Only
-  `streets.parquet` stays a manual release asset; `gtfs pack` becomes
+  `streets.parquet` stays a manual release asset; `gtfs pack` became
   `gtfs unpack`. Was:
 - **GTFS stays manual** (SEPTA's feeds change rarely): I download it as
   today. It and the street cache reach the job as release assets (below),
@@ -146,14 +146,14 @@ Next, in order:
    Note: the commits' author email becomes public with the repo; if
    that's unwanted, set GitHub's noreply address (and decide whether to
    rewrite existing history) before the first push.
-2. **Step 4, reference data**: done so far (2026-11-27):
+2. **Step 4, reference data**: done (2026-11-27).
    `python -m septa_detours.gtfs check` (end-date warnings as
-   `::warning::` lines, always exit 0) and `python -m
-   septa_detours.gtfs pack` (`data/processed/gtfs.zip`, byte-identical
-   for the same tables). Decided: no upload script; I upload `gtfs.zip`
-   and `streets.parquet` by hand on the GitHub website (instructions
-   when we get there). Left: the job's download + unpack (in the
-   workflow, step 6).
+   `::warning::` lines, always exit 0). GTFS (changed, see top):
+   `ingest gtfs` (SEPTA's release in effect -> `data/raw/gtfs/`, size +
+   SHA-256 checked, skipped if already saved) then `gtfs unpack`
+   (-> `data/gtfs/`). `gtfs pack` was built, then removed. Decided: no
+   upload script; I upload `streets.parquet` by hand on the GitHub
+   website (instructions with the workflow, step 6).
 3. **Step 5, snapshot store**: commit a snapshot to the orphan
    `snapshots` branch only when its bytes differ from the newest stored.
    Decided (2026-11-27): never check the branch out (it grows ~16 MB of
