@@ -1,10 +1,12 @@
 [project]
 name = "septa-detours"
 version = "0.1.0"
-description = "A tool that maps SEPTA service detours."
+description = "A live map of SEPTA's bus, trolley and rail detours."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "Zac Clement", email = "zclement@gmail.com" }
+    { name = "Zac Clement" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -16,6 +18,10 @@ dependencies = [
     "pyproj>=3.8.0",
     "shapely>=2.2.0",
 ]
+
+[project.urls]
+Homepage = "https://z-clement.github.io/septa-detours/"
+Repository = "https://github.com/z-clement/septa-detours"
 
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]
