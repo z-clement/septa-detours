@@ -1,4 +1,4 @@
-"""Export data for the web map: the whole site, one route, or the detours.
+"""Export data for the web map: the whole site, one route, or the copy to publish.
 
 Usage (from the repo root, since default paths are relative to it)::
 
