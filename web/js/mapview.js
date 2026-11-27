@@ -52,6 +52,8 @@ const DETOURED_LAYER = "detoured-lines";
 const FOCUS_LAYER = "focus-lines";
 const FOCUS_ARROWS_LAYER = "focus-arrows";
 const ARROW_IMAGE = "direction-arrow";
+const PATH_ARROW_IMAGE = "path-arrow";
+const PATH_ARROWS_LAYER = "path-arrows";
 const SKIPPED_LAYER = "skipped-fade";
 const PATH_CASING_LAYER = "path-casing";
 const PATH_LAYER = "path-dashes";
@@ -220,7 +222,8 @@ export function addOverviewLayers(map, site) {
   // is in the icon's own frame: +y is right of travel), so each arrow
   // sits on its own direction's line. From zoom 13: thinner lines can't
   // hold them.
-  addArrowImage(map);
+  addArrowImage(map, ARROW_IMAGE, null);
+  addArrowImage(map, PATH_ARROW_IMAGE, DETOUR_COLOR);
   map.addLayer({
     id: FOCUS_ARROWS_LAYER,
     type: "symbol",
@@ -318,6 +321,35 @@ export function addOverviewLayers(map, site) {
       // In line widths: dash 2, gap 1.5.
       "line-dasharray": [2, 1.5],
       "line-offset": offset,
+    },
+  });
+
+  // Which way each detour path runs (yours, after U5b): the route's
+  // chevrons, outlined in the accent so they show on the dashes and in
+  // the white gaps between them. Like the paths: detours in effect, from
+  // MARKER_ZOOM on the overview, every zoom when focused.
+  map.addLayer({
+    id: PATH_ARROWS_LAYER,
+    type: "symbol",
+    source: PATHS_SOURCE,
+    minzoom: MARKER_ZOOM,
+    filter: inEffect,
+    layout: {
+      "symbol-placement": "line",
+      "symbol-spacing": 70,
+      "icon-image": PATH_ARROW_IMAGE,
+      "icon-rotation-alignment": "map",
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      "icon-offset": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        13,
+        ["literal", [0, 2.5]],
+        16,
+        ["literal", [0, 4]],
+      ],
     },
   });
 
@@ -428,6 +460,7 @@ export function addOverviewLayers(map, site) {
       SKIPPED_LAYER,
       PATH_CASING_LAYER,
       PATH_LAYER,
+      PATH_ARROWS_LAYER,
     ]) {
       map.setFilter(layer, filter);
     }
@@ -459,7 +492,13 @@ export function addOverviewLayers(map, site) {
     // paths at every zoom, no markers. The overview: markers below
     // MARKER_ZOOM, the rest from it (B1).
     const detailed = focus === null ? MARKER_ZOOM : 0;
-    for (const layer of [STARTS_LAYER, SKIPPED_LAYER, PATH_CASING_LAYER, PATH_LAYER]) {
+    for (const layer of [
+      STARTS_LAYER,
+      SKIPPED_LAYER,
+      PATH_CASING_LAYER,
+      PATH_LAYER,
+      PATH_ARROWS_LAYER,
+    ]) {
       map.setLayerZoomRange(layer, detailed, 24);
     }
     for (const layer of [MARKER_LAYER, MARKER_LABEL_LAYER]) {
@@ -489,28 +528,36 @@ export function addOverviewLayers(map, site) {
 }
 
 /**
- * Add the direction arrow (`ARROW_IMAGE`): a white chevron pointing
- * right (east), as line symbols expect, drawn on a canvas at twice its
- * size for sharp screens (12 CSS px).
+ * Add a direction arrow: a white chevron pointing right (east), as line
+ * symbols expect, drawn on a canvas at twice its size for sharp screens
+ * (12 CSS px), outlined in `outline` when given (so it shows on white).
  *
  * @param {maplibregl.Map} map
+ * @param {string} name the image's id
+ * @param {string | null} outline a CSS color, or null for none
  */
-function addArrowImage(map) {
+function addArrowImage(map, name, outline) {
   const size = 24;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext("2d");
-  context.strokeStyle = "#ffffff";
-  context.lineWidth = 4;
   context.lineCap = "round";
   context.lineJoin = "round";
-  context.beginPath();
-  context.moveTo(9, 5);
-  context.lineTo(16, 12);
-  context.lineTo(9, 19);
-  context.stroke();
-  map.addImage(ARROW_IMAGE, context.getImageData(0, 0, size, size), { pixelRatio: 2 });
+  const chevron = (color, width) => {
+    context.strokeStyle = color;
+    context.lineWidth = width;
+    context.beginPath();
+    context.moveTo(9, 5);
+    context.lineTo(16, 12);
+    context.lineTo(9, 19);
+    context.stroke();
+  };
+  if (outline !== null) {
+    chevron(outline, 8);
+  }
+  chevron("#ffffff", 4);
+  map.addImage(name, context.getImageData(0, 0, size, size), { pixelRatio: 2 });
 }
 
 /**

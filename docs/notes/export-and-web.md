@@ -783,3 +783,12 @@ Tests: 125 JS.
   (swiftshader) driven over CDP from Node 20 (`--experimental-websocket`,
   scratch `cdp.mjs`: navigate, wait, mouse-wheel zoom at a point,
   screenshot); `--screenshot` alone fires before MapLibre loads.
+- Path arrows (2026-11-26, yours): `path-arrows`, line-placed chevrons on
+  the detour paths every 70 px (`addArrowImage(map, name, outline)`: the
+  route arrow, here outlined in the accent so it shows on the dashes and
+  the white gaps); filtered and zoom-ranged like the paths (in effect;
+  from `MARKER_ZOOM` on the overview, every zoom when focused); offset
+  like the route arrows. Checked in a real render (route 64: west on
+  Brown, north on 49th, east on Westminster). The CDP renders need
+  `Network.setCacheDisabled`: the browser profile cached the old
+  `mapview.js` (the same JS caching the page's users hit).
