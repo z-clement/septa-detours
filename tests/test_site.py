@@ -32,6 +32,7 @@ from septa_detours.export.site import (
     route_shapes,
     route_sort_key,
     skipped_collection,
+    skipped_line,
     starts_collection,
     status,
 )
@@ -1296,6 +1297,79 @@ def test_skipped_rejects_a_route_not_in_the_catalog(notices) -> None:
         skipped_collection([ROUTE_2], detours)
 
 
+# Route 2's SB shape along 17th; the stretch from match sits ~0.9 m east of
+# the drawn piece (simplified and rounded apart).
+STRETCH_317310 = ((-75.17161, 39.94), (-75.17161, 39.937))
+PIECE_317310 = [[-75.1716, 39.9405], [-75.1716, 39.9385], [-75.1716, 39.9365]]
+
+
+def skipping_on(notice: DetourNotice, direction_id: int) -> Detour:
+    """A detour skipping ``STRETCH_317310`` on shape 317310 in a direction."""
+    match = RouteMatch(
+        feed="bus",
+        route_id="2",
+        shapes=(AffectedShape(shape_id="317310", direction_id=direction_id),),
+        start_point=StartPoint(node_id=1, lon=-75.17161, lat=39.94),
+        skipped=SkippedStretch(shape_id="317310", line=STRETCH_317310),
+    )
+    return Detour(notice=notice, match=match)
+
+
+def test_skipped_line_is_cut_from_its_direction_s_drawn_line(notices) -> None:
+    detour = skipping_on(notices("bus_route_2")[0], 0)
+    pieces = [
+        RouteShape("317312", 1, 2, [[-75.1706, 39.9365], [-75.1706, 39.9405]]),
+        RouteShape("317310", 0, 3, PIECE_317310),
+    ]
+    # On the piece's own points: exactly under the fade.
+    assert skipped_line(detour, pieces) == [
+        [-75.1716, 39.94],
+        [-75.1716, 39.9385],
+        [-75.1716, 39.937],
+    ]
+
+
+def test_skipped_line_ignores_the_other_direction(notices) -> None:
+    detour = skipping_on(notices("bus_route_2")[0], 1)
+    pieces = [RouteShape("317310", 0, 3, PIECE_317310)]
+    assert skipped_line(detour, pieces) == [[-75.17161, 39.94], [-75.17161, 39.937]]
+
+
+def test_skipped_line_without_a_drawn_line_is_the_stretch(notices) -> None:
+    detour = skipping_on(notices("bus_route_2")[0], 0)
+    assert skipped_line(detour) == [[-75.17161, 39.94], [-75.17161, 39.937]]
+    far = [RouteShape("317310", 0, 3, [[-75.18, 39.94], [-75.18, 39.93]])]
+    assert skipped_line(detour, far) == [[-75.17161, 39.94], [-75.17161, 39.937]]
+
+
+def test_skipped_collection_cuts_from_the_route_s_pieces(notices) -> None:
+    detours = [skipping_on(notices("bus_route_2")[0], 0)]
+    shapes = {"bus-2": [RouteShape("317310", 0, 3, PIECE_317310)]}
+    [feature] = skipped_collection([ROUTE_2], detours, shapes)["features"]
+    assert feature["geometry"]["coordinates"] == [
+        [-75.1716, 39.94],
+        [-75.1716, 39.9385],
+        [-75.1716, 39.937],
+    ]
+    other_route = {"bus-21": [RouteShape("317310", 0, 3, PIECE_317310)]}
+    [feature] = skipped_collection([ROUTE_2], detours, other_route)["features"]
+    assert feature["geometry"]["coordinates"] == [
+        [-75.17161, 39.94],
+        [-75.17161, 39.937],
+    ]
+
+
+def test_route_detail_cuts_stretches_from_its_shapes(notices) -> None:
+    detour = skipping_on(notices("bus_route_2")[0], 0)
+    piece = RouteShape("317310", 0, 3, PIECE_317310)
+    [obj] = route_detail(ROUTE_2, [], [piece], [detour])["detours"]
+    assert obj["skipped"] == [
+        [-75.1716, 39.94],
+        [-75.1716, 39.9385],
+        [-75.1716, 39.937],
+    ]
+
+
 # --- paths_collection -------------------------------------------------------------
 
 
@@ -1499,3 +1573,22 @@ def test_rejoin_streets_none_when_the_steps_cant_name_it(notices) -> None:
     assert rejoin_streets(rejoining(with_steps(notice, "17th"), "crossing")) is None
     assert rejoin_streets(rejoining(with_steps(notice), "walk")) is None
     assert rejoin_streets(rejoining(with_steps(notice, "17th"), "walk")) == ["17th"]
+
+
+def test_skipped_line_cut_ends_keep_six_places(notices) -> None:
+    # A cut end between the piece's points: 5 places would move it ~0.4 m
+    # off the line (a sliver beside the fade, zoomed in).
+    detour = skipping_on(notices("bus_route_2")[0], 0)
+    stretch = SkippedStretch(
+        shape_id="317310", line=((-75.17161, 39.940003), (-75.17161, 39.937))
+    )
+    assert detour.match is not None
+    detour = detour.model_copy(
+        update={"match": detour.match.model_copy(update={"skipped": stretch})}
+    )
+    pieces = [RouteShape("317310", 0, 3, PIECE_317310)]
+    assert skipped_line(detour, pieces) == [
+        [-75.1716, 39.940003],
+        [-75.1716, 39.9385],
+        [-75.1716, 39.937],
+    ]

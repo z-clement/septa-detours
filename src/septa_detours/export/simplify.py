@@ -13,7 +13,7 @@ from itertools import pairwise
 
 from shapely import LineString, Point
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import nearest_points
+from shapely.ops import nearest_points, substring
 
 from septa_detours.export.geojson import Position
 from septa_detours.geo import EARTH_RADIUS_M, distance_to_line_m, distance_to_segment
@@ -213,15 +213,13 @@ def distinct_pieces(
             raise ValueError(f"line {index} has {len(line)} point(s), needs 2")
     if not lines:
         return []
-    # Local flat metres around the lines' mean latitude (equirectangular).
-    lats = [point[1] for line in lines for point in line]
-    x_scale = _METRES_PER_DEGREE * math.cos(math.radians(sum(lats) / len(lats)))
+    x_scale = _x_scale([point for line in lines for point in line])
 
     def to_metres(line: Sequence[Sequence[float]]) -> LineString:
-        return LineString([(p[0] * x_scale, p[1] * _METRES_PER_DEGREE) for p in line])
+        return _flat(line, x_scale)
 
     def to_lon_lat(coords: Sequence[Sequence[float]]) -> list[Position]:
-        return [[x / x_scale, y / _METRES_PER_DEGREE] for x, y in coords]
+        return _unflat(coords, x_scale)
 
     pieces: list[tuple[int, list[Position]]] = [
         (0, [[point[0], point[1]] for point in lines[0]])
@@ -242,6 +240,66 @@ def distinct_pieces(
             pieces.append((index, to_lon_lat(coords)))
         kept = kept.union(shape)
     return pieces
+
+
+def cut_along(
+    lines: Sequence[Sequence[Sequence[float]]],
+    start: Sequence[float],
+    end: Sequence[float],
+    max_gap_m: float = 5.0,
+) -> list[Position] | None:
+    """The part of a drawn line from ``start`` to ``end``, on its own points.
+
+    A skipped stretch is cut from the detour's GTFS shape; the line drawn
+    under it is a piece of the route (``distinct_pieces``), simplified and
+    rounded separately, so the two can differ by a metre's fraction, which
+    shows as a sliver of route beside the fade when zoomed far in. Cutting
+    the stretch from the drawn line itself makes them coincide.
+
+    Args:
+        lines: Drawn ``[lon, lat]`` lines of one route-direction, in order.
+        start: Where the stretch starts (``[lon, lat]``).
+        end: Where it ends.
+        max_gap_m: How far both ends may be from a line (metres).
+
+    Returns:
+        From the first line with both ends within ``max_gap_m`` and ``end``
+        after ``start`` along it: the nearest point to ``start``, the
+        line's points between, the nearest point to ``end``. ``None`` when
+        no line has both.
+    """
+    for line in lines:
+        x_scale = _x_scale([*line, start, end])
+        drawn = _flat(line, x_scale)
+        first, last = (_flat_point(p, x_scale) for p in (start, end))
+        if max(drawn.distance(first), drawn.distance(last)) > max_gap_m:
+            continue
+        from_along, to_along = drawn.project(first), drawn.project(last)
+        if to_along <= from_along:
+            continue
+        return _unflat(substring(drawn, from_along, to_along).coords, x_scale)
+    return None
+
+
+def _x_scale(points: Sequence[Sequence[float]]) -> float:
+    """Metres per degree of longitude at the points' mean latitude."""
+    mean_lat = sum(point[1] for point in points) / len(points)
+    return _METRES_PER_DEGREE * math.cos(math.radians(mean_lat))
+
+
+def _flat(line: Sequence[Sequence[float]], x_scale: float) -> LineString:
+    """A ``[lon, lat]`` line in local flat metres (equirectangular)."""
+    return LineString([(p[0] * x_scale, p[1] * _METRES_PER_DEGREE) for p in line])
+
+
+def _flat_point(point: Sequence[float], x_scale: float) -> Point:
+    """A ``[lon, lat]`` point in local flat metres."""
+    return Point(point[0] * x_scale, point[1] * _METRES_PER_DEGREE)
+
+
+def _unflat(coords: Sequence[Sequence[float]], x_scale: float) -> list[Position]:
+    """Local flat metres back to ``[lon, lat]`` lists."""
+    return [[x / x_scale, y / _METRES_PER_DEGREE] for x, y in coords]
 
 
 def _at_edge(kept: BaseGeometry, end: Point, tolerance_m: float) -> bool:

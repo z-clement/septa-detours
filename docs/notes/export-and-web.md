@@ -770,3 +770,16 @@ Tests: 125 JS.
   67 direction 1 in 20 real variants; 8 under 25 m), web/data 3.7 ->
   2.0 MB, network.geojson 970 -> 684 KB, export ~10 s. Map side not
   checked by eye.
+- Fade sliver (2026-11-26, yours: zoomed in, red showed beside the faded
+  stretch). Cause, measured: the stretch (from match's GTFS shape) and
+  the drawn piece were simplified and rounded apart, 0.37 m off (route
+  64), and the wash is only 1 px wider than the line each side.
+  `simplify.cut_along(lines, start, end)` cuts the stretch from its
+  direction's drawn piece (its own points between the ends);
+  `skipped_line(detour, pieces)` uses it (route detail and
+  `skipped_collection(..., shapes)`), falling back to the stretch;
+  cut lines are rounded to `CUT_DECIMALS` 6 (at 5 the cut start was
+  still 0.37 m off). First real render of the map: headless Brave
+  (swiftshader) driven over CDP from Node 20 (`--experimental-websocket`,
+  scratch `cdp.mjs`: navigate, wait, mouse-wheel zoom at a point,
+  screenshot); `--screenshot` alone fires before MapLibre loads.

@@ -32,6 +32,7 @@ from septa_detours.export.geojson import (
 )
 from septa_detours.export.simplify import (
     covering_shapes,
+    cut_along,
     distinct_pieces,
     round_line,
     simplify_line,
@@ -67,6 +68,11 @@ COVERING_TOLERANCE_M: Final = 20.0
 
 COORDINATE_DECIMALS: Final = 5
 """``round_line`` places for every exported line: ~1 m (D2)."""
+
+CUT_DECIMALS: Final = 6
+"""``round_line`` places for a skipped stretch cut from a drawn line
+(``skipped_line``): ~0.1 m, so its cut ends stay on the line when zoomed
+far in (at 5 places, 0.37 m off on route 64: a visible sliver)."""
 
 OVERVIEW_TOLERANCE_M: Final = 5.0
 """``simplify_line`` tolerance for ``network.geojson``'s lines (D2)."""
@@ -209,7 +215,25 @@ def route_catalog(
     )
 
 
-def detour_object(detour: Detour) -> DetourObject:
+class RouteShape(NamedTuple):
+    """One piece of a route's lines in one direction, ready to draw.
+
+    A piece is part (or all) of one covering shape: the part no earlier
+    shape of its direction already draws (``distinct_pieces``), so each
+    direction is drawn once (UI plan U5b). A shape used in both
+    directions gives pieces in each.
+    """
+
+    shape_id: str
+    """The shape the piece comes from."""
+    direction_id: int | None
+    trip_count: int
+    """How many trips use that shape in this direction."""
+    line: list[Position]
+    """Simplified at ``DETAIL_TOLERANCE_M`` and rounded."""
+
+
+def detour_object(detour: Detour, pieces: Sequence[RouteShape] = ()) -> DetourObject:
     """One detour as the page reads it (route detail and ``status.json``).
 
     ``route`` is the route's ``key`` when matched, else the alerts API's
@@ -242,7 +266,7 @@ def detour_object(detour: Detour) -> DetourObject:
         "start_point": _point_object(None if match is None else match.start_point),
         "rejoin_point": _point_object(None if match is None else match.rejoin_point),
         "rejoin_streets": rejoin_streets(detour),
-        "skipped": skipped_line(detour),
+        "skipped": skipped_line(detour, pieces),
         "path": path_line(detour),
         "hours": hours_object(notice.daily_hours),
         "route_steps": [
@@ -276,17 +300,34 @@ def _point_object(point: StartPoint | None) -> StartPointObject | None:
     return {"lon": point.lon, "lat": point.lat, "node_id": point.node_id}
 
 
-def skipped_line(detour: Detour) -> list[Position] | None:
+def skipped_line(
+    detour: Detour, pieces: Sequence[RouteShape] = ()
+) -> list[Position] | None:
     """A detour's skipped stretch for the page, or ``None`` without one.
 
-    Simplified at ``DETAIL_TOLERANCE_M`` and rounded to
-    ``COORDINATE_DECIMALS``, like a route detail's shapes, so it lies on
-    the drawn route. Shared by the detour object and ``skipped.geojson``.
+    Cut from its route's drawn line (``pieces``, ``cut_along``) in the
+    stretch's direction, so the page's fade lies exactly on it: the
+    stretch from ``match`` comes from a GTFS shape simplified and rounded
+    separately, a fraction of a metre off, which shows as a sliver of
+    route beside the fade when zoomed far in. Rounded to ``CUT_DECIMALS``:
+    its ends are cut points between the piece's points, and rounding them
+    to ~1 m would tilt it off the line again. When no piece holds both
+    ends, the stretch itself, simplified at ``DETAIL_TOLERANCE_M`` and
+    rounded to ``COORDINATE_DECIMALS``. Shared by the detour object
+    and ``skipped.geojson``.
     """
     if detour.match is None or detour.match.skipped is None:
         return None
-    line = simplify_line(detour.match.skipped.line, DETAIL_TOLERANCE_M)
-    return round_line(line, COORDINATE_DECIMALS)
+    stretch = detour.match.skipped
+    line = simplify_line(stretch.line, DETAIL_TOLERANCE_M)
+    # The detour's direction: its affected shapes share one (match picks
+    # them by direction).
+    directions = {shape.direction_id for shape in detour.match.shapes}
+    drawn = [piece.line for piece in pieces if piece.direction_id in directions]
+    cut = cut_along(drawn, line[0], line[-1])
+    if cut is None:
+        return round_line(line, COORDINATE_DECIMALS)
+    return round_line(cut, CUT_DECIMALS)
 
 
 def path_line(detour: Detour) -> list[Position] | None:
@@ -299,24 +340,6 @@ def path_line(detour: Detour) -> list[Position] | None:
         return None
     line = simplify_line(detour.match.path, DETAIL_TOLERANCE_M)
     return round_line(line, COORDINATE_DECIMALS)
-
-
-class RouteShape(NamedTuple):
-    """One piece of a route's lines in one direction, ready to draw.
-
-    A piece is part (or all) of one covering shape: the part no earlier
-    shape of its direction already draws (``distinct_pieces``), so each
-    direction is drawn once (UI plan U5b). A shape used in both
-    directions gives pieces in each.
-    """
-
-    shape_id: str
-    """The shape the piece comes from."""
-    direction_id: int | None
-    trip_count: int
-    """How many trips use that shape in this direction."""
-    line: list[Position]
-    """Simplified at ``DETAIL_TOLERANCE_M`` and rounded."""
 
 
 def route_detail(
@@ -343,7 +366,7 @@ def route_detail(
             caller's grouping), or a shape has fewer than two points.
     """
     key = entry["key"]
-    detour_objects = [detour_object(detour) for detour in detours]
+    detour_objects = [detour_object(detour, shapes) for detour in detours]
     for detour, obj in zip(detours, detour_objects, strict=True):
         if obj["route"] != key:
             raise ValueError(
@@ -567,7 +590,9 @@ def starts_collection(
 
 
 def skipped_collection(
-    catalog: Sequence[RouteEntry], detours: Sequence[Detour]
+    catalog: Sequence[RouteEntry],
+    detours: Sequence[Detour],
+    shapes: Mapping[str, Sequence[RouteShape]] | None = None,
 ) -> FeatureCollection:
     """Build ``skipped.geojson``: each detour's skipped stretch, all routes.
 
@@ -575,6 +600,9 @@ def skipped_collection(
         catalog: Output of ``route_catalog`` (each line's ``color``).
         detours: The snapshot's detours; only those with a skipped stretch
             (``RouteMatch.skipped``) get a line.
+        shapes: Output of ``route_shapes``: each stretch is cut from its
+            route's drawn pieces (``skipped_line``); ``None``: the
+            stretches as matched.
 
     Returns:
         One LineString per stretch (``skipped_line``), in snapshot order,
@@ -583,7 +611,14 @@ def skipped_collection(
     Raises:
         ValueError: As ``starts_collection``.
     """
-    return _detour_lines(catalog, detours, skipped_line)
+    pieces = shapes or {}
+
+    def line_of(detour: Detour) -> list[Position] | None:
+        match = detour.match
+        key = None if match is None else route_key(match.feed, match.route_id)
+        return skipped_line(detour, pieces.get(key, ()) if key else ())
+
+    return _detour_lines(catalog, detours, line_of)
 
 
 def paths_collection(

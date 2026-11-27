@@ -210,7 +210,7 @@ def export_site(
             by_route.setdefault(key, []).append(detour)
 
     starts = starts_collection(catalog, detours)
-    skipped = skipped_collection(catalog, detours)
+    skipped = skipped_collection(catalog, detours, shapes)
     files: dict[str, object] = {
         "status.json": status(
             detours, _snapshot_name(detours, detours_file), _feed_versions(), now

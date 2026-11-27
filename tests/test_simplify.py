@@ -5,6 +5,7 @@ import pytest
 
 from septa_detours.export.simplify import (
     covering_shapes,
+    cut_along,
     distinct_pieces,
     round_line,
     simplify_line,
@@ -409,3 +410,66 @@ def test_pieces_reject_bad_input() -> None:
     for tolerance in (0.0, -1.0, math.nan):
         with pytest.raises(ValueError, match="tolerance_m must be > 0"):
             distinct_pieces([MAIN], tolerance_m=tolerance)
+
+
+# cut_along, on the same grid.
+
+
+def approx_line(steps):
+    return [pytest.approx(point, abs=1e-9) for point in grid(*steps)]
+
+
+def test_cut_along_keeps_the_line_s_own_points_between_the_ends() -> None:
+    assert cut_along([MAIN], grid((0.5, 0))[0], grid((3.2, 0))[0]) == approx_line(
+        [(0.5, 0), (1, 0), (2, 0), (3, 0), (3.2, 0)]
+    )
+
+
+def test_cut_along_snaps_ends_a_little_off_the_line() -> None:
+    # ~2.2 m north and south of MAIN: cut at the nearest points on it.
+    start, end = grid((1.5, 0.02))[0], grid((2.5, -0.02))[0]
+    assert cut_along([MAIN], start, end) == approx_line([(1.5, 0), (2, 0), (2.5, 0)])
+
+
+def test_cut_along_needs_the_end_after_the_start() -> None:
+    backwards = grid((4, 0), (0, 0))
+    start, end = grid((1, 0))[0], grid((3, 0))[0]
+    assert cut_along([MAIN], end, start) is None
+    # The next line that runs that way is used.
+    assert cut_along([MAIN, backwards], end, start) == approx_line([(3, 0), (1, 0)])
+
+
+def test_cut_along_needs_both_ends_near_a_line() -> None:
+    near, far = grid((1, 0))[0], grid((3, 0.1))[0]  # far: 11.1 m off
+    assert cut_along([MAIN], near, far) is None
+    assert cut_along([MAIN], near, far, max_gap_m=12.0) == approx_line(
+        [(1, 0), (2, 0), (3, 0)]
+    )
+
+
+def test_cut_along_uses_the_first_line_that_has_both_ends() -> None:
+    other = grid((0, 1), (4, 1))  # 111 m north: too far
+    start, end = grid((1, 0))[0], grid((2, 0))[0]
+    assert cut_along([other, MAIN], start, end) == approx_line([(1, 0), (2, 0)])
+    assert cut_along([], start, end) is None
+
+
+def test_cut_along_gap_limit_is_exact_enough() -> None:
+    # 0.06 steps north is 6.7 m: over the default 5 m, under 10.
+    start, end = grid((1, 0))[0], grid((3, 0.06))[0]
+    assert cut_along([MAIN], start, end) is None
+
+
+def test_cut_along_same_place_is_no_stretch() -> None:
+    at = grid((2, 0))[0]
+    assert cut_along([MAIN], at, at) is None
+
+
+def test_cut_along_east_west_gaps_use_the_latitude_scale() -> None:
+    # A north-south line; the end 0.06 steps east is 5.1 m off (6.7 m if
+    # longitude weren't scaled by the latitude).
+    north = grid((0, 0), (0, 4))
+    start, end = grid((0, 1))[0], grid((0.06, 3))[0]
+    assert cut_along([north], start, end, max_gap_m=6.0) == approx_line(
+        [(0, 1), (0, 3)]
+    )
