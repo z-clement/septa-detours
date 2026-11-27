@@ -36,7 +36,8 @@ detour object gains ``route_steps`` (the card lists the turns); 8, daily
 hours: the detour object's ``hours``, the features' ``hours_*`` (the page
 hides a detour outside them); 9, each direction drawn once: network lines
 and route detail ``shapes`` are pieces (``export/simplify.distinct_pieces``),
-and route detail shapes lose ``covering``.
+and route detail shapes lose ``covering``; 10, ``routes.json`` windows
+gain the detour's daily hours (the list counts what's running now).
 """
 
 from typing import Final, Literal, TypedDict
@@ -45,7 +46,7 @@ from septa_detours.export.geojson import FeatureCollection, Position
 from septa_detours.gtfs.load import Feed
 from septa_detours.model import Direction, NoticeStatus, Turn
 
-SCHEMA_VERSION: Final = 9
+SCHEMA_VERSION: Final = 10
 
 type Mode = Literal["metro", "trolley", "trackless", "bus", "rail"]
 """A route's mode, from GTFS ``route_type`` (see ``route_mode``)."""
@@ -158,9 +159,10 @@ class Status(TypedDict):
     """Detours whose route isn't in GTFS, listed so none silently vanish."""
 
 
-type DetourWindow = tuple[str | None, str | None]
-"""A detour's overall ``(start, end)``, ISO 8601 as in ``DetourObject``;
-``None`` when unknown. JSON: a 2-item list."""
+type DetourWindow = tuple[str | None, str | None, HoursObject | None]
+"""A detour's overall ``(start, end)``, ISO 8601 as in ``DetourObject``
+(``None`` when unknown), and its daily ``hours`` (``None``: all day).
+JSON: a 3-item list."""
 
 
 class RouteDetourCounts(TypedDict):

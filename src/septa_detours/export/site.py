@@ -204,7 +204,13 @@ def route_catalog(
         counts["total"] += 1
         if detour.match.start_point is not None:
             counts["placed"] += 1
-        counts["windows"].append((_iso(detour.notice.start), _iso(detour.notice.end)))
+        counts["windows"].append(
+            (
+                _iso(detour.notice.start),
+                _iso(detour.notice.end),
+                hours_object(detour.notice.daily_hours),
+            )
+        )
 
     return sorted(
         entries.values(),

@@ -260,6 +260,10 @@ def entry(route_id: str, feed: Feed = "bus", **changes: object) -> dict[str, obj
     return expected | changes
 
 
+# The fixture notice's daily hours ("7am - 4pm Mon thru Fri").
+HOURS = {"days": [0, 1, 2, 3, 4], "start": "07:00", "end": "16:00"}
+
+
 def test_catalog_whole_output(notice: DetourNotice) -> None:
     # The fixture runs 2026-11-11 06:30 to 2026-11-27 16:00 (-05:00).
     later = notice.model_copy(
@@ -280,10 +284,10 @@ def test_catalog_whole_output(notice: DetourNotice) -> None:
             detours={
                 "total": 3,
                 "placed": 2,
-                "windows": [  # snapshot order, placed or not
-                    ("2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00"),
-                    (None, "2026-11-27T16:00:00-05:00"),
-                    ("2026-12-01T09:15:00-05:00", None),
+                "windows": [  # snapshot order, placed or not, with hours
+                    ("2026-11-11T06:30:00-05:00", "2026-11-27T16:00:00-05:00", HOURS),
+                    (None, "2026-11-27T16:00:00-05:00", HOURS),
+                    ("2026-12-01T09:15:00-05:00", None, HOURS),
                 ],
             },
         ),
@@ -292,7 +296,7 @@ def test_catalog_whole_output(notice: DetourNotice) -> None:
             detours={
                 "total": 1,
                 "placed": 0,
-                "windows": [("2026-12-01T09:15:00-05:00", None)],
+                "windows": [("2026-12-01T09:15:00-05:00", None, HOURS)],
             },
         ),
         entry("T_BUS"),
@@ -644,7 +648,7 @@ def test_route_detail_whole_output(notices) -> None:
         ROUTE_2, ROUTE_2_DIRECTIONS, [SOUTH, SHORT, NORTH], [not_placed, placed]
     )
     assert detail == {
-        "schema_version": 9,
+        "schema_version": 10,
         "key": "bus-2",
         "directions": ROUTE_2_DIRECTIONS,
         "shapes": {
@@ -1463,7 +1467,7 @@ def test_status_whole_output(notices) -> None:
         Detour(notice=unmatched[1], match=None),
     ]
     assert status(detours, SNAPSHOT, VERSIONS, GENERATED_AT) == {
-        "schema_version": 9,
+        "schema_version": 10,
         "generated_at": "2026-11-25T17:02:11Z",
         "snapshot": "2026-11-25T121123Z.json",
         "snapshot_fetched_at": "2026-11-25T12:11:23Z",
