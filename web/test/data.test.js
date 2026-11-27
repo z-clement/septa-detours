@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
-import { SCHEMA_VERSION, loadSite, routeDetailLoader } from "../js/data.js";
+import { SCHEMA_VERSION, loadSite, routeDetailLoader, versioned } from "../js/data.js";
 
 let requested;
 let options;
@@ -25,7 +25,13 @@ function serve(files) {
   };
 }
 
-const STATUS = { schema_version: 10, snapshot: "2026-11-25T121123Z.json" };
+const GENERATED_AT = "2026-11-27T13:44:40Z"; // real (export site, snapshot 134432Z)
+const V = "?v=2026-11-27T13%3A44%3A40Z";
+const STATUS = {
+  schema_version: 10,
+  generated_at: GENERATED_AT,
+  snapshot: "2026-11-27T134432Z.json",
+};
 const ROUTES = [{ key: "bus-2" }, { key: "rail-AIR" }];
 const NETWORK = { type: "FeatureCollection", features: [{ id: "network" }] };
 const STARTS = { type: "FeatureCollection", features: [{ id: "starts" }] };
@@ -33,11 +39,11 @@ const SKIPPED = { type: "FeatureCollection", features: [{ id: "skipped" }] };
 const PATHS = { type: "FeatureCollection", features: [{ id: "paths" }] };
 const SITE = {
   "data/status.json": STATUS,
-  "data/routes.json": ROUTES,
-  "data/network.geojson": NETWORK,
-  "data/starts.geojson": STARTS,
-  "data/skipped.geojson": SKIPPED,
-  "data/paths.geojson": PATHS,
+  [`data/routes.json${V}`]: ROUTES,
+  [`data/network.geojson${V}`]: NETWORK,
+  [`data/starts.geojson${V}`]: STARTS,
+  [`data/skipped.geojson${V}`]: SKIPPED,
+  [`data/paths.geojson${V}`]: PATHS,
 };
 const SITE_FILE_COUNT = Object.keys(SITE).length;
 const BUS_2 = { schema_version: 10, key: "bus-2", detours: [] };
@@ -49,16 +55,28 @@ test("SCHEMA_VERSION matches the Python contract's", () => {
   assert.equal(SCHEMA_VERSION, 10);
 });
 
+// --- versioned ------------------------------------------------------------
+
+test("versioned: the export's generated_at as a query", () => {
+  assert.equal(versioned("data/routes.json", GENERATED_AT), `data/routes.json${V}`);
+});
+
+test("versioned: a version that would break the URL is encoded", () => {
+  // Hand-built: "+" reads as a space in a query, "#" starts a fragment.
+  assert.equal(
+    versioned("data/routes.json", "2026-11-27T13:44:40+00:00#x"),
+    "data/routes.json?v=2026-11-27T13%3A44%3A40%2B00%3A00%23x",
+  );
+});
+
 // --- loadSite ---------------------------------------------------------------
 
-test("every fetch revalidates with the server (no stale cached files)", async () => {
-  serve({ ...SITE, "data/routes/bus-2.json": BUS_2 });
+test("only status.json revalidates; versioned files use the normal cache", async () => {
+  serve({ ...SITE, [`data/routes/bus-2.json${V}`]: BUS_2 });
   await loadSite();
-  await routeDetailLoader()("bus-2");
+  await routeDetailLoader(GENERATED_AT)("bus-2");
   assert.equal(options.length, SITE_FILE_COUNT + 1);
-  for (const init of options) {
-    assert.deepEqual(init, { cache: "no-cache" });
-  }
+  assert.deepEqual(options, [{ cache: "no-cache" }, ...Array(SITE_FILE_COUNT).fill(undefined)]);
 });
 
 test("loadSite: returns every overview file, status first", async () => {
@@ -73,11 +91,11 @@ test("loadSite: returns every overview file, status first", async () => {
   });
   assert.deepEqual(requested, [
     "data/status.json",
-    "data/routes.json",
-    "data/network.geojson",
-    "data/starts.geojson",
-    "data/skipped.geojson",
-    "data/paths.geojson",
+    `data/routes.json${V}`,
+    `data/network.geojson${V}`,
+    `data/starts.geojson${V}`,
+    `data/skipped.geojson${V}`,
+    `data/paths.geojson${V}`,
   ]);
 });
 
@@ -99,11 +117,11 @@ test("loadSite: a status.json without schema_version is refused", async () => {
 });
 
 test("loadSite: a missing file names the URL, the status and the commands", async () => {
-  const { "data/network.geojson": _, ...withoutNetwork } = SITE;
+  const { [`data/network.geojson${V}`]: _, ...withoutNetwork } = SITE;
   serve(withoutNetwork);
   await assert.rejects(loadSite(), {
     message:
-      "Could not load data/network.geojson (HTTP 404).\nMake it first:\n" +
+      `Could not load data/network.geojson${V} (HTTP 404).\nMake it first:\n` +
       "uv run python -m septa_detours.match\n" +
       "uv run python -m septa_detours.export site",
   });
@@ -118,46 +136,46 @@ test("loadSite: a missing status.json stops everything", async () => {
 // --- routeDetailLoader --------------------------------------------------------
 
 test("routeDetailLoader: loads a route's file", async () => {
-  serve({ "data/routes/bus-2.json": BUS_2 });
-  const load = routeDetailLoader();
+  serve({ [`data/routes/bus-2.json${V}`]: BUS_2 });
+  const load = routeDetailLoader(GENERATED_AT);
   assert.deepEqual(await load("bus-2"), BUS_2);
-  assert.deepEqual(requested, ["data/routes/bus-2.json"]);
+  assert.deepEqual(requested, [`data/routes/bus-2.json${V}`]);
 });
 
 test("routeDetailLoader: each file is fetched once, even while loading", async () => {
-  serve({ "data/routes/bus-2.json": BUS_2, "data/routes/rail-AIR.json": RAIL_AIR });
-  const load = routeDetailLoader();
+  serve({ [`data/routes/bus-2.json${V}`]: BUS_2, [`data/routes/rail-AIR.json${V}`]: RAIL_AIR });
+  const load = routeDetailLoader(GENERATED_AT);
   const first = load("bus-2");
   const second = load("bus-2"); // before the first has finished
   assert.equal(first, second);
   await first;
   await load("bus-2");
   assert.deepEqual(await load("rail-AIR"), RAIL_AIR);
-  assert.deepEqual(requested, ["data/routes/bus-2.json", "data/routes/rail-AIR.json"]);
+  assert.deepEqual(requested, [`data/routes/bus-2.json${V}`, `data/routes/rail-AIR.json${V}`]);
 });
 
 test("routeDetailLoader: separate loaders have separate caches", async () => {
-  serve({ "data/routes/bus-2.json": BUS_2 });
-  await routeDetailLoader()("bus-2");
-  await routeDetailLoader()("bus-2");
+  serve({ [`data/routes/bus-2.json${V}`]: BUS_2 });
+  await routeDetailLoader(GENERATED_AT)("bus-2");
+  await routeDetailLoader(GENERATED_AT)("bus-2");
   assert.equal(requested.length, 2);
 });
 
 test("routeDetailLoader: a failed load is retried next time", async () => {
   serve({});
-  const load = routeDetailLoader();
-  await assert.rejects(load("bus-2"), /Could not load data\/routes\/bus-2\.json \(HTTP 404\)/);
-  serve({ "data/routes/bus-2.json": BUS_2 });
+  const load = routeDetailLoader(GENERATED_AT);
+  await assert.rejects(load("bus-2"), /Could not load data\/routes\/bus-2\.json\?v=2026-11-27T13%3A44%3A40Z \(HTTP 404\)/);
+  serve({ [`data/routes/bus-2.json${V}`]: BUS_2 });
   assert.deepEqual(await load("bus-2"), BUS_2);
 });
 
 test("routeDetailLoader: a newer route file (stale page) is refused, then retried", async () => {
-  serve({ "data/routes/bus-2.json": { ...BUS_2, schema_version: 11 } });
-  const load = routeDetailLoader();
+  serve({ [`data/routes/bus-2.json${V}`]: { ...BUS_2, schema_version: 11 } });
+  const load = routeDetailLoader(GENERATED_AT);
   await assert.rejects(
     load("bus-2"),
-    /data\/routes\/bus-2\.json has schema_version 11; this page reads 10/,
+    /data\/routes\/bus-2\.json\?v=\S+ has schema_version 11; this page reads 10/,
   );
-  serve({ "data/routes/bus-2.json": BUS_2 });
+  serve({ [`data/routes/bus-2.json${V}`]: BUS_2 });
   assert.deepEqual(await load("bus-2"), BUS_2);
 });

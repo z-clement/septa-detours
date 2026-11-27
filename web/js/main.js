@@ -65,7 +65,7 @@ async function main() {
   // `[, site]` skips the first (the load event, which we don't need).
   const [, site] = await Promise.all([map.once("load"), loadSite()]);
   const routesByKey = new Map(site.routes.map((route) => [route.key, route]));
-  const loadDetail = routeDetailLoader();
+  const loadDetail = routeDetailLoader(site.status.generated_at);
 
   const { showFocus, setInEffect, setMarkers, setHoveredDot, setSelectedDot } =
     addOverviewLayers(map, site);

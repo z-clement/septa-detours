@@ -10,19 +10,37 @@ const MAKE_SITE_COMMANDS =
   "uv run python -m septa_detours.export site";
 
 /**
+ * One export's URL for a data file: `path?v=<version>`.
+ *
+ * Every export has its own `generated_at`, so its files get URLs no
+ * earlier export used. A browser (or GitHub Pages' fixed 10-minute cache)
+ * can then keep them as long as it likes: a stale copy can't be served
+ * for a new export, and a page never mixes files from two exports.
+ *
+ * @param {string} path e.g. "data/routes.json"
+ * @param {string} version status.json's `generated_at`
+ * @returns {string}
+ */
+export function versioned(path, version) {
+  return `${path}?v=${encodeURIComponent(version)}`;
+}
+
+/**
  * Fetch and parse one JSON file; a missing file names the commands.
  *
- * `cache: "no-cache"`: the browser may keep a copy but must ask the server
- * before using it (a cheap 304 when unchanged). Without it, a dev server
- * that sends no Cache-Control (`python -m http.server`) lets the browser
- * reuse stale files after a re-export, mixing old and new (seen: an old
- * route file after a schema bump; even Ctrl+Shift+R didn't clear it).
+ * `fresh`: ask the server before using a cached copy (`cache: "no-cache"`;
+ * a cheap 304 when unchanged). Only status.json needs it: it's the one
+ * file whose URL never changes, and it names the version of the rest.
+ * (Seen before versioned URLs: `python -m http.server` sends no
+ * Cache-Control, and the browser reused an old route file after a schema
+ * bump; even Ctrl+Shift+R didn't clear it.)
  *
  * @param {string} url
+ * @param {{fresh?: boolean}} [options]
  * @returns {Promise<any>}
  */
-async function loadJson(url) {
-  const response = await fetch(url, { cache: "no-cache" });
+async function loadJson(url, { fresh = false } = {}) {
+  const response = await (fresh ? fetch(url, { cache: "no-cache" }) : fetch(url));
   if (!response.ok) {
     throw new Error(
       `Could not load ${url} (HTTP ${response.status}).\n` +
@@ -52,21 +70,22 @@ function checkSchema(url, file) {
 /**
  * Load everything the overview needs.
  *
- * status.json comes first, alone: if its schema_version is wrong, the
- * other files (network.geojson is ~1 MB) aren't downloaded at all. Then
- * the rest in parallel.
+ * status.json comes first, alone and fresh: if its schema_version is
+ * wrong, the other files (network.geojson is ~1 MB) aren't downloaded at
+ * all. Then the rest in parallel, at the export's versioned URLs.
  *
  * @returns {Promise<{status: object, routes: object[], network: object, starts: object, skipped: object, paths: object}>}
  */
 export async function loadSite() {
-  const status = await loadJson("data/status.json");
+  const status = await loadJson("data/status.json", { fresh: true });
   checkSchema("data/status.json", status);
+  const load = (path) => loadJson(versioned(path, status.generated_at));
   const [routes, network, starts, skipped, paths] = await Promise.all([
-    loadJson("data/routes.json"),
-    loadJson("data/network.geojson"),
-    loadJson("data/starts.geojson"),
-    loadJson("data/skipped.geojson"),
-    loadJson("data/paths.geojson"),
+    load("data/routes.json"),
+    load("data/network.geojson"),
+    load("data/starts.geojson"),
+    load("data/skipped.geojson"),
+    load("data/paths.geojson"),
   ]);
   return { status, routes, network, starts, skipped, paths };
 }
@@ -78,13 +97,14 @@ export async function loadSite() {
  * calls while the first is still loading share one request. A failed load
  * is dropped from the cache, so asking again retries.
  *
+ * @param {string} version status.json's `generated_at` (see `versioned`)
  * @returns {(key: string) => Promise<object>}
  */
-export function routeDetailLoader() {
+export function routeDetailLoader(version) {
   const cache = new Map();
   return (key) => {
     if (!cache.has(key)) {
-      const url = `data/routes/${key}.json`;
+      const url = versioned(`data/routes/${key}.json`, version);
       const promise = loadJson(url).then((detail) => {
         checkSchema(url, detail);
         return detail;

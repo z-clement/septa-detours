@@ -662,6 +662,14 @@ Tests: 125 JS.
   schema bump (`http.server` sends no Cache-Control). `data.loadJson`
   now fetches with `cache: "no-cache"` (a test checks every request);
   versioned URLs are logged under hosting in `web-plan.md`.
+- Versioned data URLs (hosting plan step 2a, 2026-11-27):
+  `data.versioned(path, generated_at)` -> `path?v=<encoded>`. Only
+  `status.json` is fetched `no-cache` (its URL never changes and it
+  names the version); every other file, route files included
+  (`routeDetailLoader(version)`, `main.js` passes
+  `site.status.generated_at`), uses the normal cache, so Pages'
+  fixed `max-age=600` can't mix exports. 8/8 mutants killed; checked
+  headless (`/#route=bus-21`: every data request carried `?v=`).
 
 ## U1, time on the map (UI plan, 2026-11-26)
 
