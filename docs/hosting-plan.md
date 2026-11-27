@@ -165,7 +165,11 @@ Next, in order:
 4. **Step 6, the workflow**: done 2026-11-27,
    `.github/workflows/publish.yml` (details below, "The workflow as
    built"). Terms checked first (section below); SEPTA credit added.
-5. **Me: go live** (the steps under "Going live" below).
+5. **Me: go live**: done 2026-11-27. Second manual run (after the
+   action updates) green end to end: GTFS from cache, deploy, snapshot
+   `2026-11-27T153734Z` stored by `github-actions[bot]`. Live at
+   https://z-clement.github.io/septa-detours/ (`status.json` fresh,
+   hashed `js-`/`css-` dirs, no `test/`, `Cache-Control: max-age=600`).
 6. **My whole-project check** before announcing it (notes below), then
    share it and collect feedback for the mobile pass (`docs/backlog.md`).
 

@@ -232,9 +232,9 @@ Reached (history in `docs/notes/`, plans in `docs/`):
 Actions every 15 min (`.github/workflows/publish.yml`) -> GitHub Pages;
 snapshots on a `snapshots` branch; GTFS from SEPTA's GitHub releases
 (cached); the street cache by hand as a `reference` release asset.
-Built and checked locally. Next: my "Going live" steps in the plan
-(push, release, Pages setting, first run), then my pre-deploy check
-(notes in the plan), then a README. After it: a targeted mobile UI/UX
+Live since 2026-11-27 at https://z-clement.github.io/septa-detours/.
+Next: watch the scheduled runs, my whole-project check (notes in the
+plan, "Notes for the pre-deploy check"), then a README. After it: a targeted mobile UI/UX
 pass from testers' feedback (`docs/backlog.md`).
 
 Left for later (render sweep and color pass done 2026-11-26): the
