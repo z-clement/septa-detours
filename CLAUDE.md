@@ -112,6 +112,8 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
   `uv run python -m septa_detours.ingest` ->
   `data/raw/alerts/<UTC stamp>.json`. A `septa-detours fetch` CLI is
   planned but not built
+- Check the GTFS end dates (warns within 14 days; always exits 0):
+  `uv run python -m septa_detours.gtfs check`
 - Fetch OSM extracts (occasionally, ~540 MB):
   `uv run python -m septa_detours.ingest osm` ->
   `data/raw/osm/{pennsylvania,new-jersey,delaware}-<YYMMDD>.osm.pbf`

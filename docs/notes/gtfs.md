@@ -65,3 +65,16 @@ file raises `FileNotFoundError` and the caller decides (the export
 records `null`). Used for `status.json`'s `gtfs` (decided: `feed_version`,
 not file mtimes, which change on every copy). `tests/test_load_feed_info.py`
 (7, real header and rows, CRLF).
+
+Done (2026-11-27, hosting step 4): `gtfs/expiry.py::end_date_warning`
+(pure; `today` passed in) and `python -m septa_detours.gtfs check`
+(`gtfs/__main__.py::check_feeds`), for the hosted job. One line per feed:
+`bus GTFS v202611220 ends 2027-02-20`, or `::warning::<message>` (an
+Actions annotation) within `WARN_WITHIN_DAYS` = 14 days of
+`feed_end_date` (inclusive: the end date is a service day, "ends
+today"), past it, or when `feed_info.txt` is missing / lacks a column /
+has no rows / has a blank or malformed date (exactly 8 ASCII digits and
+a real day; `strptime` would take `2027220`). Always exits 0: old GTFS
+must never stop the site. Each feed is loaded separately, so one broken
+file doesn't hide the other. Tests: `tests/test_expiry.py` (18),
+`tests/test_gtfs_main.py` (9); 25 mutants, all killed.
