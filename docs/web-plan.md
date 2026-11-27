@@ -551,6 +551,9 @@ is the point of defining it first.
 
 ## Later: hosting with live fetching
 
+(Planned 2026-11-27 in `docs/hosting-plan.md`: option (1) below, with
+GitHub Actions + Pages. Kept here for the history.)
+
 Probably a spin-off that reuses this pipeline and contract. Cheapest
 first: (1) static hosting + a scheduled job (every 5-10 min) running
 `ingest -> match -> export site` and publishing `web/` (GTFS and the

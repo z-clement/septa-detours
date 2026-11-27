@@ -72,8 +72,9 @@ web/             map frontend (the detours map): index.html, css/app.css,
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
                  alerts/ holds API route entries + an annotated README
 notebooks/       exploration only, not production code
-docs/            plans (ui-plan.md = current, web-plan.md, geography-plan.md,
-                 backlog.md) and notes/ (detailed per-area history)
+docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
+                 geography-plan.md, backlog.md) and notes/ (detailed
+                 per-area history)
 ```
 
 ## Stack
@@ -207,9 +208,13 @@ Reached (history in `docs/notes/`, plans in `docs/`):
 
 ## Next
 
-Agreed order (2026-11-26): a render sweep of everything built (by
-Claude, headless), then the **color pass** (`docs/ui-plan.md`), then
-the remaining follow-ups: script caching (web plan, hosting), the
+**Hosting** (`docs/hosting-plan.md`, decided 2026-11-27): GitHub
+Actions every 15 min -> GitHub Pages, snapshots on a `snapshots`
+branch. Steps: `ingest gtfs`, versioned URLs, stale-data warning,
+snapshot store, the workflow. After it: a targeted mobile UI/UX pass
+from testers' feedback (`docs/backlog.md`).
+
+Left for later (render sweep and color pass done 2026-11-26): the
 off-route start lead-in and the two unchecked turns
 (`docs/geography-plan.md`, tier C follow-ups), two-street detours,
 `source_key` twins and message-vs-API questions (`docs/backlog.md`),

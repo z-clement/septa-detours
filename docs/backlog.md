@@ -8,6 +8,10 @@ Options and follow-ups not scheduled yet. The current plan is
 `docs/web-plan.md`.
 
 Other options, for later:
+- **A targeted mobile UI/UX pass after hosting** (added 2026-11-27):
+  once the site is live (`docs/hosting-plan.md`), people trying it on
+  their phones will show what the desktop-led UI pass missed. Collect
+  that feedback first, then plan the pass from it.
 - **Settle parse's open questions** (each is my decision; ask):
   ~~recurring windows ("7am - 4pm Mon thru Fri")~~ (done 2026-11-26:
   `parse/hours.py`, UI plan U8) and message-vs-API mismatches (route
