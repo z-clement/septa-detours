@@ -47,9 +47,9 @@ data/raw/        untouched downloads (gitignored); alerts/ holds API snapshots,
                  osm/ holds Geofabrik extracts (<region>-<YYMMDD>.osm.pbf),
                  gtfs/ holds SEPTA's releases (gtfs_public-<tag>.zip)
 data/gtfs/       SEPTA static GTFS (gitignored)
-data/processed/  pipeline output (gitignored; sample_* files may be
-                 committed): detours-<snapshot stamp>.json = match output
-                 (one per snapshot); streets.parquet = the street cache
+data/processed/  pipeline output (gitignored): detours-<snapshot
+                 stamp>.json = match output (one per snapshot);
+                 streets.parquet = the street cache
 src/septa_detours/{ingest,parse,match,export}/
 src/septa_detours/gtfs/   shared GTFS reference data (not a stage): load.py
                           reads tables, shapes.py builds coordinate lists,
@@ -65,7 +65,8 @@ src/septa_detours/geo.py  shared helper (not a stage): EARTH_RADIUS_M,
                           metres_between, distance_to_line_m
                           (equirectangular metres)
 src/septa_detours/model.py
-web/             map frontend (the detours map): index.html, css/app.css,
+web/             map frontend (the detours map): index.html, favicon.svg,
+                 css/app.css,
                  js/ (ES modules: main, data, mapview = the only
                  maplibregl user, sidebar = the sidebar DOM; format,
                  routes, detours, state, sheet = pure),
@@ -74,22 +75,26 @@ web/             map frontend (the detours map): index.html, css/app.css,
                  (`export site`; gitignored)
 tests/fixtures/  saved real alerts, including ugly/ambiguous ones;
                  alerts/ holds API route entries + an annotated README
-notebooks/       exploration only, not production code
-docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
-                 geography-plan.md, backlog.md) and notes/ (detailed
+docs/            operating.md (running the hosted site), backlog.md,
+                 plans (all done: web-plan.md, geography-plan.md,
+                 ui-plan.md, hosting-plan.md) and notes/ (detailed
                  per-area history)
+.github/         workflows/publish.yml (the hosted job), test.yml (CI),
+                 dependabot.yml
+tools/           local helper scripts (gitignored): shot.mjs, headless
+                 screenshots
 ```
 
 ## Stack
 
 - Backend: Python 3.13 (pinned in `.python-version`), managed with uv
-- Frontend: MapLibre GL JS, plain JS ES modules, no build step. Keyless
-  basemap (OpenFreeMap or Protomaps). May move to TypeScript + Vite later
-  (triggers in `docs/web-plan.md`)
+- Frontend: MapLibre GL JS 5 (from unpkg, with SRI hashes), plain JS ES
+  modules, no build step. Keyless basemap: OpenFreeMap. May move to
+  TypeScript + Vite later (triggers in `docs/web-plan.md`)
 - Tests: pytest
 - Formatting/linting: ruff (Python). No JS linter for now
 - Type checking: ty (Astral), via the VS Code extension; editor interpreter
-  must be `.venv/bin/python`
+  must be `.venv/bin/python`. From the shell: `uvx ty check`
 - GTFS tables: polars (added). Shapely/geometry stays out of polars; build
   it from plain coordinate lists in `match/`
 - Models: pydantic v2 (added). Validates structure only; messy-text
@@ -113,8 +118,7 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
   The map pipeline: `ingest` -> `match` -> `export site` -> serve.
 - Fetch an alerts snapshot (from the repo root):
   `uv run python -m septa_detours.ingest` ->
-  `data/raw/alerts/<UTC stamp>.json`. A `septa-detours fetch` CLI is
-  planned but not built
+  `data/raw/alerts/<UTC stamp>.json`
 - Check the GTFS end dates (warns within 14 days; always exits 0):
   `uv run python -m septa_detours.gtfs check`
 - Unpack a saved GTFS release into `data/gtfs/{bus,rail}/` (default: the
@@ -150,7 +154,9 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
   `<out>`). Locally, serve `web/` as is
 - Hosted: `.github/workflows/publish.yml` runs ingest gtfs -> gtfs unpack
   -> gtfs check -> ingest -> match -> export site -> export deploy
-  -> Pages -> ingest store, every 15 minutes
+  -> Pages -> ingest store, every 15 minutes. `test.yml` runs lint and
+  both test suites on pushes and pull requests. Running it all:
+  `docs/operating.md`
 - Serve the map: `python -m http.server -d web`, then open
   http://localhost:8000 (it reads the files `export site` writes)
 
@@ -201,48 +207,36 @@ docs/            plans (hosting-plan.md = current, ui-plan.md, web-plan.md,
 
 ## Current state
 
-Tooling set up: dev deps (pytest, ruff), strict ruff config, lint passing,
-pytest `testpaths = ["tests"]`. No CLI entry point yet; add
-`[project.scripts]` back when building `fetch`.
-
-Reached (history in `docs/notes/`, plans in `docs/`):
+Live at https://z-clement.github.io/septa-detours/ since 2026-11-27
+(history in `docs/notes/`, plans in `docs/`):
 
 - **The pipeline**: `ingest` -> `match` (parse + match: route, shapes,
   start point, rejoin, skipped stretch, the detour's own path walked
   along OSM streets, daily hours) -> `export site` (the data contract,
-  `export/contract.py`, **schema 9**) -> `web/`.
-- **The page** (web plan W1-W6): sidebar / bottom sheet with search,
-  mode chips, route list and a route panel of detour cards; focus via
-  URL hash; keyboard and screen-reader pass.
+  `export/contract.py`, **schema 10**) -> `web/`.
+- **The page** (web plan W1-W6, UI plan U1-U8): sidebar / bottom sheet
+  with search, mode chips, route list and a route panel of detour cards;
+  focus via URL hash; only detours in effect, by the page's clock and
+  their daily hours; a legend; keyboard and screen-reader pass; a
+  stale-data banner and a reload offer when newer detours are out.
 - **Geography** (geography plan tiers A-C): start points, rejoins,
   skipped stretches (cut from the drawn line), detour paths with turn
-  checks. Real `121123Z`: 63 paths of 97 candidates, 75 stretches.
-- **UI/UX pass** (`docs/ui-plan.md`, U1-U8 + U5b, 2026-11-26): only
-  detours in effect, by the page's clock and their daily hours; grey
-  routes and magenta detours; route-number markers below zoom 13;
-  focusing frames the detours; direction arrows on the focused route
-  and on detour paths; a legend of what's drawn; cards with turns,
-  hours and "Back on route ..."; each route-direction drawn once.
-- Tests: ~1660 Python, ~156 JS. The map can be rendered headless
-  (Brave + CDP, see `docs/notes/export-and-web.md`), not just by eye.
+  checks.
+- **Hosting** (`docs/hosting-plan.md`): GitHub Actions every 15 min ->
+  GitHub Pages; snapshots on the `snapshots` branch; CI and Dependabot.
+  Then a whole-project check and cleanup, a README and an MIT LICENSE.
+- Tests: ~1835 Python, ~180 JS. The map can be rendered headless
+  (Brave + CDP, `tools/shot.mjs`, see `docs/notes/export-and-web.md`).
 
 ## Next
 
-**Hosting** (`docs/hosting-plan.md`, decided 2026-11-27): GitHub
-Actions every 15 min (`.github/workflows/publish.yml`) -> GitHub Pages;
-snapshots on a `snapshots` branch; GTFS from SEPTA's GitHub releases
-(cached); the street cache by hand as a `reference` release asset.
-Live since 2026-11-27 at https://z-clement.github.io/septa-detours/.
-Next: **start from the plan's "Handoff" section**: the whole-project
-check and cleanup, then a README. After it: a targeted mobile UI/UX
-pass from testers' feedback (`docs/backlog.md`).
-
-Left for later (render sweep and color pass done 2026-11-26): the
-off-route start lead-in and the two unchecked turns
+A targeted mobile UI/UX pass from testers' feedback (`docs/backlog.md`).
+Left for later: the off-route start lead-in and the two unchecked turns
 (`docs/geography-plan.md`, tier C follow-ups), two-street detours,
-`source_key` twins and message-vs-API questions (`docs/backlog.md`),
-snapshot collection. Stop closures on the map (tier A step 4) may not
-be needed: closures are well signed in person; detours aren't.
+`source_key` twins, message-vs-API questions, routes H/L/R/XH (left
+unmatched, decided) and using the stored snapshots (`docs/backlog.md`).
+Stop closures on the map (tier A step 4) may not be needed: closures are
+well signed in person; detours aren't.
 
 ## Testing habits (cross-cutting)
 
@@ -267,9 +261,10 @@ Details and their origins are in `docs/notes/`; the short version:
   RUF001 flags literal en dashes / NBSPs (write `"\u2013"`, `"\u00a0"`;
   Claude has typed literal NBSPs before: `sed -i
   's/\xc2\xa0/\\u00a0/g' <file>`).
-- ty: 47 pre-existing diagnostics (45, plus one per new `DetourNotice`
-  field from `test_model.py`'s untyped `make_notice` helper) (mostly `**dict` test helpers and
-  `dict` invariance vs `Properties`); don't add more.
+- ty: 50 pre-existing diagnostics (`uvx ty check`, ty 0.0.112,
+  2026-11-27; one more per new `DetourNotice` field from `test_model.py`'s
+  untyped `make_notice` helper), mostly `**dict` test helpers and `dict`
+  invariance vs `Properties`; don't add more.
 - JS: `node --test web/test/` for pure modules (no DOM, no
   `maplibregl`). Tests set `process.env.TZ = "Asia/Tokyo"`: this machine
   is on New York time, so a missing `timeZone` would otherwise pass. The

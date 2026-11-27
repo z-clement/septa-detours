@@ -12,9 +12,8 @@ __pycache__/
 data/raw/
 data/gtfs/
 
-# Pipeline output; keep small committed samples only
-data/processed/*
-!data/processed/sample_*
+# Pipeline output
+data/processed/
 web/data/
 
 # Local helper scripts (not published)
