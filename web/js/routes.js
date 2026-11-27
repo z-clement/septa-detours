@@ -223,3 +223,66 @@ export function withRouteLabels(collection, routes) {
     })),
   };
 }
+
+/** Detours of one route starting this close (metres) share one overview
+ * marker (render sweep findings 1, 5): at the marker zooms (< 13) that's
+ * about a marker's width or less. */
+export const MARKER_MERGE_M = 800;
+
+/** Approximate metres between two [lon, lat] points (equirectangular). */
+function metresBetween([lon1, lat1], [lon2, lat2]) {
+  const radians = Math.PI / 180;
+  const x = (lon2 - lon1) * radians * Math.cos(((lat1 + lat2) / 2) * radians);
+  const y = (lat2 - lat1) * radians;
+  return 6371008.8 * Math.hypot(x, y);
+}
+
+/**
+ * The overview's markers: one per route per place, for its detours in
+ * effect, so a route's two directions at one corner (or its detours a few
+ * blocks apart) don't stack up unlabelled.
+ *
+ * Start dots (starts.geojson features) whose `source_key` is in `keys`
+ * (`inEffectKeys`) join the first earlier marker of the same route within
+ * `mergeM` of it (measured from that marker), else start a new one at
+ * their own point. Different routes never merge.
+ *
+ * @param {object[]} features starts.geojson features
+ * @param {Set<string>} keys detours in effect
+ * @param {object[]} routes routes.json (`key`, `short_name`)
+ * @param {number} [mergeM]
+ * @returns {{type: "FeatureCollection", features: object[]}} Points with
+ *   properties `key`, `source_key` (its first detour's: clicks select
+ *   it), `label` (route short name, or key), `count` (detours merged)
+ */
+export function routeMarkers(features, keys, routes, mergeM = MARKER_MERGE_M) {
+  const names = new Map(routes.map((route) => [route.key, route.short_name]));
+  const markers = [];
+  for (const { geometry, properties } of features) {
+    if (!keys.has(properties.source_key)) {
+      continue;
+    }
+    const point = geometry.coordinates;
+    const near = markers.find(
+      (marker) => marker.key === properties.key && metresBetween(marker.point, point) <= mergeM,
+    );
+    if (near === undefined) {
+      markers.push({ key: properties.key, point, sourceKeys: [properties.source_key] });
+    } else {
+      near.sourceKeys.push(properties.source_key);
+    }
+  }
+  return {
+    type: "FeatureCollection",
+    features: markers.map(({ key, point, sourceKeys }) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: point },
+      properties: {
+        key,
+        source_key: sourceKeys[0],
+        label: names.get(key) ?? key,
+        count: sourceKeys.length,
+      },
+    })),
+  };
+}

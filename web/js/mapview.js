@@ -46,6 +46,7 @@ const STARTS_SOURCE = "starts";
 const SKIPPED_SOURCE = "skipped";
 const PATHS_SOURCE = "paths";
 const REJOINS_SOURCE = "rejoins";
+const MARKERS_SOURCE = "markers";
 const FOCUS_SOURCE = "focus";
 const NETWORK_LAYER = "network-lines";
 const DETOURED_LAYER = "detoured-lines";
@@ -137,6 +138,7 @@ export function createMap(container) {
  * @returns {{
  *   showFocus: (focus: {key: string, detail: object | null, rejoins: object | null} | null) => void,
  *   setInEffect: (keys: Set<string>) => void,
+ *   setMarkers: (markers: object) => void,
  *   setHoveredDot: (sourceKey: string | null) => void,
  *   setSelectedDot: (sourceKey: string | null) => void,
  * }} see each below
@@ -163,6 +165,8 @@ export function addOverviewLayers(map, site) {
     promoteId: "source_key",
   });
   map.addSource(FOCUS_SOURCE, { type: "geojson", data: EMPTY_COLLECTION });
+  // The overview's markers (`routeMarkers`), set by `setMarkers`.
+  map.addSource(MARKERS_SOURCE, { type: "geojson", data: EMPTY_COLLECTION });
   map.addSource(REJOINS_SOURCE, {
     type: "geojson",
     data: EMPTY_COLLECTION,
@@ -435,29 +439,28 @@ export function addOverviewLayers(map, site) {
     paint: { "text-color": "#222222", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
   });
 
-  // Zoomed out: one marker per detour in effect at its start, an accent
-  // circle with its route number (B1), on top of everything. Where
-  // markers crowd, MapLibre hides labels that would overlap; every circle
-  // stays. Same source as the start dots, so hover/select/click match.
+  // Zoomed out: an accent circle with the route number (B1) per route per
+  // place (`routeMarkers`: a route's nearby detours share one), on top of
+  // everything. Where different routes' markers crowd, MapLibre hides
+  // labels that would overlap; every circle stays. Overview only (no
+  // cards to hover); a click focuses the route with its first detour.
   map.addLayer({
     id: MARKER_LAYER,
     type: "circle",
-    source: STARTS_SOURCE,
+    source: MARKERS_SOURCE,
     maxzoom: MARKER_ZOOM,
-    filter: inEffect,
     paint: {
       "circle-color": DETOUR_COLOR,
-      "circle-radius": ["case", emphasized, 14, 11],
-      "circle-stroke-color": ["case", selected, SELECTED_RING_COLOR, "#ffffff"],
-      "circle-stroke-width": ["case", selected, 3, 2],
+      "circle-radius": 11,
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 2,
     },
   });
   map.addLayer({
     id: MARKER_LABEL_LAYER,
     type: "symbol",
-    source: STARTS_SOURCE,
+    source: MARKERS_SOURCE,
     maxzoom: MARKER_ZOOM,
-    filter: inEffect,
     layout: {
       "text-field": ["get", "label"],
       "text-font": LABEL_FONT,
@@ -489,8 +492,6 @@ export function addOverviewLayers(map, site) {
     for (const layer of [
       STARTS_LAYER,
       START_LABEL_LAYER,
-      MARKER_LAYER,
-      MARKER_LABEL_LAYER,
       SKIPPED_LAYER,
       PATH_CASING_LAYER,
       PATH_LAYER,
@@ -553,9 +554,20 @@ export function addOverviewLayers(map, site) {
     applyDetourFilters();
   }
 
+  /**
+   * The overview's markers, from `routeMarkers` (recomputed by the caller
+   * as the clock moves, like `setInEffect`).
+   *
+   * @param {{type: string, features: object[]}} markers
+   */
+  function setMarkers(markers) {
+    map.getSource(MARKERS_SOURCE).setData(markers);
+  }
+
   return {
     showFocus,
     setInEffect,
+    setMarkers,
     setHoveredDot: dotStateSetter(map, "hover"),
     setSelectedDot: dotStateSetter(map, "selected"),
   };

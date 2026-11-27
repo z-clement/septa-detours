@@ -12,6 +12,8 @@ import {
   routesBounds,
   searchRoutes,
   timingCounts,
+  MARKER_MERGE_M,
+  routeMarkers,
   visibleRoutes,
   withRouteLabels,
 } from "../js/routes.js";
@@ -493,4 +495,84 @@ test("timingCounts: off-hours detours count as resting, not active", () => {
   assert.deepEqual(detouredNow([windowed("bus-79", windows)], NOW), [
     { route: windowed("bus-79", windows), active: 1 },
   ]);
+});
+
+// --- routeMarkers ------------------------------------------------------------
+
+/** A start dot at [lon, lat]. */
+function dotAt(key, sourceKey, lon, lat) {
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [lon, lat] },
+    properties: { key, source_key: sourceKey, color: null, start: null, end: null },
+  };
+}
+
+const MARKER_ROUTES = [
+  { key: "bus-19", short_name: "19" },
+  { key: "bus-31", short_name: "31" },
+];
+// 0.001 deg of latitude is ~111 m.
+const LAT0 = 40.06;
+
+test("routeMarkers: a route's detours close together share one marker", () => {
+  // Route 19's NB and SB at one corner (~111 m apart), and one 3.3 km away.
+  const dots = [
+    dotAt("bus-19", "nb", -75.07, LAT0),
+    dotAt("bus-19", "sb", -75.07, LAT0 + 0.001),
+    dotAt("bus-19", "far", -75.07, LAT0 + 0.03),
+  ];
+  const markers = routeMarkers(dots, new Set(["nb", "sb", "far"]), MARKER_ROUTES);
+  assert.deepEqual(
+    markers.features.map((f) => [f.geometry.coordinates, f.properties]),
+    [
+      [[-75.07, LAT0], { key: "bus-19", source_key: "nb", label: "19", count: 2 }],
+      [[-75.07, LAT0 + 0.03], { key: "bus-19", source_key: "far", label: "19", count: 1 }],
+    ],
+  );
+  assert.equal(markers.type, "FeatureCollection");
+});
+
+test("routeMarkers: different routes never merge", () => {
+  const dots = [dotAt("bus-19", "a", -75.07, LAT0), dotAt("bus-31", "b", -75.07, LAT0)];
+  const labels = routeMarkers(dots, new Set(["a", "b"]), MARKER_ROUTES).features.map(
+    (f) => f.properties.label,
+  );
+  assert.deepEqual(labels, ["19", "31"]);
+});
+
+test("routeMarkers: only detours in effect", () => {
+  const dots = [dotAt("bus-19", "a", -75.07, LAT0), dotAt("bus-19", "b", -75.07, LAT0)];
+  const markers = routeMarkers(dots, new Set(["b"]), MARKER_ROUTES);
+  assert.deepEqual(
+    markers.features.map((f) => [f.properties.source_key, f.properties.count]),
+    [["b", 1]],
+  );
+  assert.deepEqual(routeMarkers(dots, new Set(), MARKER_ROUTES).features, []);
+});
+
+test("routeMarkers: the merge distance, measured in metres from the marker", () => {
+  assert.equal(MARKER_MERGE_M, 800);
+  // ~778 m north merges, ~834 m doesn't; 0.0093 deg east merges: ~792 m
+  // with longitude scaled by the latitude, ~1034 m if it weren't.
+  const at = (dLon, dLat) => [
+    dotAt("bus-19", "a", -75.07, LAT0),
+    dotAt("bus-19", "b", -75.07 + dLon, LAT0 + dLat),
+  ];
+  const count = (dots) => routeMarkers(dots, new Set(["a", "b"]), MARKER_ROUTES).features.length;
+  assert.equal(count(at(0, 0.007)), 1);
+  assert.equal(count(at(0, 0.0075)), 2);
+  assert.equal(count(at(0.0093, 0)), 1);
+  // Diagonal: ~511 m east, ~445 m north is ~677 m apart (straight line).
+  assert.equal(count(at(0.006, 0.004)), 1);
+  // A custom distance.
+  assert.equal(
+    routeMarkers(at(0, 0.001), new Set(["a", "b"]), MARKER_ROUTES, 50).features.length,
+    2,
+  );
+});
+
+test("routeMarkers: an unknown route is labelled with its key", () => {
+  const dots = [dotAt("bus-99", "a", -75.07, LAT0)];
+  assert.equal(routeMarkers(dots, new Set(["a"]), []).features[0].properties.label, "bus-99");
 });

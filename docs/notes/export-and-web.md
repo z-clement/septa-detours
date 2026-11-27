@@ -800,3 +800,12 @@ Tests: 125 JS.
   "Not running now" after "In effect", "off-hours" in list counts, not
   counted in "Detoured now" (so the list agrees with the map). Real
   render: route 79 in the evening, In effect (2) + Not running now (1).
+- One marker per route per place (findings 1, 5; yours): pure
+  `routes.routeMarkers(features, keys, routes, mergeM)` merges a route's
+  in-effect start dots within `MARKER_MERGE_M` 800 m of a marker (never
+  across routes; measured from the marker; tested incl. the latitude
+  scale and a diagonal); `markers` source set by `setMarkers` on every
+  clock tick; markers lose hover emphasis (overview only, no cards).
+  Real render: route 19's stacked pair is one marker; different routes
+  still overlap (City Hall, and the whole phone overview at its zoom):
+  marker size is for the color/size pass.

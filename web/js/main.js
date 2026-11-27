@@ -19,6 +19,7 @@ import {
 import {
   detouredRoutes,
   groupByMode,
+  routeMarkers,
   routesBounds,
   searchRoutes,
   timingCounts,
@@ -66,10 +67,8 @@ async function main() {
   const routesByKey = new Map(site.routes.map((route) => [route.key, route]));
   const loadDetail = routeDetailLoader();
 
-  const { showFocus, setInEffect, setHoveredDot, setSelectedDot } = addOverviewLayers(
-    map,
-    site,
-  );
+  const { showFocus, setInEffect, setMarkers, setHoveredDot, setSelectedDot } =
+    addOverviewLayers(map, site);
   // Open on wide screens; a closed "Map key" button on phones (U6).
   const { showLegendFor } = addLegend(map, { open: !NARROW.matches });
   showStatus(statusLine(site.status));
@@ -86,7 +85,11 @@ async function main() {
     ...site.skipped.features,
     ...site.paths.features,
   ];
-  const showInEffect = (now) => setInEffect(inEffectKeys(detourFeatures, now));
+  const showInEffect = (now) => {
+    const keys = inEffectKeys(detourFeatures, now);
+    setInEffect(keys);
+    setMarkers(routeMarkers(site.starts.features, keys, site.routes));
+  };
   showInEffect(store.get().now);
 
   // --- The mobile sheet -----------------------------------------------------
